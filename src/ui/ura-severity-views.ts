@@ -1,7 +1,7 @@
 import type { UraSeverityView } from '#contract/ipc-contract.ts';
 
 /**
- * Every note label in the order the composer and the dock offer them: the labels reviewers reach
+ * Every note label in the order the composer and the notes list offer them: the labels reviewers reach
  * for most first, then the rarer Conventional Comments ones (ADR 0131).
  */
 export const uraSeverityViews: readonly UraSeverityView[] = [

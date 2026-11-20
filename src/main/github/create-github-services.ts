@@ -110,7 +110,7 @@ export interface GithubServicesOptions {
   readonly openSessionId: () => string | undefined;
 }
 
-/** Composes the auth and github domains with sessions, git and the URA dock. */
+/** Composes the auth and github domains with sessions, git and the notes list. */
 export function createGithubServices(options: GithubServicesOptions): GithubServices {
   const github: GithubContext = {
     session: options.context,

@@ -6,7 +6,7 @@ import type { Result } from '#x/result/result.ts';
 import { uraItemFromRow } from './ura-item-from-row.ts';
 import type { SessionId, UraItem, UraStoreError } from './ura-item.ts';
 
-/** A session's items in dock order, every status and every head. */
+/** A session's items in note order, every status and every head. */
 export function listUraItems(
   db: DatabaseSync,
   sessionId: SessionId,

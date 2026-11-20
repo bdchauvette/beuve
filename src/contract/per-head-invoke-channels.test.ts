@@ -78,7 +78,7 @@ function headFreeSessionChannels(): Readonly<
     'setup:set-command': 'the command belongs to the repository, not a head (ADR 0130)',
     'ura:list': read,
     'ura:create': 'the item records the head its anchor refers to and is re-anchored on every read',
-    'ura:reorder': 'dock order belongs to the session, not a head',
+    'ura:reorder': 'note order belongs to the session, not a head',
     'ura:export':
       'copies to the clipboard for the reviewer to paste; the export names the head it was compiled at',
     'ura:expand-note': 'a read pinned to its own `headSha`; it stores nothing',

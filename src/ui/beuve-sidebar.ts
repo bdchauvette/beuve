@@ -10,7 +10,7 @@ import type { SidebarZone } from './sidebar-zone.ts';
 
 /**
  * The column beside the diff: a resize handle, the tabs and the panels the owner slots in (the
- * overview, the files, the review dock, the chat), of which the owner hides all but the selected one. A
+ * overview, the files, the notes list, the chat), of which the owner hides all but the selected one. A
  * presentational layout (ADR 0104). The handle's `beuve-sidebar-resize` and the tabs'
  * `beuve-sidebar-tab` reach the owner as they are.
  */

@@ -5,7 +5,7 @@
 
 ## Context
 
-ADR 0015, 0021, 0042 and 0053 built "ImpactGate" (spec 5G): per-function cognitive and cyclomatic complexity from Tree-sitter trees, a mid-rank percentile among the analyzed files' functions, and findings for changed functions over a cognitive complexity limit (15). It reached the diff cards as a chip and popover, the radar tree as percentile decorations, the URA dock as staged findings, the chat prompt as a section, and agents as the `beuve_run_impact_check` MCP tool, and it ran in its own worker thread.
+ADR 0015, 0021, 0042 and 0053 built "ImpactGate" (spec 5G): per-function cognitive and cyclomatic complexity from Tree-sitter trees, a mid-rank percentile among the analyzed files' functions, and findings for changed functions over a cognitive complexity limit (15). It reached the diff cards as a chip and popover, the radar tree as percentile decorations, the notes list as staged findings, the chat prompt as a section, and agents as the `beuve_run_impact_check` MCP tool, and it ran in its own worker thread.
 
 The name, and part of the idea, come from [officefloor/ImpactGate](https://github.com/officefloor/ImpactGate) (Apache-2.0, by the OfficeFloor project), a Python merge gate that scores a change by its "impact". What beuve built is a different measure. It is a Sonar-style cognitive complexity check, not ImpactGate's formula, and it shares only the name, the gating idea and a `cognitive-max` style threshold with the project it was named after. Nothing in the repository or its history shows ImpactGate code or data in beuve. beuve's implementation is its own TypeScript on `web-tree-sitter`, not Python on `lizard`.
 

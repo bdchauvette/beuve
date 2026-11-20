@@ -14,5 +14,5 @@ export interface DraftState {
   readonly caret: number;
 }
 
-/** A mention without its commit, as a card, the dock or the tree names it; the shell adds the sha. */
+/** A mention without its commit, as a card, the notes list or the tree names it; the shell adds the sha. */
 export type MentionTarget = Omit<ChatMentionView, 'sha'>;

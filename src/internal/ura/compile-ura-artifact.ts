@@ -17,7 +17,7 @@ import type { UraItem } from './ura-item.ts';
 
 export interface UraArtifactInput {
   readonly summary: UraSummary;
-  /** The session's items in dock order, every status; only `staged` ones are compiled. */
+  /** The session's items in note order, every status; only `staged` ones are compiled. */
   readonly items: readonly UraItem[];
   /**
    * One mapping from each older head an item was written against to `summary.headSha`. Mappings

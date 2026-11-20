@@ -17,10 +17,10 @@ Context menus were derived from the catalog: the commands that list a kind, grou
   4. Move Up · Move Down
   5. Add to Chat
   6. Delete
-- **Label and Status are catalog commands** (`dock-label-<label>`, `dock-status-open|addressed|withdrawn`), since the labels are a fixed list (ADR 0131). Each checks when every note it acts on has that label or status (`dockItemOf` reports the shared `status` and `severity`; `dockCheckedCommands` names them), so a mixed selection checks none. They are checkboxes, not radio items, because Electron may check the first radio item of a group in which none is checked. Mark Note as Blocking shows as a "Blocking" checkbox in the Label submenu. Choosing one sets every targeted note that does not already have it, in one `ura:edit-many`.
+- **Label and Status are catalog commands** (`notes list-label-<label>`, `note-status-open|addressed|withdrawn`), since the labels are a fixed list (ADR 0131). Each checks when every note it acts on has that label or status (`noteListItemOf` reports the shared `status` and `severity`; `noteListCheckedCommands` names them), so a mixed selection checks none. They are checkboxes, not radio items, because Electron may check the first radio item of a group in which none is checked. Mark Note as Blocking shows as a "Blocking" checkbox in the Label submenu. Choosing one sets every targeted note that does not already have it, in one `ura:edit-many`.
 - **Status goes straight between the closed statuses**, through the status actions of ADR 0151: Open reopens, Addressed marks addressed, Withdrawn withdraws, from whichever status the note has.
 - **The palette leaves the Status commands out** (`inPalette: false` in the registry): Withdraw, Restore and Mark as (Not) Addressed already do the same there, and the palette's greedy matcher ranked "Set Note Status to Addressed" above "Mark Note as Not Addressed" for "not addressed". The Label commands are in the palette ("Set Note Label to Nitpick").
-- The menu bar's Note menu (ADR 0152) mirrors this layout. Withdraw, Mark as Addressed and Change Label… stay catalog commands for the dock's in-place keys and the palette, but neither menu shows them.
+- The menu bar's Note menu (ADR 0152) mirrors this layout. Withdraw, Mark as Addressed and Change Label… stay catalog commands for the notes list's in-place keys and the palette, but neither menu shows them.
 
 ## Consequences
 

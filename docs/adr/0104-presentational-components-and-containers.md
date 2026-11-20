@@ -5,9 +5,9 @@
 
 ## Context
 
-`beuve-app.ts` was the renderer's root and held nearly all of its logic: 4,021 lines, 53 `@state` fields and about 250 methods. Moving each concern into a controller (chat, GitHub, the review dock, review edits, the loaded review data, settings) and each small piece of view into an element (titlebar, sidebar tabs, resize handle) took it to about 2,600 lines. What remains is two jobs in one class. One is the window: the sessions list, the Open dialog, the command palette, notices, the status bar, the menus, command routing and the focus zone. The other is the open review: its controllers, the diff stream, the sidebar and the terminal. Command routing reaches into both, which is why neither can shrink alone.
+`beuve-app.ts` was the renderer's root and held nearly all of its logic: 4,021 lines, 53 `@state` fields and about 250 methods. Moving each concern into a controller (chat, GitHub, the notes list, review edits, the loaded review data, settings) and each small piece of view into an element (titlebar, sidebar tabs, resize handle) took it to about 2,600 lines. What remains is two jobs in one class. One is the window: the sessions list, the Open dialog, the command palette, notices, the status bar, the menus, command routing and the focus zone. The other is the open review: its controllers, the diff stream, the sidebar and the terminal. Command routing reaches into both, which is why neither can shrink alone.
 
-The components below the app already split two ways without a name for it. Some take data and report intent (the dock, the file cards, the open panel, the tabs). Others call the bridge or read the open session (`beuve-terminal-panel`, `beuve-sheet-view`).
+The components below the app already split two ways without a name for it. Some take data and report intent (the notes list, the file cards, the open panel, the tabs). Others call the bridge or read the open session (`beuve-terminal-panel`, `beuve-sheet-view`).
 
 ## Decision
 

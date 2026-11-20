@@ -9,7 +9,7 @@ const meta: Meta = { title: 'Primitives/Note label menu' };
 export default meta;
 
 /**
- * The composer's and the dock editor's label and Blocking, as one menu button (ADR 0131): the
+ * The composer's and the notes list editor's label and Blocking, as one menu button (ADR 0131): the
  * labels, a separator, then Blocking.
  */
 export const LabelMenu: StoryObj = {
@@ -21,7 +21,7 @@ export const LabelMenu: StoryObj = {
   },
 };
 
-/** Beside the Title field, as the composer and the dock's editor show it: one control height. */
+/** Beside the Title field, as the composer and the notes list's editor show it: one control height. */
 export const BesideATitle: StoryObj = {
   render: () => {
     return framed(html`

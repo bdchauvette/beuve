@@ -60,7 +60,7 @@ So:
   - card headers (old and new path);
   - the inline and window sheet title (the window's `document.title` gets the plain revealed text);
   - peek rows and their symbol names;
-  - URA dock anchors and the composer's "where";
+  - notes list anchors and the composer's "where";
   - chat mention chips, in the transcript and in the input box, and citation pills;
   - palette file results, where each character is escaped on its own so the match highlights still line up;
   - the trace portal's test files.

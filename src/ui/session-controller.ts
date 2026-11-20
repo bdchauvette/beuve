@@ -79,7 +79,7 @@ const initial: SessionSnapshot = {
 /**
  * The review sessions of this window and the one it shows (ADR 0079): the list, which session is
  * selected and its review, creating a local session, saving progress. A newer load supersedes an
- * older one, so only the latest answers. What the review brings along (its chat, dock, tree) is
+ * older one, so only the latest answers. What the review brings along (its chat, notes list, tree) is
  * the owner's to reset and start through the {@link SessionEnvironment}; the host re-renders when
  * a getter's value changes.
  */

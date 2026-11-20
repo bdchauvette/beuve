@@ -9,7 +9,7 @@ export interface UraDrop {
 }
 
 /**
- * The dock order after dropping notes beside another (ADR 0144), as Move Up and Move Down do one
+ * The note order after dropping notes beside another (ADR 0144), as Move Up and Move Down do one
  * step at a time: the dragged movable notes leave their places and land together, in their old
  * order, before or after the target, and the notes that aren't movable keep their places in
  * `order`. Unchanged when the target isn't movable, is one of the dragged notes, or nothing

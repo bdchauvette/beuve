@@ -29,7 +29,7 @@ export interface PaletteSources {
   readonly uraItems: readonly UraItemView[];
   /**
    * The commands whose state shows their checked names (ADR 0144), such as Restore Note for the
-   * dock's withdrawn notes; none when absent.
+   * notes list's withdrawn notes; none when absent.
    */
   readonly checked?: readonly CommandId[];
 }

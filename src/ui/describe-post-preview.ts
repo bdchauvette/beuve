@@ -2,7 +2,7 @@ import { describeReviewPreview } from './describe-review-preview.ts';
 import type { GithubPreviewState } from './github-post-state.ts';
 
 /**
- * What the line beside the dock's Post button says will be posted (ADR 0039 amendment
+ * What the line beside the notes list's Post button says will be posted (ADR 0039 amendment
  * 2026-11-18): the preview's counts, verdict and head, the last ones while a fresh preview is
  * compiled, or why there is none. Pure.
  */

@@ -21,7 +21,7 @@ ADR 0031 left some questions of the main and UI wiring open: what happens to a q
 
 - A reviewer who types a second question too early has to resend it. The refusal says why.
 - A crash can leave an unfinished answer shown as stopped, with the text up to the last stored preview.
-- An answer whose only citations are outside the diff stages on the whole change, which the dock shows.
+- An answer whose only citations are outside the diff stages on the whole change, which the notes list shows.
 - `ura:create` accepts a `chat-answer` origin from the renderer; the message id isn't checked against `chat_messages`, because the URA domain doesn't know the chat domain's table.
 
 ## Amendment 2026-10-30: queued, not refused

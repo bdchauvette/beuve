@@ -1,6 +1,6 @@
 # 0055. `/review` is a chat answer, with findings checked by a second pass
 
-- Status: Accepted; supersedes [0022](0022-opt-in-preliminary-review-via-chat-command.md) and [0024](0024-review-runs-keyed-by-path-scope.md), amends [0019](0019-review-model-port-and-claude-code-cli-adapter.md), [0023](0023-universal-review-artifact-model-and-exporters.md), [0027](0027-ura-dock-keyboard-clipboard-and-outdated-items.md) and [0030](0030-llm-domain-and-structural-model-ports.md)
+- Status: Accepted; supersedes [0022](0022-opt-in-preliminary-review-via-chat-command.md) and [0024](0024-review-runs-keyed-by-path-scope.md), amends [0019](0019-review-model-port-and-claude-code-cli-adapter.md), [0023](0023-universal-review-artifact-model-and-exporters.md), [0027](0027-ura-note-list-keyboard-clipboard-and-outdated-items.md) and [0030](0030-llm-domain-and-structural-model-ports.md)
 - Date: 2026-10-30
 
 ## Context

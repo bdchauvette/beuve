@@ -33,7 +33,7 @@ export function uraFailure(
     case 'order-mismatch': {
       return err({
         code: 'refused',
-        message: 'the dock is out of date: the order must name every item once',
+        message: 'the notes list is out of date: the order must name every item once',
       });
     }
     case 'approve-over-blocking': {

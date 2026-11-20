@@ -1,6 +1,6 @@
 # 0022. Opt-in preliminary review, run from a chat command
 
-- Status: Superseded by [0055](0055-review-folded-into-chat-with-verification.md) (opt-in from the chat, the grammar and how `claude` is found still hold); run keying, attach rules and `--fresh` statuses amended by [0024](0024-review-runs-keyed-by-path-scope.md); promotion stages a URA item since [0027](0027-ura-dock-keyboard-clipboard-and-outdated-items.md)
+- Status: Superseded by [0055](0055-review-folded-into-chat-with-verification.md) (opt-in from the chat, the grammar and how `claude` is found still hold); run keying, attach rules and `--fresh` statuses amended by [0024](0024-review-runs-keyed-by-path-scope.md); promotion stages a URA item since [0027](0027-ura-note-list-keyboard-clipboard-and-outdated-items.md)
 - Date: 2026-10-28
 
 ## Context

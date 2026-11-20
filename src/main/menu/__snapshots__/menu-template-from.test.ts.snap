@@ -619,11 +619,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
-        "id": "dock-show",
+        "id": "note-show",
         "label": "&Show in Diff",
       },
       {
-        "id": "dock-edit",
+        "id": "note-edit",
         "label": "&Edit…",
       },
       {
@@ -633,52 +633,52 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Label",
         "submenu": [
           {
-            "id": "dock-label-issue",
+            "id": "note-label-issue",
             "label": "&Issue",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-suggestion",
+            "id": "note-label-suggestion",
             "label": "&Suggestion",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-question",
+            "id": "note-label-question",
             "label": "&Question",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-nitpick",
+            "id": "note-label-nitpick",
             "label": "&Nitpick",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-thought",
+            "id": "note-label-thought",
             "label": "&Thought",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-smell",
+            "id": "note-label-smell",
             "label": "S&mell",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-praise",
+            "id": "note-label-praise",
             "label": "&Praise",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-note",
+            "id": "note-label-note",
             "label": "N&ote",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-todo",
+            "id": "note-label-todo",
             "label": "To&do",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-chore",
+            "id": "note-label-chore",
             "label": "&Chore",
             "type": "checkbox",
           },
@@ -687,7 +687,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
           },
           {
             "checkedLabel": "Mark as Not &Blocking",
-            "id": "dock-blocking",
+            "id": "note-blocking",
             "label": "Mark &as Blocking",
           },
         ],
@@ -696,7 +696,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "S&tatus",
         "submenu": [
           {
-            "id": "dock-status-open",
+            "id": "note-status-open",
             "label": "&Open",
             "type": "checkbox",
           },
@@ -704,12 +704,12 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "type": "separator",
           },
           {
-            "id": "dock-status-addressed",
+            "id": "note-status-addressed",
             "label": "&Addressed",
             "type": "checkbox",
           },
           {
-            "id": "dock-status-withdrawn",
+            "id": "note-status-withdrawn",
             "label": "&Withdrawn",
             "type": "checkbox",
           },
@@ -720,19 +720,19 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "icon": "arrow-up",
-        "id": "dock-move-up",
+        "id": "note-move-up",
         "label": "&Move Up",
       },
       {
         "icon": "arrow-down",
-        "id": "dock-move-down",
+        "id": "note-move-down",
         "label": "Move &Down",
       },
       {
         "type": "separator",
       },
       {
-        "id": "dock-select-all",
+        "id": "note-select-all",
         "label": "Sele&ct All",
       },
       {
@@ -747,7 +747,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
-        "id": "dock-delete",
+        "id": "note-delete",
         "label": "Delete",
       },
     ],
@@ -1558,11 +1558,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "type": "separator",
       },
       {
-        "id": "dock-show",
+        "id": "note-show",
         "label": "Show in Diff",
       },
       {
-        "id": "dock-edit",
+        "id": "note-edit",
         "label": "Edit…",
       },
       {
@@ -1572,52 +1572,52 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Label",
         "submenu": [
           {
-            "id": "dock-label-issue",
+            "id": "note-label-issue",
             "label": "Issue",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-suggestion",
+            "id": "note-label-suggestion",
             "label": "Suggestion",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-question",
+            "id": "note-label-question",
             "label": "Question",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-nitpick",
+            "id": "note-label-nitpick",
             "label": "Nitpick",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-thought",
+            "id": "note-label-thought",
             "label": "Thought",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-smell",
+            "id": "note-label-smell",
             "label": "Smell",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-praise",
+            "id": "note-label-praise",
             "label": "Praise",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-note",
+            "id": "note-label-note",
             "label": "Note",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-todo",
+            "id": "note-label-todo",
             "label": "Todo",
             "type": "checkbox",
           },
           {
-            "id": "dock-label-chore",
+            "id": "note-label-chore",
             "label": "Chore",
             "type": "checkbox",
           },
@@ -1626,7 +1626,7 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           },
           {
             "checkedLabel": "Mark as Not Blocking",
-            "id": "dock-blocking",
+            "id": "note-blocking",
             "label": "Mark as Blocking",
           },
         ],
@@ -1635,7 +1635,7 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Status",
         "submenu": [
           {
-            "id": "dock-status-open",
+            "id": "note-status-open",
             "label": "Open",
             "type": "checkbox",
           },
@@ -1643,12 +1643,12 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
             "type": "separator",
           },
           {
-            "id": "dock-status-addressed",
+            "id": "note-status-addressed",
             "label": "Addressed",
             "type": "checkbox",
           },
           {
-            "id": "dock-status-withdrawn",
+            "id": "note-status-withdrawn",
             "label": "Withdrawn",
             "type": "checkbox",
           },
@@ -1659,19 +1659,19 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       },
       {
         "icon": "arrow-up",
-        "id": "dock-move-up",
+        "id": "note-move-up",
         "label": "Move Up",
       },
       {
         "icon": "arrow-down",
-        "id": "dock-move-down",
+        "id": "note-move-down",
         "label": "Move Down",
       },
       {
         "type": "separator",
       },
       {
-        "id": "dock-select-all",
+        "id": "note-select-all",
         "label": "Select All",
       },
       {
@@ -1686,7 +1686,7 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "type": "separator",
       },
       {
-        "id": "dock-delete",
+        "id": "note-delete",
         "label": "Delete",
       },
     ],

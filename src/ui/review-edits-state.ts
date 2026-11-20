@@ -17,8 +17,8 @@ export type ReviewEditsFlow =
   | { readonly kind: 'done'; readonly text: string }
   | { readonly kind: 'failed'; readonly text: string };
 
-/** What the dock shows of the session's review edits. */
-export interface ReviewEditsDockState {
+/** What the notes list shows of the session's review edits. */
+export interface ReviewEditsNoteListState {
   readonly view: ReviewEditsView | undefined;
   readonly flow: ReviewEditsFlow;
 }

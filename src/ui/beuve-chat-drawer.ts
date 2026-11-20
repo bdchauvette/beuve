@@ -1796,7 +1796,7 @@ export class BeuveChatDrawer extends LitElement {
           data-message-id=${messageId}
           data-finding=${index}
           aria-disabled=${isStaged ? 'true' : 'false'}
-          title="Stage this finding on its lines in the review dock"
+          title="Stage this finding on its lines in the notes list"
         >
           ${isStaged ? 'Staged' : 'Stage'}
         </button>
@@ -1843,7 +1843,7 @@ export class BeuveChatDrawer extends LitElement {
           data-message-id=${messageId}
           data-proposal=${proposal}
           aria-disabled=${isStaged ? 'true' : 'false'}
-          title="Stage this note on its lines in the review dock"
+          title="Stage this note on its lines in the notes list"
         >
           ${isStaged ? 'Staged' : 'Stage'}
         </button>

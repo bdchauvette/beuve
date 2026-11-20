@@ -55,7 +55,7 @@ markdown-it 14 was checked against a sample document in a scratch install. Every
   - Diagram text cannot be selected or found. A diagram is drawn again when the color scheme changes.
   - A fence that fails to parse shows as code, with Mermaid's error under it.
   - The diagram is one region on the fence's lines. "Show previous version" draws the base's diagram.
-- **Navigation.** `j`/`k` step over hunks as in source. In a rendered card each step outlines the region of the hunk's changed lines, or, for a hunk that only removes, the removed region (`hunkTargetFrom`). A citation, flow or dock jump outlines its line's region.
+- **Navigation.** `j`/`k` step over hunks as in source. In a rendered card each step outlines the region of the hunk's changed lines, or, for a hunk that only removes, the removed region (`hunkTargetFrom`). A citation, flow or notes list jump outlines its line's region.
 - **Find in review** (ADR 0051) searches the source, as now, in rendered cards too. A hit in a rendered card outlines the region that holds its line, without switching the card to source.
 - **Sheets** render Markdown by default, with the same toggle.
   - Regions are tinted from the sheet's marks (`changeRunsFromMarks`). A sheet has no base text, so it shows no removed regions.

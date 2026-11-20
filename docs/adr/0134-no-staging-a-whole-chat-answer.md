@@ -9,7 +9,7 @@ Every completed answer, and every `/summarize` block, carried "Stage as URA comm
 
 ## Decision
 
-- Answers and `/summarize` blocks have no stage button; the `stage-answer` command and the `answer` context-menu kind are gone. What reaches the dock from the chat is a `/review` finding or a proposed note, each one the reviewer's click.
+- Answers and `/summarize` blocks have no stage button; the `stage-answer` command and the `answer` context-menu kind are gone. What reaches the notes list from the chat is a `/review` finding or a proposed note, each one the reviewer's click.
 - `ura:create` loses `origin`: a note made through it is always the reviewer's (`human`). A `chat-answer` origin names a finding or a proposal, never neither: `validateUraItem` rejects one that names neither, and the `ura_items` CHECK says the same (`chat_finding` or `chat_proposal`, exactly one, on lines).
 - To quote an answer in a note, the reviewer copies from it into the composer.
 

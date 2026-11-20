@@ -146,7 +146,7 @@ describe('menuTemplateFrom', () => {
     'gives a %s command whose name follows the state both labels, and no check mark',
     (platform, { expect }) => {
       const items = flatten(menuTemplateFrom({ catalog: commandCatalog, platform }));
-      const blocking = items.find((item) => item.id === 'dock-blocking');
+      const blocking = items.find((item) => item.id === 'note-blocking');
       expect([plain(blocking?.label), plain(blocking?.checkedLabel)]).toStrictEqual([
         'Mark as Blocking',
         'Mark as Not Blocking',
@@ -172,8 +172,8 @@ describe('menuTemplateFrom', () => {
           return [item.id, item.icon];
         }),
     ).toStrictEqual([
-      ['dock-move-up', 'arrow-up'],
-      ['dock-move-down', 'arrow-down'],
+      ['note-move-up', 'arrow-up'],
+      ['note-move-down', 'arrow-down'],
     ]);
   });
 
@@ -274,13 +274,13 @@ describe('contextMenuTemplateFrom', () => {
       'Delete',
     ]);
     const label = items.find((item) => item.label === 'Label')?.submenu ?? [];
-    expect(label.find((item) => item.id === 'dock-blocking')).toStrictEqual({
-      id: 'dock-blocking',
+    expect(label.find((item) => item.id === 'note-blocking')).toStrictEqual({
+      id: 'note-blocking',
       label: 'Blocking',
       type: 'checkbox',
     });
-    expect(items.find((item) => item.id === 'dock-move-up')).toStrictEqual({
-      id: 'dock-move-up',
+    expect(items.find((item) => item.id === 'note-move-up')).toStrictEqual({
+      id: 'note-move-up',
       label: 'Move Up',
     });
   });
