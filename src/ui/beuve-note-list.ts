@@ -34,10 +34,10 @@ import { uraSeverityViews } from './ura-severity-views.ts';
 import { noteListSelectionAfter } from './note-list-selection-after.ts';
 import type { NoteListGesture, NoteListSelection } from './note-list-selection-after.ts';
 import { countNoun } from './count-noun.ts';
-import { createSuggestionBadge } from './create-suggestion-badge.ts';
-import { createUraNoteIcon } from './create-ura-note-icon.ts';
-import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
+import { noteMarksFrom } from './note-marks-from.ts';
+import { uraSeverityEmoji } from './ura-severity-emoji.ts';
+import './primitives/beuve-agent-mark.ts';
 import './beuve-ura-label-menu.ts';
 import type { UraLabelChange } from './beuve-ura-label-menu.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
@@ -94,9 +94,9 @@ const noteListExports: Readonly<Record<NoteListExportTarget, NoteListExport>> = 
 };
 
 /**
- * Zone 3: the Universal Review Artifact notes list (ADR 0023, 0027). Lists the session's staged
- * items in export order (severity, `path:lines` on the current head, title, origin, and an
- * outdated marker), then the withdrawn and addressed ones. While the zone has focus: ↑/↓ move,
+ * Zone 3: the Universal Review Artifact notes list (ADR 0023, 0027). Lists the session's open
+ * notes in export order, then the closed ones under their own heading; each row is the label's
+ * emoji, what the note says, its path, and only what is marked (ADR 0154). While the zone has focus: ↑/↓ move,
  * Return jumps the diff stream to the item, Space opens its editor (label, Blocking, title, body),
  * Delete withdraws or restores it, Shift+Delete deletes it and ⌥↑/⌥↓ move it up or down the
  * export order, as dragging a staged note among the staged ones does (ADR 0144); a double-click
@@ -143,6 +143,9 @@ export class BeuveNoteList extends LitElement {
 
       li {
         position: relative;
+        display: grid;
+        grid-template-columns: calc(1.5 * var(--beuve-measure-em)) minmax(0, 1fr);
+        column-gap: var(--beuve-space-1-5);
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border: var(--beuve-border-width) solid transparent;
         border-radius: var(--beuve-radius);
@@ -160,10 +163,6 @@ export class BeuveNoteList extends LitElement {
 
       :host([focused]) li.cursor {
         border-color: var(--beuve-accent);
-      }
-
-      li.done {
-        opacity: 0.6;
       }
 
       li.selected {
@@ -210,10 +209,6 @@ export class BeuveNoteList extends LitElement {
           -0.5 *
             (var(--beuve-space-0-5) + var(--beuve-border-width-thick)) - var(--beuve-border-width)
         );
-      }
-
-      li.done .title {
-        text-decoration: line-through;
       }
 
       .meta {
@@ -291,11 +286,107 @@ export class BeuveNoteList extends LitElement {
         font: var(--beuve-font-code);
       }
 
-      .suggestion {
-        display: inline-flex;
-        flex: none;
+      /* ADR 0154: the label's emoji in its own column, then text, path and marks. */
+      .note-kind {
+        text-align: center;
+        font-size: var(--beuve-font-size-body);
+        line-height: var(--beuve-line-height-normal);
+      }
+
+      .note-content {
+        display: flex;
+        flex-direction: column;
+        gap: var(--beuve-space-px);
+        min-inline-size: 0;
+      }
+
+      .note-title {
+        font-weight: var(--beuve-font-weight-medium);
+        overflow-wrap: anywhere;
+      }
+
+      .note-text {
+        display: -webkit-box;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+
+      :is(.note-title, .note-text) code {
+        padding: 0 var(--beuve-space-0-5);
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-code);
+      }
+
+      .note-path {
+        overflow: hidden;
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-code);
+        font-size: var(--beuve-font-size-caption);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        direction: rtl;
+        /* The box is right to left, so a long path loses its start; its end is the left edge. */
+        text-align: end;
+      }
+
+      .note-path.whole {
+        font: var(--beuve-font-small);
+        direction: ltr;
+        text-align: start;
+      }
+
+      .note-marks {
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        color: var(--beuve-accent);
+        column-gap: var(--beuve-space-1);
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-small);
+        font-weight: var(--beuve-font-weight-semibold);
+      }
+
+      .mark + .mark::before {
+        content: '•';
+        margin-inline-end: var(--beuve-space-1);
+        color: var(--beuve-text-faint);
+        font-weight: var(--beuve-font-weight-normal);
+      }
+
+      .mark-blocking {
+        color: var(--beuve-danger);
+      }
+
+      .mark-outdated {
+        color: var(--beuve-warn);
+      }
+
+      .mark-addressed {
+        color: var(--beuve-ok);
+      }
+
+      li.closed :is(.note-title, .note-text) {
+        color: var(--beuve-text-muted);
+        font-weight: var(--beuve-font-weight-normal);
+      }
+
+      .list-heading {
+        display: flex;
+        justify-content: space-between;
+        margin: var(--beuve-space-3) var(--beuve-space-2) var(--beuve-space-1);
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-small);
+        font-weight: var(--beuve-font-weight-semibold);
+      }
+
+      .list-count {
+        font-weight: var(--beuve-font-weight-normal);
+      }
+
+      li > .editor {
+        grid-column: 1 / -1;
       }
 
       beuve-patch-preview {
@@ -1064,62 +1155,95 @@ export class BeuveNoteList extends LitElement {
     this.emit('beuve-ura-export', { target });
   }
 
+  /**
+   * One note (ADR 0154): its label's emoji in a column of its own, then what it says, its path,
+   * and the facts that differ from the default, if any (✨ for an agent's note, then Blocking,
+   * Outdated, Posted, Addressed or Withdrawn). The cursor row adds the suggestion's preview.
+   */
   private renderItem(item: UraItemView, index: number): TemplateResult {
     const labels = describeUraItem(item);
-    const isDone = item.status.kind !== 'staged';
-    const status = statusText(item);
+    const isCursor = index === this.cursor;
     const isSelected = this.selection.selected.includes(item.id);
     const classes = [
-      index === this.cursor && 'cursor',
+      isCursor && 'cursor',
       isSelected && 'selected',
-      isDone && 'done',
+      item.status.kind !== 'staged' && 'closed',
       this.draggedIds.includes(item.id) && 'dragging',
       this.dropTarget?.id === item.id && `drop-${this.dropTarget.side}`,
     ].filter((name) => name !== false);
+    const isDraggable = item.status.kind === 'staged' && this.editingId !== item.id;
     return html`<li
       class=${classes.join(' ')}
       data-action="item"
       data-item-id=${item.id}
       aria-selected=${isSelected ? 'true' : 'false'}
-      draggable=${isDone || this.editingId === item.id ? 'false' : 'true'}
+      draggable=${isDraggable ? 'true' : 'false'}
     >
-      <div class="meta">
-        ${createUraNoteIcon()}
-        <span class="severity ${item.severity} ${item.blocking ? 'blocking' : ''}"
-          >${labels.emoji} ${labels.severity}</span
-        >
-        <span class="anchor" title=${labels.anchor}><bdi>${pathText(labels.anchor)}</bdi></span>
+      <span
+        class="note-kind"
+        role="img"
+        aria-label=${labels.severityName}
+        title=${labels.severityName}
+        >${uraSeverityEmoji(item.severity)}</span
+      >
+      <div class="note-content">
+        ${this.renderNoteText(item)}
         ${
-          labels.outdated === undefined
-            ? nothing
-            : html`<span
-                class="outdated"
-                title="Written against ${item.headSha.slice(0, 12)}; it is still exported, with its original lines"
-                >${labels.outdated}</span
-              >`
+          item.suggestedPatch !== undefined &&
+          hasNoteText(item) &&
+          (isCursor || this.editingId === item.id)
+            ? html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`
+            : nothing
         }
         ${
-          item.posted === undefined
-            ? nothing
-            : html`<span
-                class="posted"
-                title="Posted to GitHub ${item.posted.placement === 'inline' ? 'inline' : 'in the review body'}, ${item.posted.postedAt}"
-                >posted</span
+          item.anchor.kind === 'change'
+            ? html`<span class="note-path whole">Whole change</span>`
+            : html`<span class="note-path" title=${labels.anchor}
+                ><bdi>${pathText(labels.anchor)}</bdi></span
               >`
         }
-        ${item.suggestedPatch === undefined ? nothing : createSuggestionBadge()}
-        <span class="origin ${item.origin.kind}">${status === '' ? labels.origin : status}</span>
+        ${this.renderMarks(item, isCursor)}
       </div>
-      <div class="title">
-        ${parseInlineTitle(headlineOfUraItem(item)).map((span) => renderInlineSpan(span))}
-      </div>
-      ${
-        item.suggestedPatch !== undefined && (index === this.cursor || this.editingId === item.id)
-          ? html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`
-          : nothing
-      }
       ${this.editingId === item.id ? this.renderEditor(item) : nothing}
     </li>`;
+  }
+
+  /** What the note says: its title, else its body, else its suggestion (ADR 0154). */
+  private renderNoteText(item: UraItemView): TemplateResult {
+    if (item.title !== '') {
+      return html`<span class="note-title"
+        >${parseInlineTitle(item.title).map((span) => renderInlineSpan(span))}</span
+      >`;
+    }
+    const body = item.body.trim();
+    if (body !== '' || item.suggestedPatch === undefined) {
+      return html`<span class="note-text"
+        >${parseInlineTitle(body.replaceAll(/\s+/gu, ' ')).map((span) => renderInlineSpan(span))}</span
+      >`;
+    }
+    return html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`;
+  }
+
+  /** ✨ for an agent's note, then the words for what is marked; nothing when nothing is. */
+  private renderMarks(item: UraItemView, isCursor: boolean): TemplateResult | typeof nothing {
+    const marks = noteMarksFrom(item);
+    const isAgent = item.origin.kind !== 'human';
+    if (!isAgent && marks.length === 0) {
+      return nothing;
+    }
+    return html`<span class="note-marks">
+      ${
+        isAgent
+          ? html`<beuve-agent-mark
+              .origin=${item.origin}
+              ?focusable=${isCursor}
+            ></beuve-agent-mark>`
+          : nothing
+      }
+      ${marks.map((mark) => {
+        return html`<span class="mark mark-${mark.kind}" title=${mark.title}>${mark.text}</span>`;
+      })}
+    </span>`;
   }
 
   /**
@@ -1567,6 +1691,30 @@ export class BeuveNoteList extends LitElement {
     </div>`;
   }
 
+  /** The open notes, then the closed ones under their own heading (ADR 0154). */
+  private renderLists(ordered: readonly UraItemView[]): TemplateResult {
+    const openCount = ordered.filter((item) => item.status.kind === 'staged').length;
+    const closed = ordered.slice(openCount);
+    return html`<ol
+        ?hidden=${openCount === 0}
+        aria-label="Open notes"
+        aria-multiselectable="true"
+        data-action="list"
+      >
+        ${ordered.slice(0, openCount).map((item, index) => this.renderItem(item, index))}
+      </ol>
+      ${
+        closed.length === 0
+          ? nothing
+          : html`<h3 class="list-heading" id="closed-notes">
+                Closed <span class="list-count">${closed.length}</span>
+              </h3>
+              <ol aria-labelledby="closed-notes" aria-multiselectable="true" data-action="list">
+                ${closed.map((item, index) => this.renderItem(item, openCount + index))}
+              </ol>`
+      }`;
+  }
+
   /** The line that says how many closed notes are hidden, with a button that lists them. */
   private renderHidden(listedCount: number): TemplateResult | typeof nothing {
     const hidden = this.hiddenCount();
@@ -1744,15 +1892,7 @@ export class BeuveNoteList extends LitElement {
                       : 'Open a review session to stage notes.'
                   }
                 </p>`
-              : html`${this.renderSelectionBar()}
-                  <ol
-                    ?hidden=${ordered.length === 0}
-                    aria-label="Staged review items"
-                    aria-multiselectable="true"
-                    data-action="list"
-                  >
-                    ${ordered.map((item, index) => this.renderItem(item, index))}
-                  </ol>`
+              : html`${this.renderSelectionBar()} ${this.renderLists(ordered)}`
           }
           ${this.renderHidden(ordered.length)}
         </section>
@@ -1908,11 +2048,9 @@ const saveAccelerators: Readonly<Record<KeyPlatform, string>> = {
 };
 
 /** The status word on a finished item; none on a staged one. */
-function statusText(item: UraItemView): string {
-  if (item.status.kind === 'withdrawn' || item.status.kind === 'addressed') {
-    return item.status.kind;
-  }
-  return '';
+/** Whether the note says something in words, so a suggestion is extra rather than its content. */
+function hasNoteText(item: UraItemView): boolean {
+  return item.title !== '' || item.body.trim() !== '';
 }
 
 declare global {

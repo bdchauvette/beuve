@@ -51,6 +51,7 @@ import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import type { ShowInChatDetail } from './primitives/beuve-agent-mark.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { adjacentMessageTop } from './adjacent-message-top.ts';
 import { chatCompletionStyles } from './chat-completion-styles.ts';
@@ -414,6 +415,11 @@ export class BeuveChatDrawer extends LitElement {
       .finding {
         padding-block-start: var(--beuve-space-2);
         border-block-start: var(--beuve-border-width) solid var(--beuve-border);
+      }
+
+      .proposal.revealed,
+      .entry.revealed {
+        background: var(--beuve-accent-soft);
       }
 
       .finding.revealed {
@@ -1813,7 +1819,12 @@ export class BeuveChatDrawer extends LitElement {
     const key = `${messageId}:${String(proposal)}`;
     const isStaged = this.stagedProposals.has(key);
     const citation = { path: note.path, startLine: note.startLine, endLine: note.endLine };
-    return html`<div class="proposal" role="group" aria-label="Proposed review note">
+    return html`<div
+      class="proposal"
+      role="group"
+      aria-label="Proposed review note"
+      data-proposal-key=${key}
+    >
       <div class="finding-head">
         <span class="severity ${note.blocking ? 'blocking' : ''}"
           >${note.blocking ? `${uraBlockingEmoji} ` : ''}${uraSeverityEmoji(note.label)}
@@ -1918,15 +1929,33 @@ export class BeuveChatDrawer extends LitElement {
     </div>`;
   }
 
+  /** The finding, proposal or answer a note came from, if the transcript still holds it. */
+  private sourceElement({
+    messageId,
+    finding,
+    proposal,
+  }: ShowInChatDetail): HTMLElement | undefined {
+    let selector = `.entry.answer[data-message-id="${CSS.escape(messageId)}"]`;
+    if (finding !== undefined) {
+      selector = `[data-finding="${CSS.escape(`${messageId}:${String(finding)}`)}"]`;
+    } else if (proposal !== undefined) {
+      selector = `[data-proposal-key="${CSS.escape(`${messageId}:${String(proposal)}`)}"]`;
+    }
+    return this.renderRoot.querySelector<HTMLElement>(selector) ?? undefined;
+  }
+
   /** Scrolls to a `/review` finding of the transcript and marks it for a moment (ADR 0061). */
   async revealFinding(messageId: string, finding: number): Promise<void> {
+    await this.revealSource({ messageId, finding });
+  }
+
+  /**
+   * Scrolls to where a note came from (ADR 0154): its `/review` finding, its proposal, or else
+   * the answer, and marks it for a moment. A source the transcript no longer holds is a no-op.
+   */
+  async revealSource(source: ShowInChatDetail): Promise<void> {
     await this.updateComplete;
-    const key = `${messageId}:${String(finding)}`;
-    const item = [...this.renderRoot.querySelectorAll<HTMLElement>('[data-finding]')].find(
-      (element) => {
-        return element.dataset['finding'] === key;
-      },
-    );
+    const item = this.sourceElement(source);
     if (item === undefined) {
       return;
     }

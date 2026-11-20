@@ -12,6 +12,8 @@ import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 export interface UraItemLabels {
   /** The label, with ` (blocking)` when the note blocks: `Issue (blocking)`. */
   readonly severity: string;
+  /** The label alone: `Issue`, for its emoji's name in the notes list (ADR 0154). */
+  readonly severityName: string;
   /** The label's emoji, shown beside its name, after 🛑 when the note blocks. */
   readonly emoji: string;
   /** `src/a.ts:12-14`, where the item sits on the current head (or sat, when outdated). */
@@ -48,7 +50,8 @@ const outdatedReasons: Readonly<Record<UraOutdatedReasonView, string>> = {
 /** Labels for an item: label and blocking, anchor on the current head, origin and outdated reason. */
 export function describeUraItem(item: UraItemView): UraItemLabels {
   const { placement } = item;
-  let severity = severities[item.severity];
+  const severityName = severities[item.severity];
+  let severity = severityName;
   let emoji = uraSeverityEmoji(item.severity);
   if (item.blocking) {
     severity += ' (blocking)';
@@ -56,6 +59,7 @@ export function describeUraItem(item: UraItemView): UraItemLabels {
   }
   return {
     severity,
+    severityName,
     emoji,
     anchor: formatAnchor(currentAnchor(item)),
     origin: originOf(item),

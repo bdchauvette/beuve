@@ -37,4 +37,4 @@ A native `<select>` for the label beside an icon-only Blocking toggle looked unl
 
 ## Amendment 2026-11-20: a glyph marks a note with a suggestion
 
-ADR 0043's amendment of this date names the code a note carries a "suggestion" throughout the UI. The notes list row and the diff marker mark it with a ± glyph named "Has suggested changes" rather than the word `patch`, so a `suggestion`-labeled note with code still does not say the word twice. The overlap of the word with this label elsewhere is accepted as an experiment.
+ADR 0043's amendment of this date names the code a note carries a "suggestion" throughout the UI. The diff marker marks it with a ± glyph (the notes list row no longer marks it, ADR 0154) named "Has suggested changes" rather than the word `patch`, so a `suggestion`-labeled note with code still does not say the word twice. The overlap of the word with this label elsewhere is accepted as an experiment.
