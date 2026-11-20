@@ -14,7 +14,7 @@ The menu bar is beuve (app, macOS), File, Edit, View, Navigate, Analyze, Review,
 - **File** is the review as a document: Open Pull Request or Branch…, Review Queue; Reload Review, Stop; Open in Editor, Open in Sheet, Open Description in Sheet, Open on GitHub; Export Review ▸, Post Review to GitHub…; Close Window, Close All Sheets.
 - **Navigate** replaces Go and adds Show Callers beside Go to Definition and Go to Type Definition.
 - **Analyze** holds Show Control Flow, the one analysis that draws a view; later analyses join it.
-- **Review** is the reviewer's progress and edits: File Reviewed, Save Progress, Undo Save Progress; Review Range ▸, Filter by Commit…; Suggest Edit…, Review Edits ▸; Checkout ▸ (Run Setup, Edit Setup Command…, Restart Language Servers).
+- **Review** is the reviewer's progress and edits: File Reviewed, Save Progress, Undo Save Progress; Review Range ▸, Filter by Commit…; Add Suggestion…, Review Edits ▸; Checkout ▸ (Run Setup, Edit Setup Command…, Restart Language Servers).
 - **Note** is a top-level menu that mirrors the note's context menu (ADR 0150): Add Note, Flesh Out Draft; Show in Diff, Edit…; Label ▸ (the labels, then Mark as Blocking), Status ▸ (Open; Addressed, Withdrawn); Move Up, Move Down; Select All; Show Closed Notes; Delete. Withdraw, Mark as Addressed and Change Label… leave the menu bar. They stay catalog commands for the dock's in-place keys and the palette. On Linux its access key is the O (`N&ote`), since Navigate takes the N.
 - **Editor Settings…** moves beside Settings… (the app menu on macOS, Edit on Linux), since it is a preference.
 

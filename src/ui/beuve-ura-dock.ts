@@ -101,7 +101,7 @@ const dockExports: Readonly<Record<DockExportTarget, DockExport>> = {
  * The Note menu and the context menu run the same commands (`runCommand`, ADR 0068), and Open in
  * Editor opens it (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocking note; export buttons copy the compiled review. Items carrying
- * a suggested patch say `patch` and preview it under the cursor; the editor can re-edit the
+ * a suggestion say `suggestion` and preview it under the cursor; the editor can re-edit the
  * suggestion in the diff stream or remove it (ADR 0043). Presentational: emits
  * `beuve-ura-edit-suggestion`, `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-edit-many`,
  * `beuve-ura-delete`, `beuve-ura-reorder` and `beuve-ura-export`; `beuve-app` does the IPC.
@@ -1103,7 +1103,7 @@ export class BeuveUraDock extends LitElement {
         ${
           item.suggestedPatch === undefined
             ? nothing
-            : html`<span class="suggestion" title="Carries a suggested change">patch</span>`
+            : html`<span class="suggestion" title="Carries a suggestion">suggestion</span>`
         }
         <span class="origin ${item.origin.kind}">${status === '' ? labels.origin : status}</span>
       </div>
@@ -1203,7 +1203,7 @@ export class BeuveUraDock extends LitElement {
   }
 
   /**
-   * Re-edit or remove a suggestion. Editing happens in the diff stream (Suggest Edit there), so it is
+   * Re-edit or remove a suggestion. Editing happens in the diff stream (Add Suggestion there), so it is
    * offered only for line notes current on the head they were written against.
    */
   private renderSuggestionActions(item: UraItemView): TemplateResult | typeof nothing {
@@ -1223,7 +1223,7 @@ export class BeuveUraDock extends LitElement {
               data-action="edit-suggestion"
               data-item-id=${item.id}
             >
-              ${item.suggestedPatch === undefined ? 'Suggest a change…' : 'Edit suggestion…'}
+              ${item.suggestedPatch === undefined ? 'Add suggestion…' : 'Edit suggestion…'}
             </button>`
           : nothing
       }

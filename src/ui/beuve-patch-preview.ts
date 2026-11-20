@@ -58,7 +58,7 @@ export class BeuvePatchPreview extends LitElement {
     const lines = minimizePatchPreview(
       splitPatch(this.patch).filter((line) => line.kind !== 'meta' && line.kind !== 'hunk'),
     );
-    return html`<pre aria-label="Suggested change">
+    return html`<pre aria-label="Suggestion">
 ${lines.map((line) => {
         return html`<span class=${line.kind}>${line.text === '' ? ' ' : line.text}</span>`;
       })}</pre>`;
