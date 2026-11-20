@@ -518,8 +518,8 @@ export class BeuveUraDock extends LitElement {
   @property({ type: Boolean }) accessor hasSession = false;
   /** The open session's items in dock order, every status (`ura:list`). */
   @property({ attribute: false }) accessor items: readonly UraItemView[] = [];
-  /** Whether addressed notes are listed (View preference `showAddressedNotes`, ADR 0149). */
-  @property({ type: Boolean }) accessor showAddressed = true;
+  /** Whether closed notes, addressed or withdrawn, are listed (preference `showClosedNotes`, ADR 0149). */
+  @property({ type: Boolean }) accessor showClosed = true;
   @property() accessor derivedVerdict: UraVerdictView = 'approve';
   /** The verdict stored for the session (`ura:list`); absent when the derived one applies. */
   @property() accessor chosenVerdict: UraVerdictView | undefined;
@@ -560,9 +560,9 @@ export class BeuveUraDock extends LitElement {
     this.addController(
       new ActionDelegation(this, {
         click: {
-          'show-addressed': (_data, event): void => {
+          'show-closed': (_data, event): void => {
             event.stopPropagation();
-            this.emit('beuve-ura-show-addressed', undefined);
+            this.emit('beuve-ura-show-closed', undefined);
           },
           'review-edits': ({ op = '' }, event): void => {
             event.stopPropagation();
@@ -776,23 +776,23 @@ export class BeuveUraDock extends LitElement {
   }
 
   /**
-   * The listed items: staged ones first, in export order, then withdrawn and addressed ones,
-   * leaving out the addressed ones while they are hidden (ADR 0149).
+   * The listed items: staged ones first, in export order, then the closed ones (withdrawn and
+   * addressed), unless closed notes are hidden (ADR 0149).
    */
   private ordered(): UraItemView[] {
-    return [
-      ...this.items.filter((item) => item.status.kind === 'staged'),
-      ...this.items.filter((item) => item.status.kind !== 'staged' && this.isListed(item)),
-    ];
+    const staged = this.items.filter((item) => item.status.kind === 'staged');
+    if (!this.showClosed) {
+      return staged;
+    }
+    return [...staged, ...this.items.filter((item) => item.status.kind !== 'staged')];
   }
 
-  private isListed(item: UraItemView): boolean {
-    return this.showAddressed || item.status.kind !== 'addressed';
-  }
-
-  /** How many addressed notes the dock is hiding. */
+  /** How many closed notes the dock is hiding. */
   private hiddenCount(): number {
-    return this.items.filter((item) => !this.isListed(item)).length;
+    if (this.showClosed) {
+      return 0;
+    }
+    return this.items.filter((item) => item.status.kind !== 'staged').length;
   }
 
   /** Open in Editor: the item's file at its current first line (line 1 for file notes and outdated items). */
@@ -1548,7 +1548,7 @@ export class BeuveUraDock extends LitElement {
     </div>`;
   }
 
-  /** The line that says how many addressed notes are hidden, with a button that lists them. */
+  /** The line that says how many closed notes are hidden, with a button that lists them. */
   private renderHidden(listedCount: number): TemplateResult | typeof nothing {
     const hidden = this.hiddenCount();
     if (hidden === 0) {
@@ -1556,11 +1556,11 @@ export class BeuveUraDock extends LitElement {
     }
     let lead = '';
     if (listedCount === 0) {
-      lead = 'Every note is addressed. ';
+      lead = 'Every note is closed. ';
     }
-    return html`<p class="empty hidden-notes">
-      ${lead}${countNoun(hidden, 'addressed note')} hidden.
-      <button type="button" class="button link" data-action="show-addressed">Show</button>
+    return html`<p class="empty hidden-notes" title="Addressed and withdrawn notes are closed">
+      ${lead}${countNoun(hidden, 'closed note')} hidden.
+      <button type="button" class="button link" data-action="show-closed">Show</button>
     </p>`;
   }
 
@@ -1734,7 +1734,7 @@ export class BeuveUraDock extends LitElement {
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
-    if (changed.has('items') || changed.has('showAddressed')) {
+    if (changed.has('items') || changed.has('showClosed')) {
       const listed = this.ordered();
       this.cursor = Math.min(this.cursor, Math.max(0, listed.length - 1));
       const present = new Set(listed.map((item) => item.id));

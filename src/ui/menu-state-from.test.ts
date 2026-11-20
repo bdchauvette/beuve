@@ -14,7 +14,7 @@ describe('menuStateFrom', () => {
         'diff-split',
         'toggle-insights',
         'toggle-diagnostics',
-        'toggle-addressed-notes',
+        'toggle-closed-notes',
         'order-path',
       ],
     });
@@ -63,7 +63,7 @@ describe('menuStateFrom', () => {
       'diff-inline',
       'toggle-insights',
       'toggle-diagnostics',
-      'toggle-addressed-notes',
+      'toggle-closed-notes',
       'tree-mode',
       'order-calls',
       'toggle-reviewed',

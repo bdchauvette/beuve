@@ -35,7 +35,7 @@ const defaults: Required<DiffDisplayView> = {
   showInsights: true,
   showDiagnostics: true,
   showReviewComments: false,
-  showAddressedNotes: true,
+  showClosedNotes: true,
   reviewOrder: 'path',
   skipReviewed: false,
   reviewQueue: defaultReviewQueuePrefs,
@@ -47,8 +47,8 @@ const defaults: Required<DiffDisplayView> = {
 /**
  * Keeps the display preferences (ADR 0042, 0044, 0052) in the JSON file at `filePath`
  * (`<userData>/settings.json`) as `diffLayout`, `ignoreWhitespace`, `sidebarSide` and
- * `showGenerated`, `showInsights` (ADR 0061), `showDiagnostics` (ADR 0111), `showReviewComments` (ADR 0140), `showAddressedNotes` (ADR 0149), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064), the review queue's `reviewQueue` and `reviewQueueBranchPrefixes` (ADR 0113), the preferred `codeFont` (ADR 0122) and `proseFont` (ADR 0124), next to any other keys. A missing or malformed value reads as the default:
- * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, other reviewers' comments hidden, addressed notes listed, files in path order, reviewed files not skipped, no preferred code or prose font. Without a path, in
+ * `showGenerated`, `showInsights` (ADR 0061), `showDiagnostics` (ADR 0111), `showReviewComments` (ADR 0140), `showClosedNotes` (ADR 0149), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064), the review queue's `reviewQueue` and `reviewQueueBranchPrefixes` (ADR 0113), the preferred `codeFont` (ADR 0122) and `proseFont` (ADR 0124), next to any other keys. A missing or malformed value reads as the default:
+ * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, other reviewers' comments hidden, closed notes listed, files in path order, reviewed files not skipped, no preferred code or prose font. Without a path, in
  * memory.
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
@@ -80,7 +80,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
             showInsights: next.showInsights,
             showDiagnostics: next.showDiagnostics,
             showReviewComments: next.showReviewComments,
-            showAddressedNotes: next.showAddressedNotes,
+            showClosedNotes: next.showClosedNotes,
             reviewOrder: next.reviewOrder,
             skipReviewed: next.skipReviewed,
             reviewQueue: next.reviewQueue,
@@ -103,7 +103,7 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
   const showInsights = settings['showInsights'];
   const showDiagnostics = settings['showDiagnostics'];
   const showReviewComments = settings['showReviewComments'];
-  const showAddressedNotes = settings['showAddressedNotes'];
+  const showClosedNotes = settings['showClosedNotes'];
   const reviewOrder = settings['reviewOrder'];
   const skipReviewed = settings['skipReviewed'];
   return {
@@ -114,7 +114,7 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
     showInsights: validOr(showInsights, isBoolean, defaults.showInsights),
     showDiagnostics: validOr(showDiagnostics, isBoolean, defaults.showDiagnostics),
     showReviewComments: validOr(showReviewComments, isBoolean, defaults.showReviewComments),
-    showAddressedNotes: validOr(showAddressedNotes, isBoolean, defaults.showAddressedNotes),
+    showClosedNotes: validOr(showClosedNotes, isBoolean, defaults.showClosedNotes),
     reviewOrder: validOr(reviewOrder, isReviewOrder, defaults.reviewOrder),
     skipReviewed: validOr(skipReviewed, isBoolean, defaults.skipReviewed),
     reviewQueue: reviewQueuePrefsFrom(settings['reviewQueue']),

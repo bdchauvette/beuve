@@ -10,7 +10,7 @@ export function createDiffDisplay(overrides: Partial<DiffDisplayView> = {}): Dif
     showInsights: true,
     showDiagnostics: true,
     showReviewComments: false,
-    showAddressedNotes: true,
+    showClosedNotes: true,
     reviewOrder: 'path',
     skipReviewed: false,
     ...overrides,
