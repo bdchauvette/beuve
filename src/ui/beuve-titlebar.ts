@@ -4,17 +4,19 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { displayIcon } from './display-icon.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { statusDotStyles } from './primitives/status-dot-styles.ts';
 
 /**
  * The window's top bar: the name of the open review, which opens the Open dialog, an icon-only
- * Reload beside it while a review is open (ADR 0146), and New Commits after it while polling has
- * found commits the review does not show yet. The bar drags the window; its buttons do not. Emits
- * `beuve-titlebar-open`, `beuve-titlebar-reload` and `beuve-titlebar-new-commits`.
+ * Reload beside it while a review is open (ADR 0146), marked with a dot while polling has found
+ * commits the review does not show yet. The bar drags the window; its buttons do not. Emits
+ * `beuve-titlebar-open` and `beuve-titlebar-reload`.
  */
 @customElement('beuve-titlebar')
 export class BeuveTitlebar extends LitElement {
   static override styles = [
     buttonStyles,
+    statusDotStyles,
     css`
       :host {
         display: flex;
@@ -42,9 +44,15 @@ export class BeuveTitlebar extends LitElement {
         -webkit-app-region: no-drag;
       }
 
-      .reload,
-      .new-commits {
+      .reload {
+        position: relative;
         flex: none;
+      }
+
+      .reload .status-dot {
+        position: absolute;
+        inset-block-start: var(--beuve-space-0-5);
+        inset-inline-end: var(--beuve-space-0-5);
       }
 
       .reload[aria-busy='true'] svg {
@@ -73,12 +81,6 @@ export class BeuveTitlebar extends LitElement {
     this.dispatchEvent(new CustomEvent('beuve-titlebar-reload', { bubbles: true, composed: true }));
   };
 
-  private readonly showNewCommits = (): void => {
-    this.dispatchEvent(
-      new CustomEvent('beuve-titlebar-new-commits', { bubbles: true, composed: true }),
-    );
-  };
-
   /** The open review's name, or the placeholder when none is open. */
   @property() accessor label = '';
 
@@ -91,7 +93,7 @@ export class BeuveTitlebar extends LitElement {
   /** Whether a review is open, so Reload shows. */
   @property({ type: Boolean }) accessor canReload = false;
 
-  /** Polling found commits the open review doesn't show yet; stays until the reviewer shows them. */
+  /** Polling found commits the open review doesn't show yet; stays until the reviewer reloads. */
   @property({ type: Boolean }) accessor hasNewCommits = false;
 
   /** Whether the review is reloading: Reload spins its glyph and waits. */
@@ -101,28 +103,23 @@ export class BeuveTitlebar extends LitElement {
   @property({ reflect: true }) accessor platform = '';
 
   private renderReload(): TemplateResult {
+    let label = 'Reload Review';
+    let title = this.reloadTitle;
+    if (this.hasNewCommits) {
+      label = 'Reload Review: new commits';
+      title = `New commits. ${this.reloadTitle}`;
+    }
     return html`<button
       type="button"
       class="button icon reload"
-      aria-label="Reload Review"
-      title=${this.reloadTitle}
+      aria-label=${label}
+      title=${title}
       aria-busy=${this.reloading ? 'true' : 'false'}
       ?disabled=${this.reloading}
       @click=${this.reload}
     >
       ${displayIcon('refresh')}
-    </button>`;
-  }
-
-  private renderNewCommits(): TemplateResult {
-    return html`<button
-      type="button"
-      class="button small primary new-commits"
-      title="Reload the review with the new commits"
-      ?disabled=${this.reloading}
-      @click=${this.showNewCommits}
-    >
-      New commits
+      ${this.hasNewCommits ? html`<span class="status-dot" data-tone="accent"></span>` : nothing}
     </button>`;
   }
 
@@ -131,7 +128,6 @@ export class BeuveTitlebar extends LitElement {
       <button class="button quiet" type="button" title=${this.openTitle} @click=${this.open}>
         ${this.label}
       </button>
-      ${this.canReload ? this.renderReload() : nothing}
-      ${this.canReload && this.hasNewCommits ? this.renderNewCommits() : nothing}`;
+      ${this.canReload ? this.renderReload() : nothing} `;
   }
 }

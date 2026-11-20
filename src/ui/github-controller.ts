@@ -158,7 +158,7 @@ export class GithubController implements ReactiveController {
   /**
    * Polling found a change. A new head is only announced: reloading under the reviewer would
    * throw away a note being written and the place they were reading, so the review reloads when
-   * they choose Show New Commits ({@link showNewCommits}).
+   * they choose Reload Review, whose button in the title bar is marked meanwhile.
    */
   private applyUpdate(event: PullRequestUpdatedView): void {
     void this.environment.refreshSessions();
@@ -227,7 +227,7 @@ export class GithubController implements ReactiveController {
     this.environment.notify({
       tone: 'info',
       text: `New commits on ${name}.`,
-      action: { label: 'Show', command: 'show-new-commits' },
+      action: { label: 'Reload', command: 'reload-review' },
     });
   }
 
@@ -369,17 +369,6 @@ export class GithubController implements ReactiveController {
   /** Whether polling found new commits that the open review doesn't show yet. */
   get hasNewCommits(): boolean {
     return this.snapshot.newCommitsIn !== undefined;
-  }
-
-  /** Review ▸ Show New Commits: reloads the review, which then offers the interdiff. */
-  showNewCommits(): void {
-    const sessionId = this.snapshot.newCommitsIn;
-    if (sessionId === undefined) {
-      return;
-    }
-    this.patch({ newCommitsIn: undefined });
-    this.isReloadAsked = true;
-    void this.environment.selectSession(sessionId);
   }
 
   /** Whether a pull request is being fetched to open. */

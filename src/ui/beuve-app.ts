@@ -369,10 +369,6 @@ export class BeuveApp extends LitElement {
     this.runAppCommand('reload-review');
   };
 
-  private readonly onTitlebarNewCommits = (): void => {
-    this.runAppCommand('show-new-commits');
-  };
-
   /** The dock's Show beside its count of hidden addressed notes. */
   private readonly onShowAddressed = (): void => {
     this.runAppCommand('toggle-addressed-notes');
@@ -748,10 +744,6 @@ export class BeuveApp extends LitElement {
         void this.setDisplay(displayChangeFor(id, this.settings.display));
         return;
       }
-      case 'show-new-commits': {
-        this.github.showNewCommits();
-        return;
-      }
       case 'reload-review': {
         void this.reloadReview();
         return;
@@ -974,7 +966,6 @@ export class BeuveApp extends LitElement {
       .platform=${this.appInfo?.platform ?? ''}
       @beuve-titlebar-open=${this.onTitlebarOpen}
       @beuve-titlebar-reload=${this.onTitlebarReload}
-      @beuve-titlebar-new-commits=${this.onTitlebarNewCommits}
     ></beuve-titlebar>`;
   }
 
