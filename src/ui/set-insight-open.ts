@@ -3,20 +3,20 @@ import { createPlainMarkdownRenderers } from './create-plain-markdown-renderers.
 import { createTextSpan } from './create-text-span.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import { parseMarkdown } from './parse-markdown.ts';
+import { setAnnotationOpen } from './set-annotation-open.ts';
 
 /**
- * Expands or collapses an insight note made by `createInsightElement`: the full body, with Stage
- * and Show in chat, is built when it opens and dropped when it closes.
+ * Expands or collapses an insight made by `createInsightElement` (ADR 0155): the full body, with
+ * Stage and Show in chat, is built when it opens and dropped when it closes.
  */
 export function setInsightOpen(root: HTMLElement, insight: ReviewInsight, isOpen: boolean): void {
-  root.querySelector('.insight-line')?.setAttribute('aria-expanded', String(isOpen));
-  root.classList.toggle('open', isOpen);
-  const body = root.querySelector(':scope > .insight-body');
-  if (isOpen && body === null) {
-    root.append(createBody(insight));
-  } else if (!isOpen && body !== null) {
-    body.remove();
-  }
+  setAnnotationOpen(
+    root,
+    (): HTMLElement => {
+      return createBody(insight);
+    },
+    isOpen,
+  );
 }
 
 function createBody(insight: ReviewInsight): HTMLElement {
@@ -44,7 +44,7 @@ function createBody(insight: ReviewInsight): HTMLElement {
     show,
     createTextSpan({
       className: 'insight-meta',
-      text: `${String(confidence)}% confidence · ${finding.check}`,
+      text: `${finding.category.replaceAll('-', ' ')} · ${String(confidence)}% confidence · ${finding.check}`,
     }),
   );
   body.append(text, actions);

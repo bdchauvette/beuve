@@ -23,3 +23,7 @@ beuve shows a pull request's commits, reviews and conversation comments in the O
 - Every thread shows, resolved or not, until an adapter can report resolution; a pull request with many old resolved threads is noisier than on GitHub.
 - Threads outside the head's current lines are one click away rather than on the code. That is deliberate, not final.
 - The host-neutral port costs one module in main and one channel more than a GitHub-only read would, in exchange for not having to change the renderer for the next host.
+
+## Amendment 2026-11-20: threads are collapsed by default
+
+ADR 0155: a thread under its lines shows one line (💬, its first comment's first line, its author, reply count and Resolved) and opens to every comment on Enter, Space or a click.

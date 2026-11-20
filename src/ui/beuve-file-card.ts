@@ -24,7 +24,6 @@ import type {
   ReviewThreadView,
   UraItemView,
 } from '#contract/ipc-contract.ts';
-import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import './beuve-flow-portal.ts';
 import type { FlowNodeActivateDetail } from './flow-graph-view.ts';
@@ -34,7 +33,6 @@ import type { BeuveUraComposer } from './beuve-ura-composer.ts';
 import type { NoteEdit } from './note-edit-from.ts';
 import { applySuggestedPatch } from './apply-suggested-patch.ts';
 import { buildSuggestedPatch } from './build-suggested-patch.ts';
-import { describeUraItem } from './describe-ura-item.ts';
 import { describeDiagnostics } from './describe-diagnostics.ts';
 import { DiagnosticHighlights } from './diagnostic-highlights.ts';
 import { diagnosticRangesFrom } from './diagnostic-ranges-from.ts';
@@ -69,16 +67,15 @@ import type {
 } from './place-note-on-diff.ts';
 import { diffsThemeNames } from './diffs-theme-names.ts';
 import { loadDiffsLibrary } from './load-diffs-library.ts';
-import { parseInlineTitle } from './parse-inline-title.ts';
-import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { anchorFromTarget } from './anchor-from-target.ts';
-import { createSuggestionBadge } from './create-suggestion-badge.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { uraMarkersFrom } from './ura-markers-from.ts';
 import type { UraMarker } from './ura-markers-from.ts';
-import { createInlineNode } from './create-inline-node.ts';
 import { createInsightElement } from './create-insight-element.ts';
-import { delegateActions } from './delegate-actions.ts';
+import { createNoteAnnotation } from './create-note-annotation.ts';
+import { createThreadAnnotation } from './create-thread-annotation.ts';
+import { setNoteOpen } from './set-note-open.ts';
+import { setThreadOpen } from './set-thread-open.ts';
 import type { DelegatedActions } from './delegate-actions.ts';
 import { dispatchAction } from './dispatch-action.ts';
 import type { ActionHandlers } from './dispatch-action.ts';
@@ -433,77 +430,6 @@ export class BeuveFileCard extends LitElement {
         --diffs-bg-hover-override: var(--beuve-surface-sunken);
       }
 
-      .ura-marker {
-        display: flex;
-        align-items: baseline;
-        gap: var(--beuve-space-2);
-        margin: var(--beuve-space-0-5) var(--beuve-space-3);
-        padding: 0 var(--beuve-space-2);
-        border-inline-start: var(--beuve-border-width-thick) solid var(--beuve-accent);
-        font: var(--beuve-font-small);
-        white-space: nowrap;
-        color: var(--beuve-text-muted);
-      }
-
-      .ura-marker .ura-kind {
-        display: inline-flex;
-        flex: none;
-        align-items: center;
-        gap: var(--beuve-space-1);
-        font-weight: var(--beuve-font-weight-semibold);
-        color: var(--beuve-accent);
-      }
-
-      .ura-marker.blocking {
-        border-inline-start-color: var(--beuve-danger);
-      }
-
-      .ura-marker.blocking .ura-kind {
-        color: var(--beuve-danger);
-      }
-
-      .ura-marker .ura-title {
-        min-inline-size: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        color: var(--beuve-text);
-      }
-
-      .ura-marker .ura-outside,
-      .ura-marker .ura-edit {
-        flex: none;
-        margin-inline-start: auto;
-        padding: 0 var(--beuve-space-1);
-        border: none;
-        border-radius: var(--beuve-radius-small);
-        background: none;
-        font: inherit;
-        color: var(--beuve-accent);
-        cursor: pointer;
-      }
-
-      .ura-marker .ura-outside + .ura-edit {
-        margin-inline-start: 0;
-      }
-
-      .ura-marker .ura-outside:hover,
-      .ura-marker .ura-edit:hover {
-        text-decoration: underline;
-      }
-
-      .ura-marker .ura-outside:focus-visible,
-      .ura-marker .ura-edit:focus-visible {
-        outline: var(--beuve-border-width) solid var(--beuve-accent);
-        outline-offset: var(--beuve-focus-ring-offset);
-      }
-
-      .ura-marker .ura-title code {
-        padding: 0 var(--beuve-space-0-5);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-code);
-      }
-
       .insight-badge {
         color: var(--beuve-text-muted);
       }
@@ -516,121 +442,210 @@ export class BeuveFileCard extends LitElement {
         color: var(--beuve-warn);
       }
 
-      .insight {
-        --insight-color: var(--beuve-text-muted);
+      /* ADR 0155: notes, insights and threads under diff lines share one head and open in place. */
+      .annotation {
         margin: var(--beuve-space-0-5) var(--beuve-space-3);
-        padding: 0 var(--beuve-space-2);
-        border-inline-start: var(--beuve-border-width-thick) solid var(--insight-color);
+        border: var(--beuve-border-width) solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
         font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
+        color: var(--beuve-text);
+        white-space: normal;
       }
 
-      .insight.risk {
-        --insight-color: var(--beuve-danger);
+      .annotation.insight {
+        border-style: dashed;
+        background: transparent;
       }
 
-      .insight.warning {
-        --insight-color: var(--beuve-warn);
-      }
-
-      .insight.unconfirmed {
+      .annotation.insight.unconfirmed {
         opacity: 0.65;
       }
 
-      .insight.unconfirmed.open,
-      .insight.unconfirmed:hover {
+      .annotation.insight.unconfirmed.open,
+      .annotation.insight.unconfirmed:hover {
         opacity: 1;
       }
 
-      .insight-line {
+      .annotation-head {
         display: flex;
         align-items: baseline;
         gap: var(--beuve-space-2);
         min-inline-size: 0;
+        padding: var(--beuve-space-0-5) var(--beuve-space-2);
         white-space: nowrap;
         cursor: pointer;
-        outline: none;
       }
 
-      .insight-line:focus-visible {
+      .annotation-toggle {
+        display: flex;
+        flex: 1;
+        align-items: baseline;
+        gap: var(--beuve-space-1-5);
+        min-inline-size: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: inherit;
+        text-align: start;
+        cursor: pointer;
+      }
+
+      .annotation-toggle:focus-visible {
         outline: var(--beuve-border-width) solid var(--beuve-accent);
         outline-offset: var(--beuve-focus-ring-offset);
       }
 
-      .insight-category {
+      .annotation-emoji {
         flex: none;
-        color: var(--insight-color);
+        inline-size: calc(1.5 * var(--beuve-measure-em));
+        text-align: center;
       }
 
-      .insight-title {
+      .annotation-text {
         min-inline-size: 0;
         overflow: hidden;
         text-overflow: ellipsis;
-        color: var(--beuve-text);
+        font-weight: var(--beuve-font-weight-medium);
       }
 
-      .insight.open .insight-title {
+      .annotation-text.body {
+        font-weight: var(--beuve-font-weight-normal);
+      }
+
+      .annotation.open .annotation-text {
         overflow: visible;
         white-space: normal;
       }
 
-      .insight-flag {
+      .annotation-marks {
+        display: flex;
         flex: none;
-        font-style: italic;
+        gap: var(--beuve-space-1);
+        color: var(--beuve-text-muted);
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
-      .insight code {
+      .annotation-mark + .annotation-mark::before {
+        content: '•';
+        margin-inline-end: var(--beuve-space-1);
+        color: var(--beuve-text-faint);
+        font-weight: var(--beuve-font-weight-normal);
+      }
+
+      .annotation-mark.mark-blocking {
+        color: var(--beuve-danger);
+      }
+
+      .annotation-mark.mark-insight {
+        color: var(--beuve-violet);
+      }
+
+      .annotation-mark.mark-unconfirmed {
+        font-style: italic;
+        font-weight: var(--beuve-font-weight-normal);
+      }
+
+      .annotation-chevron {
+        flex: none;
+        color: var(--beuve-text-faint);
+      }
+
+      .annotation-chevron::before {
+        content: '▸';
+      }
+
+      .annotation.open .annotation-chevron::before {
+        content: '▾';
+      }
+
+      .annotation-reveal {
+        flex: none;
+        padding: 0 var(--beuve-space-1);
+        border: none;
+        border-radius: var(--beuve-radius-small);
+        background: none;
+        font: inherit;
+        color: var(--beuve-accent);
+        cursor: pointer;
+      }
+
+      .annotation-reveal:hover {
+        text-decoration: underline;
+      }
+
+      .annotation-reveal:focus-visible {
+        outline: var(--beuve-border-width) solid var(--beuve-accent);
+        outline-offset: var(--beuve-focus-ring-offset);
+      }
+
+      .annotation code {
         padding: 0 var(--beuve-space-0-5);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-code);
       }
 
-      .insight-body {
-        padding: var(--beuve-space-1) 0 var(--beuve-space-2);
-        color: var(--beuve-text);
-        white-space: normal;
+      .annotation-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--beuve-space-1-5);
+        padding-block: var(--beuve-space-1-5) var(--beuve-space-2);
+        padding-inline: calc(
+            var(--beuve-space-2) + 1.5 * var(--beuve-measure-em) + var(--beuve-space-1-5)
+          )
+          var(--beuve-space-2);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
-      .insight-text :is(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6, .table) {
+      .annotation-body .thread {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+      }
+
+      :is(.insight-text, .annotation-markdown)
+        :is(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6, .table) {
         margin: 0 0 var(--beuve-space-1);
       }
 
-      .insight-text :is(h1, h2, h3, h4, h5, h6) {
+      :is(.insight-text, .annotation-markdown) :is(h1, h2, h3, h4, h5, h6) {
         font: inherit;
         font-weight: var(--beuve-font-weight-semibold);
       }
 
-      .insight-text :is(ul, ol) {
+      :is(.insight-text, .annotation-markdown) :is(ul, ol) {
         padding-inline-start: var(--beuve-space-4);
       }
 
-      .insight-text .table {
+      :is(.insight-text, .annotation-markdown) .table {
         overflow-inline: auto;
       }
 
-      .insight-text table {
+      :is(.insight-text, .annotation-markdown) table {
         border-collapse: collapse;
         font: inherit;
       }
 
-      .insight-text :is(th, td) {
+      :is(.insight-text, .annotation-markdown) :is(th, td) {
         padding: var(--beuve-space-px) var(--beuve-space-2);
         border: var(--beuve-border-width) solid var(--beuve-border);
         text-align: start;
         vertical-align: top;
       }
 
-      .insight-text th {
+      :is(.insight-text, .annotation-markdown) th {
         background: var(--beuve-surface-sunken);
         font-weight: var(--beuve-font-weight-semibold);
       }
 
-      .insight-text .align-center {
+      :is(.insight-text, .annotation-markdown) .align-center {
         text-align: center;
       }
 
-      .insight-text .align-right {
+      :is(.insight-text, .annotation-markdown) .align-right {
         text-align: end;
       }
 
@@ -718,7 +733,7 @@ export class BeuveFileCard extends LitElement {
         cursor: pointer;
       }
 
-      .insight-text pre {
+      :is(.insight-text, .annotation-markdown) pre {
         margin: 0 0 var(--beuve-space-1);
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border-radius: var(--beuve-radius-small);
@@ -726,7 +741,7 @@ export class BeuveFileCard extends LitElement {
         overflow-inline: auto;
       }
 
-      .insight-actions {
+      :is(.insight-actions, .annotation-actions) {
         display: flex;
         align-items: baseline;
         gap: var(--beuve-space-2);
@@ -791,7 +806,7 @@ export class BeuveFileCard extends LitElement {
   private editor: Editor<'file-diff', PlacedSlot> | undefined;
   private editHead: string | undefined;
   /** Insight notes the reviewer expanded, by insight key. */
-  private readonly openInsights = new Set<string>();
+  private readonly openAnnotations = new Set<string>();
   /** The gutter marks' style sheet in this diff's shadow root. */
   private markSheet: CSSStyleSheet | undefined;
   private tintSheet: CSSStyleSheet | undefined;
@@ -972,8 +987,9 @@ export class BeuveFileCard extends LitElement {
       'edit-note': ({ uraItemId = '' }): void => {
         this.emitNoteEdit(uraItemId);
       },
-      'insight-line': (_data, _event, line): void => {
-        this.toggleInsight(line, undefined);
+      'annotation-toggle': (_data, event, element): void => {
+        event.stopPropagation();
+        this.toggleAnnotation(element, undefined);
       },
       'insight-stage': (_data, _event, button): void => {
         this.emitInsight(button, 'beuve-insight-stage');
@@ -988,24 +1004,12 @@ export class BeuveFileCard extends LitElement {
       },
     },
     keydown: {
-      insight: (_data, event, note): void => {
-        this.onInsightKey(event, note);
+      'annotation-toggle': (_data, event, element): void => {
+        this.onAnnotationKey(event, element);
       },
     },
   } satisfies DelegatedActions;
 
-  private readonly crossing = {
-    focusin: {
-      'insight-line': (_data, _event, line): void => {
-        if (line.matches(':focus-visible') && line.getAttribute('aria-expanded') !== 'true') {
-          this.toggleInsight(line, true);
-        }
-      },
-    },
-  } satisfies DelegatedActions;
-
-  /** The {@link crossing} listeners, while the card has something they act on. */
-  private crossingDelegation: AbortController | undefined;
   /** The editing keys' listeners, while a Add Suggestion edit is in progress. */
   private editKeys: AbortController | undefined;
   /** The ⌘/Ctrl tracking that shows the pointer on tokens, while the card is in the document. */
@@ -1381,18 +1385,6 @@ export class BeuveFileCard extends LitElement {
     }
   }
 
-  /** Delegates the crossing events while an insight note is there to act on them. */
-  private syncCrossingDelegation(): void {
-    const isNeeded = this.insights.length > 0;
-    if (isNeeded && this.crossingDelegation === undefined) {
-      this.crossingDelegation = new AbortController();
-      delegateActions(this.renderRoot, this.crossing, { signal: this.crossingDelegation.signal });
-    } else if (!isNeeded && this.crossingDelegation !== undefined) {
-      this.crossingDelegation.abort();
-      this.crossingDelegation = undefined;
-    }
-  }
-
   /** While editing, the editing keys come first: listeners on the host, from start to end. */
   private syncEditKeys(): void {
     if (this.edit !== undefined && this.editKeys === undefined) {
@@ -1410,13 +1402,13 @@ export class BeuveFileCard extends LitElement {
     const { note } = slot;
     switch (note.kind) {
       case 'ura': {
-        return uraMarkerElement(note.item, outsideLabel(slot, placement));
+        return this.noteNode(note.item, outsideLabel(slot, placement));
       }
       case 'insight': {
         return this.insightNode(note.insight);
       }
       case 'thread': {
-        return createThreadElement(note.thread, { showsPlace: false });
+        return createThreadAnnotation(note.thread, this.isOpen(`thread:${note.thread.id}`));
       }
       case 'composer': {
         return this.composerNode();
@@ -1429,9 +1421,22 @@ export class BeuveFileCard extends LitElement {
     return placeReviewThreads(this.reviewThreads, this.headSha);
   }
 
-  /** A `/review` finding's note; it stays expanded across re-renders until the reviewer collapses it. */
+  /** Whether the reviewer opened the annotation `key` (ADR 0155); it stays open across re-renders. */
+  private isOpen(key: string): boolean {
+    return this.openAnnotations.has(key);
+  }
+
+  /** A note's annotation, open if the reviewer left it open. */
+  private noteNode(item: UraItemView, outside: string | undefined): HTMLElement {
+    return createNoteAnnotation(item, {
+      isOpen: this.isOpen(`ura:${item.id}`),
+      ...(outside !== undefined && { outside }),
+    });
+  }
+
+  /** A `/review` finding's annotation, open if the reviewer left it open. */
   private insightNode(insight: ReviewInsight): HTMLElement {
-    return createInsightElement(insight, this.openInsights.has(insight.key));
+    return createInsightElement(insight, this.isOpen(`insight:${insight.key}`));
   }
 
   /** The insight note `element` is in, and its insight. */
@@ -1445,35 +1450,58 @@ export class BeuveFileCard extends LitElement {
     return { note, insight };
   }
 
-  /** Expands or collapses (`undefined`: toggles) the note `element` is in, and remembers it. */
-  private toggleInsight(element: HTMLElement, isOpen: boolean | undefined): void {
-    const found = this.insightOf(element);
-    if (found === undefined) {
+  /**
+   * Opens or closes (`undefined`: toggles) the annotation `element` is in, a note, an insight or
+   * a thread (ADR 0155), and remembers it.
+   */
+  private toggleAnnotation(element: HTMLElement, isOpen: boolean | undefined): void {
+    const root = element.closest<HTMLElement>('[data-annotation-key]');
+    const key = root?.dataset['annotationKey'];
+    if (root === null || key === undefined) {
       return;
     }
-    const { note, insight } = found;
-    const isOpening = isOpen ?? !note.classList.contains('open');
-    setInsightOpen(note, insight, isOpening);
-    if (isOpening) {
-      this.openInsights.add(insight.key);
+    const isOpening = isOpen ?? !root.classList.contains('open');
+    const [kind = '', id = ''] = splitKey(key);
+    if (kind === 'ura') {
+      const item = this.uraItems.find((candidate) => candidate.id === id);
+      if (item === undefined) {
+        return;
+      }
+      setNoteOpen(root, item, isOpening);
+    } else if (kind === 'insight') {
+      const insight = this.insights.find((candidate) => candidate.key === id);
+      if (insight === undefined) {
+        return;
+      }
+      setInsightOpen(root, insight, isOpening);
     } else {
-      this.openInsights.delete(insight.key);
+      const thread = this.reviewThreads.find((candidate) => candidate.id === id);
+      if (thread === undefined) {
+        return;
+      }
+      setThreadOpen(root, thread, isOpening);
+    }
+    if (isOpening) {
+      this.openAnnotations.add(key);
+    } else {
+      this.openAnnotations.delete(key);
     }
   }
 
-  /** Enter or Space on the note's line toggles it; Escape collapses it, back on its line. */
-  private onInsightKey(event: KeyboardEvent, note: HTMLElement): void {
-    const line = note.querySelector<HTMLElement>('.insight-line');
-    const isOpen = note.classList.contains('open');
-    if (event.composedPath()[0] === line && (event.key === 'Enter' || event.key === ' ')) {
+  /** Enter or Space on an annotation's toggle opens or closes it; Escape closes it (ADR 0155). */
+  private onAnnotationKey(event: KeyboardEvent, element: HTMLElement): void {
+    const root = element.closest<HTMLElement>('[data-annotation-key]');
+    const toggle = root?.querySelector<HTMLElement>('.annotation-toggle');
+    const isOpen = root?.classList.contains('open') === true;
+    if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       event.stopPropagation();
-      this.toggleInsight(note, !isOpen);
+      this.toggleAnnotation(element, !isOpen);
     } else if (isOpen && event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      this.toggleInsight(note, false);
-      line?.focus({ preventScroll: true });
+      this.toggleAnnotation(element, false);
+      toggle?.focus({ preventScroll: true });
     }
   }
 
@@ -1660,13 +1688,13 @@ export class BeuveFileCard extends LitElement {
   private richNoteElement(note: CardNote): HTMLElement {
     switch (note.kind) {
       case 'ura': {
-        return uraMarkerElement(note.item, undefined);
+        return this.noteNode(note.item, undefined);
       }
       case 'insight': {
         return this.insightNode(note.insight);
       }
       case 'thread': {
-        return createThreadElement(note.thread, { showsPlace: false });
+        return createThreadAnnotation(note.thread, this.isOpen(`thread:${note.thread.id}`));
       }
       case 'composer': {
         return this.composerNode();
@@ -1924,7 +1952,7 @@ export class BeuveFileCard extends LitElement {
 
   private renderFallback(file: DiffFileView): TemplateResult {
     const path = file.path;
-    return html`${this.shownMarkers(path).map((marker) => uraMarkerElement(marker.item, undefined))}
+    return html`${this.shownMarkers(path).map((marker) => this.noteNode(marker.item, undefined))}
       ${this.insights.map((insight) => this.insightNode(insight))}
       ${this.composer?.path === path ? this.composerNode() : nothing}
       <pre>
@@ -2320,7 +2348,6 @@ ${splitPatch(file.patch).map((line) => {
     if (changed.has('diagnostics')) {
       this.syncDiagnosticHighlights();
     }
-    this.syncCrossingDelegation();
     const { library, metadata } = this;
     if (
       library === undefined ||
@@ -2395,6 +2422,12 @@ ${splitPatch(file.patch).map((line) => {
   }
 }
 
+/** An annotation key's kind and id: `ura:<id>`, `insight:<key>` or `thread:<id>`. */
+function splitKey(key: string): string[] {
+  const at = key.indexOf(':');
+  return [key.slice(0, at), key.slice(at + 1)];
+}
+
 /** "line N, outside the shown hunks" for a note the diff doesn't show, else `undefined`. */
 function outsideLabel(range: HeadSideRange, placement: NotePlacement): string | undefined {
   if (placement.kind !== 'hidden') {
@@ -2404,51 +2437,6 @@ function outsideLabel(range: HeadSideRange, placement: NotePlacement): string | 
     return `line ${String(range.lineStart)}, outside the shown hunks`;
   }
   return `lines ${String(range.lineStart)}–${String(range.lineEnd)}, outside the shown hunks`;
-}
-
-/**
- * A staged item's marker: its severity and title on one quiet line, built as text nodes, and for
- * lines the diff doesn't show, a button that reveals them (delegated as `reveal-note`). Its Edit
- * button (`edit-note`) and a double-click on it (`note`) edit the note in the diff (ADR 0129).
- */
-function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLElement {
-  const labels = describeUraItem(item);
-  const marker = document.createElement('div');
-  marker.className = `ura-marker ${item.severity}`;
-  marker.classList.toggle('blocking', item.blocking);
-  marker.dataset['action'] = 'note';
-  marker.dataset['uraItemId'] = item.id;
-  marker.title = `Staged in the notes list: ${revealFormatControls(labels.anchor)}, from ${labels.origin}. Double-click to edit.`;
-  const kind = document.createElement('span');
-  kind.className = 'ura-kind';
-  kind.textContent = `${labels.emoji} Staged · ${labels.severity}`;
-  kind.prepend(createUraNoteIcon());
-  if (item.suggestedPatch !== undefined) {
-    kind.append(createSuggestionBadge());
-  }
-  const title = document.createElement('span');
-  title.className = 'ura-title';
-  title.append(...parseInlineTitle(headlineOfUraItem(item)).map((span) => createInlineNode(span)));
-  marker.append(kind, title);
-  if (outside !== undefined) {
-    const reveal = document.createElement('button');
-    reveal.type = 'button';
-    reveal.className = 'ura-outside';
-    reveal.dataset['action'] = 'reveal-note';
-    reveal.dataset['uraItemId'] = item.id;
-    reveal.title = 'Show these lines in the diff';
-    reveal.textContent = outside;
-    marker.append(reveal);
-  }
-  const edit = document.createElement('button');
-  edit.type = 'button';
-  edit.className = 'ura-edit';
-  edit.dataset['action'] = 'edit-note';
-  edit.dataset['uraItemId'] = item.id;
-  edit.title = 'Edit this note here';
-  edit.textContent = 'Edit';
-  marker.append(edit);
-  return marker;
 }
 
 /**

@@ -20,3 +20,7 @@ ADR 0055 folded the preliminary review into the chat and took the findings off t
 ## Consequences
 
 Findings are visible where the code is read, at no cost to the diff's navigation or its render budget. They exist only after a `/review`, per head: a new head shows none until `/review` runs again. Merging by file, lines and category is a heuristic; two different problems in the same lines and category read as one. The dot relies on the library's gutter markup (`[data-column-number]`), like the row selectors already do.
+
+## Amendment 2026-11-20: the shared annotation head
+
+ADR 0155: an insight under its line uses the head notes and threads share (the emoji of the label it would be staged with, its title, "Insight", "Unconfirmed", ✨) in a dashed frame, and opens on Enter, Space or a click only, no longer on keyboard focus.
