@@ -31,7 +31,7 @@ function createBody(insight: ReviewInsight): HTMLElement {
   const stage = actionButton({
     action: 'insight-stage',
     label: 'Stage',
-    title: 'Stage this finding on its lines in the review dock',
+    title: 'Stage this finding on its lines in the notes list',
   });
   const show = actionButton({
     action: 'insight-show',

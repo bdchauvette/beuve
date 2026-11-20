@@ -27,9 +27,9 @@ describe('menuStateFrom', () => {
     [
       {
         focusedZone: 'ura',
-        dockItem: { count: 1, isAddressed: false, isWithdrawn: false, isBlocking: false },
+        noteListItem: { count: 1, isAddressed: false, isWithdrawn: false, isBlocking: false },
       },
-      ['session', 'file', 'dock-item'],
+      ['session', 'file', 'note-item'],
     ],
     [{ activePath: undefined }, ['session']],
     [
@@ -44,12 +44,12 @@ describe('menuStateFrom', () => {
     expect(menuStateFrom({ ...open(), ...change }).conditions).toStrictEqual(conditions);
   });
 
-  test('checks the reviewed mark, the dock item and find’s case', ({ expect }) => {
+  test('checks the reviewed mark, the notes list item and find’s case', ({ expect }) => {
     const { checked } = menuStateFrom({
       ...open(),
       isActiveReviewed: true,
       focusedZone: 'ura',
-      dockItem: { count: 2, isAddressed: true, isWithdrawn: false, isBlocking: false },
+      noteListItem: { count: 2, isAddressed: true, isWithdrawn: false, isBlocking: false },
       isFindCaseSensitive: true,
       reviewRange: 'whole',
       treeMode: 'diff-only',
@@ -69,7 +69,7 @@ describe('menuStateFrom', () => {
       'toggle-reviewed',
       'find-match-case',
       'range-whole',
-      'dock-addressed',
+      'note-addressed',
     ]);
   });
 });
@@ -81,7 +81,7 @@ function idle(): MenuStateInput {
     isActiveReviewed: false,
     isActiveEditable: false,
     focusedZone: 'diff',
-    dockItem: undefined,
+    noteListItem: undefined,
     isTextFocused: false,
     isBusy: false,
     isPullRequest: false,

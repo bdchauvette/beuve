@@ -23,17 +23,18 @@ import { displayAccelerator } from './display-accelerator.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { describePostPreview } from './describe-post-preview.ts';
 import { describeUraItem } from './describe-ura-item.ts';
-import type { GithubDockState, GithubPostState } from './github-post-state.ts';
-import type { ReviewEditsDockState, ReviewEditsFlow } from './review-edits-state.ts';
+import type { GithubNoteListState, GithubPostState } from './github-post-state.ts';
+import type { ReviewEditsNoteListState, ReviewEditsFlow } from './review-edits-state.ts';
 import { describeHarvest } from './describe-harvest.ts';
 import { describeEditCounts } from './describe-edit-counts.ts';
 import { dropUraItems } from './drop-ura-items.ts';
 import { moveUraItems } from './move-ura-items.ts';
 import { noteStatusChange } from './note-status-change.ts';
 import { uraSeverityViews } from './ura-severity-views.ts';
-import { dockSelectionAfter } from './dock-selection-after.ts';
-import type { DockGesture, DockSelection } from './dock-selection-after.ts';
+import { noteListSelectionAfter } from './note-list-selection-after.ts';
+import type { NoteListGesture, NoteListSelection } from './note-list-selection-after.ts';
 import { countNoun } from './count-noun.ts';
+import { createSuggestionBadge } from './create-suggestion-badge.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
@@ -41,7 +42,7 @@ import './beuve-ura-label-menu.ts';
 import type { UraLabelChange } from './beuve-ura-label-menu.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
 import { noteLabelStateFrom } from './note-label-state-from.ts';
-import { resolveDockVerdict } from './resolve-dock-verdict.ts';
+import { resolveNoteListVerdict } from './resolve-note-list-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
@@ -52,7 +53,7 @@ import { EmojiCompletion } from './emoji-completion.ts';
 import { emojiCompletionStyles } from './emoji-completion-styles.ts';
 
 /** A status line under the export buttons; `tone` colors it. */
-export interface DockNotice {
+export interface NoteListNotice {
   readonly tone: 'info' | 'error';
   readonly text: string;
 }
@@ -63,17 +64,21 @@ const verdictLabels: Readonly<Record<UraVerdictView, string>> = {
   'request-changes': 'Request changes',
 };
 
-/** The exports the dock offers as buttons; File › Export Review has all of them. */
-type DockExportTarget = Extract<UraExportTarget, 'agent-xml' | 'agent-json' | 'github'>;
+/** The exports the notes list offers as buttons; File › Export Review has all of them. */
+type NoteListExportTarget = Extract<UraExportTarget, 'agent-xml' | 'agent-json' | 'github'>;
 
-interface DockExport {
+interface NoteListExport {
   readonly label: string;
   readonly title: string;
 }
 
-const dockExportTargets: readonly DockExportTarget[] = ['agent-xml', 'agent-json', 'github'];
+const noteListExportTargets: readonly NoteListExportTarget[] = [
+  'agent-xml',
+  'agent-json',
+  'github',
+];
 
-const dockExports: Readonly<Record<DockExportTarget, DockExport>> = {
+const noteListExports: Readonly<Record<NoteListExportTarget, NoteListExport>> = {
   'agent-xml': {
     label: 'Copy as XML',
     title: 'Copy the review as XML for Claude Code (beuve.ura/1), summary included',
@@ -89,7 +94,7 @@ const dockExports: Readonly<Record<DockExportTarget, DockExport>> = {
 };
 
 /**
- * Zone 3: the Universal Review Artifact staging dock (ADR 0023, 0027). Lists the session's staged
+ * Zone 3: the Universal Review Artifact notes list (ADR 0023, 0027). Lists the session's staged
  * items in export order (severity, `path:lines` on the current head, title, origin, and an
  * outdated marker), then the withdrawn and addressed ones. While the zone has focus: ↑/↓ move,
  * Return jumps the diff stream to the item, Space opens its editor (label, Blocking, title, body),
@@ -101,13 +106,13 @@ const dockExports: Readonly<Record<DockExportTarget, DockExport>> = {
  * The Note menu and the context menu run the same commands (`runCommand`, ADR 0068), and Open in
  * Editor opens it (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocking note; export buttons copy the compiled review. Items carrying
- * a suggestion say `suggestion` and preview it under the cursor; the editor can re-edit the
+ * a suggestion show a ± glyph named "Has suggested changes" and preview it under the cursor; the editor can re-edit the
  * suggestion in the diff stream or remove it (ADR 0043). Presentational: emits
  * `beuve-ura-edit-suggestion`, `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-edit-many`,
  * `beuve-ura-delete`, `beuve-ura-reorder` and `beuve-ura-export`; `beuve-app` does the IPC.
  */
-@customElement('beuve-ura-dock')
-export class BeuveUraDock extends LitElement {
+@customElement('beuve-note-list')
+export class BeuveNoteList extends LitElement {
   static override styles = [
     buttonStyles,
     fieldStyles,
@@ -287,7 +292,9 @@ export class BeuveUraDock extends LitElement {
       }
 
       .suggestion {
+        display: inline-flex;
         flex: none;
+        align-items: center;
         color: var(--beuve-accent);
       }
 
@@ -464,7 +471,7 @@ export class BeuveUraDock extends LitElement {
   private readonly emoji = new EmojiCompletion(this);
 
   /**
-   * The dock's in-place keys (ADR 0068, 0144): ↑/↓ move, ⇧↑/⇧↓ extend the selection, ⌘A / Ctrl+A
+   * The notes list's in-place keys (ADR 0068, 0144): ↑/↓ move, ⇧↑/⇧↓ extend the selection, ⌘A / Ctrl+A
    * selects every note and Escape clears the selection, Return shows, Space edits, Delete
    * withdraws, ⌥↑/⌥↓ reorder.
    */
@@ -479,7 +486,7 @@ export class BeuveUraDock extends LitElement {
     const isEditing = isTextEntry(event) || isInEditor(event);
     if (!isEditing && this.isSelectAll(event)) {
       event.preventDefault();
-      this.runCommand('dock-select-all');
+      this.runCommand('note-select-all');
       return;
     }
     if (event.ctrlKey || event.metaKey) {
@@ -518,7 +525,7 @@ export class BeuveUraDock extends LitElement {
   @property({ type: Boolean, reflect: true }) accessor focused = false;
   /** Whether a review session is open; without one there is nothing to stage into. */
   @property({ type: Boolean }) accessor hasSession = false;
-  /** The open session's items in dock order, every status (`ura:list`). */
+  /** The open session's items in note order, every status (`ura:list`). */
   @property({ attribute: false }) accessor items: readonly UraItemView[] = [];
   /** Whether closed notes, addressed or withdrawn, are listed (preference `showClosedNotes`, ADR 0149). */
   @property({ type: Boolean }) accessor showClosed = true;
@@ -527,15 +534,15 @@ export class BeuveUraDock extends LitElement {
   @property() accessor chosenVerdict: UraVerdictView | undefined;
   /** Why a stored verdict was dropped, shown until the reviewer chooses again. */
   @property() accessor verdictNotice = '';
-  @property({ attribute: false }) accessor notice: DockNotice | undefined;
+  @property({ attribute: false }) accessor notice: NoteListNotice | undefined;
   /** Set by the owner while an export is being compiled and copied. */
   @property({ type: Boolean }) accessor exporting = false;
   /** Set for pull request sessions: posting to GitHub replaces copying the review JSON. */
-  @property({ attribute: false }) accessor github: GithubDockState | undefined;
+  @property({ attribute: false }) accessor github: GithubNoteListState | undefined;
 
   @state() accessor cursor = 0;
   /** The notes picked besides the cursor (ADR 0144); empty is the cursor's note alone. */
-  @state() accessor selection: DockSelection = { selected: [], anchor: undefined };
+  @state() accessor selection: NoteListSelection = { selected: [], anchor: undefined };
   /** Where a note being dragged would land (ADR 0144); absent while nothing is dragged over one. */
   @state() accessor dropTarget: DropTarget | undefined;
   /** The notes being dragged, while a drag from the list runs. */
@@ -552,7 +559,7 @@ export class BeuveUraDock extends LitElement {
   @property() accessor platform = '';
 
   /** The session's review edits (ADR 0088); shown only once they exist or an action runs. */
-  @property({ attribute: false }) accessor reviewEdits: ReviewEditsDockState | undefined;
+  @property({ attribute: false }) accessor reviewEdits: ReviewEditsNoteListState | undefined;
 
   constructor() {
     super();
@@ -610,7 +617,7 @@ export class BeuveUraDock extends LitElement {
           ),
           export: withPayload(
             ({ target }) => {
-              return dockExportTargets.find((candidate) => candidate === target);
+              return noteListExportTargets.find((candidate) => candidate === target);
             },
             (target): void => {
               this.exportTo(target);
@@ -732,8 +739,8 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
-  private select(gesture: DockGesture): void {
-    this.selection = dockSelectionAfter(this.selection, {
+  private select(gesture: NoteListGesture): void {
+    this.selection = noteListSelectionAfter(this.selection, {
       gesture,
       order: this.ordered().map((item) => item.id),
     });
@@ -747,7 +754,7 @@ export class BeuveUraDock extends LitElement {
     return event.ctrlKey;
   }
 
-  /** ⌘A on macOS, Ctrl+A elsewhere: the dock's Select All Notes while the list has the focus. */
+  /** ⌘A on macOS, Ctrl+A elsewhere: the notes list's Select All Notes while the list has the focus. */
   private isSelectAll(event: KeyboardEvent): boolean {
     const isMac = keyPlatformOf(this.platform) === 'mac';
     let hasModifier = event.ctrlKey && !event.metaKey;
@@ -789,7 +796,7 @@ export class BeuveUraDock extends LitElement {
     return [...staged, ...this.items.filter((item) => item.status.kind !== 'staged')];
   }
 
-  /** How many closed notes the dock is hiding. */
+  /** How many closed notes the notes list is hiding. */
   private hiddenCount(): number {
     if (this.showClosed) {
       return 0;
@@ -1042,7 +1049,7 @@ export class BeuveUraDock extends LitElement {
     if (value !== '') {
       chosen = value as UraVerdictView;
     }
-    const resolved = resolveDockVerdict(chosen, this.derivedVerdict, this.blockingCount());
+    const resolved = resolveNoteListVerdict(chosen, this.derivedVerdict, this.blockingCount());
     this.verdictRefusal = resolved.refusal ?? '';
     if (resolved.refusal === undefined) {
       this.emit('beuve-ura-set-verdict', { verdict: chosen });
@@ -1100,11 +1107,7 @@ export class BeuveUraDock extends LitElement {
                 >posted</span
               >`
         }
-        ${
-          item.suggestedPatch === undefined
-            ? nothing
-            : html`<span class="suggestion" title="Carries a suggestion">suggestion</span>`
-        }
+        ${item.suggestedPatch === undefined ? nothing : createSuggestionBadge()}
         <span class="origin ${item.origin.kind}">${status === '' ? labels.origin : status}</span>
       </div>
       <div class="title">
@@ -1243,7 +1246,7 @@ export class BeuveUraDock extends LitElement {
   }
 
   private renderExport(stagedCount: number): TemplateResult {
-    const verdict = resolveDockVerdict(
+    const verdict = resolveNoteListVerdict(
       this.chosenVerdict,
       this.derivedVerdict,
       this.blockingCount(),
@@ -1293,7 +1296,7 @@ export class BeuveUraDock extends LitElement {
    * (in `renderPostActions`), and here otherwise; the GitHub JSON copy only where posting isn't.
    */
   private renderExports(): TemplateResult | typeof nothing {
-    const targets: DockExportTarget[] = [];
+    const targets: NoteListExportTarget[] = [];
     if (this.github?.isSignedIn !== true) {
       targets.push('agent-xml', 'agent-json');
     }
@@ -1310,8 +1313,8 @@ export class BeuveUraDock extends LitElement {
     </div>`;
   }
 
-  private renderExportButton(target: DockExportTarget): TemplateResult {
-    const { label, title } = dockExports[target];
+  private renderExportButton(target: NoteListExportTarget): TemplateResult {
+    const { label, title } = noteListExports[target];
     return html`<button
       class="button"
       type="button"
@@ -1448,7 +1451,7 @@ export class BeuveUraDock extends LitElement {
    * posts at once. GitHub refusing an approval on the reviewer's own pull request offers posting
    * as a comment in the button's place; after a post the same form posts again.
    */
-  private renderGithub(github: GithubDockState): TemplateResult {
+  private renderGithub(github: GithubNoteListState): TemplateResult {
     if (!github.isSignedIn) {
       return html`<p class="note">Post to ${github.target}: ${github.signInHint}</p>`;
     }
@@ -1516,7 +1519,7 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
-  private renderPostActions(github: GithubDockState): TemplateResult {
+  private renderPostActions(github: GithubNoteListState): TemplateResult {
     const { post } = github;
     if (post.kind === 'own-pull-request') {
       return html`<div class="actions">
@@ -1615,24 +1618,24 @@ export class BeuveUraDock extends LitElement {
       return true;
     }
     switch (id) {
-      case 'dock-move':
-      case 'dock-extend-selection':
-      case 'dock-clear-selection': {
+      case 'note-move':
+      case 'note-extend-selection':
+      case 'note-clear-selection': {
         return true;
       }
-      case 'dock-select-all': {
+      case 'note-select-all': {
         this.select({ kind: 'all' });
         return true;
       }
-      case 'dock-move-up': {
+      case 'note-move-up': {
         this.move(targets, -1);
         return true;
       }
-      case 'dock-move-down': {
+      case 'note-move-down': {
         this.move(targets, 1);
         return true;
       }
-      case 'dock-show': {
+      case 'note-show': {
         if (current !== undefined) {
           this.emit('beuve-ura-jump', { item: current });
         }
@@ -1644,32 +1647,32 @@ export class BeuveUraDock extends LitElement {
         }
         return true;
       }
-      case 'dock-edit': {
+      case 'note-edit': {
         if (current !== undefined) {
           this.toggleEditor(current);
         }
         return true;
       }
-      case 'dock-withdraw': {
+      case 'note-withdraw': {
         this.toggleStatus(targets, 'withdrawn');
         return true;
       }
-      case 'dock-delete': {
+      case 'note-delete': {
         if (targets.length > 0) {
           this.emit('beuve-ura-delete', { itemIds: targets.map((item) => item.id) });
           this.selection = { selected: [], anchor: undefined };
         }
         return true;
       }
-      case 'dock-addressed': {
+      case 'note-addressed': {
         this.toggleStatus(targets, 'addressed');
         return true;
       }
-      case 'dock-blocking': {
+      case 'note-blocking': {
         this.toggleBlocking(targets);
         return true;
       }
-      case 'dock-change-label': {
+      case 'note-change-label': {
         this.changeLabel(current);
         return true;
       }
@@ -1708,7 +1711,7 @@ export class BeuveUraDock extends LitElement {
     return this.summary;
   }
 
-  /** The notes a Note command acts on: the selected ones in dock order, else the cursor's. */
+  /** The notes a Note command acts on: the selected ones in note order, else the cursor's. */
   targetItems(): UraItemView[] {
     const { selected } = this.selection;
     if (selected.length > 0) {
@@ -1721,7 +1724,7 @@ export class BeuveUraDock extends LitElement {
     return [current];
   }
 
-  /** The item under the dock's cursor, which Add to Chat adds by its anchor (ADR 0046). */
+  /** The item under the notes list's cursor, which Add to Chat adds by its anchor (ADR 0046). */
   cursorItem(): UraItemView | undefined {
     return this.ordered()[this.cursor];
   }
@@ -1815,9 +1818,9 @@ type UraStatusKind = UraItemView['status']['kind'];
 
 /** The status each of the context menu's Status commands sets (ADR 0150). */
 const statusOfCommand: Readonly<Partial<Record<CommandId, UraStatusKind>>> = {
-  'dock-status-open': 'staged',
-  'dock-status-addressed': 'addressed',
-  'dock-status-withdrawn': 'withdrawn',
+  'note-status-open': 'staged',
+  'note-status-addressed': 'addressed',
+  'note-status-withdrawn': 'withdrawn',
 };
 
 /** The action that brings a note to each status (ADR 0151). */
@@ -1830,19 +1833,19 @@ const statusActions = {
 /** The label each of the context menu's Label commands sets (ADR 0150). */
 const severityOfCommand: Readonly<Partial<Record<CommandId, UraSeverityView>>> = Object.fromEntries(
   uraSeverityViews.map((severity) => {
-    return [`dock-label-${severity}`, severity];
+    return [`note-label-${severity}`, severity];
   }),
 );
 
 const inPlaceKeys: Readonly<Record<string, CommandId>> = {
-  Enter: 'dock-show',
-  ' ': 'dock-edit',
-  Delete: 'dock-withdraw',
-  Backspace: 'dock-withdraw',
-  'Shift+Delete': 'dock-delete',
-  'Shift+Backspace': 'dock-delete',
-  'Alt+ArrowUp': 'dock-move-up',
-  'Alt+ArrowDown': 'dock-move-down',
+  Enter: 'note-show',
+  ' ': 'note-edit',
+  Delete: 'note-withdraw',
+  Backspace: 'note-withdraw',
+  'Shift+Delete': 'note-delete',
+  'Shift+Backspace': 'note-delete',
+  'Alt+ArrowUp': 'note-move-up',
+  'Alt+ArrowDown': 'note-move-down',
 };
 
 /** ⌘/Ctrl+Enter in the editor saves, as Enter in its title does. */
@@ -1875,7 +1878,7 @@ function submitOnModEnter(event: KeyboardEvent, form: HTMLFormElement): void {
   form.requestSubmit();
 }
 
-/** Typing in the editor is never a dock shortcut. */
+/** Typing in the editor is never a notes list shortcut. */
 function isTextEntry(event: KeyboardEvent): boolean {
   const [target] = event.composedPath();
   return (
@@ -1892,7 +1895,7 @@ function isInSelectionBar(event: Event): boolean {
   });
 }
 
-/** A key in the open editor (its label menu, its buttons) is the editor's, not the dock's. */
+/** A key in the open editor (its label menu, its buttons) is the editor's, not the notes list's. */
 function isInEditor(event: KeyboardEvent): boolean {
   return event.composedPath().some((target) => {
     return target instanceof Element && target.matches('.editor');
@@ -1914,7 +1917,7 @@ function statusText(item: UraItemView): string {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'beuve-ura-dock': BeuveUraDock;
+    'beuve-note-list': BeuveNoteList;
   }
 }
 

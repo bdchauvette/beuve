@@ -1,6 +1,6 @@
 # The review format (`beuve.ura/1`)
 
-What beuve hands a coding agent when the reviewer copies their staged notes out: **Copy as XML** in the review dock (beside Post review on a pull request) or File › Export Review › Copy as XML, or **Copy as JSON** in either place for the same data as JSON. It is data only. It carries no instructions, so whatever reads it decides what to do with it. Paste it into a Claude Code session, or point a project's `CLAUDE.md` at this file and say that pasted `<beuve-review>` blocks are the reviewer's feedback on the current change.
+What beuve hands a coding agent when the reviewer copies their staged notes out: **Copy as XML** in the notes list (beside Post review on a pull request) or File › Export Review › Copy as XML, or **Copy as JSON** in either place for the same data as JSON. It is data only. It carries no instructions, so whatever reads it decides what to do with it. Paste it into a Claude Code session, or point a project's `CLAUDE.md` at this file and say that pasted `<beuve-review>` blocks are the reviewer's feedback on the current change.
 
 The code is `src/internal/ura/build-agent-review.ts` (the structure) and `render-agent-review-xml.ts` (the XML). ADR 0023 and ADR 0131 give the reasons.
 
@@ -44,7 +44,7 @@ The JSON form has the same data under camelCase keys (`baseSha`, `startLine`, `v
 
 ### `summary`
 
-The reviewer's own words on the review as a whole: the summary they typed in the dock to post with it, which is also the top of the GitHub review body. Markdown, in a CDATA section, with surrounding whitespace trimmed. Absent when they wrote none. It comes after `change` and before `counts`.
+The reviewer's own words on the review as a whole: the summary they typed in the notes list to post with it, which is also the top of the GitHub review body. Markdown, in a CDATA section, with surrounding whitespace trimmed. Absent when they wrote none. It comes after `change` and before `counts`.
 
 ### `counts`
 

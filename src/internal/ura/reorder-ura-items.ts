@@ -9,7 +9,7 @@ import type { SessionId, UraItemId, UraStoreError } from './ura-item.ts';
 
 /**
  * Puts a session's items in the given order. `ids` must name every item of the session exactly
- * once (withdrawn and addressed ones included), so a stale dock can't silently drop items;
+ * once (withdrawn and addressed ones included), so a stale notes list can't silently drop items;
  * otherwise nothing changes and the result is `order-mismatch`.
  */
 export function reorderUraItems(

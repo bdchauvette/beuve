@@ -1,6 +1,6 @@
 # 0151. Notes change status through three named actions, from any status
 
-- Status: Accepted; amends [0023](0023-universal-review-artifact-model-and-exporters.md), [0027](0027-ura-dock-keyboard-clipboard-and-outdated-items.md) and [0144](0144-note-names-by-state-menu-icons-and-bulk-notes.md)
+- Status: Accepted; amends [0023](0023-universal-review-artifact-model-and-exporters.md), [0027](0027-ura-note-list-keyboard-clipboard-and-outdated-items.md) and [0144](0144-note-names-by-state-menu-icons-and-bulk-notes.md)
 - Date: 2026-11-20
 
 ## Context

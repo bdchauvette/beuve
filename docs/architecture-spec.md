@@ -76,7 +76,7 @@ ADR 0044 overrides the geometry below: the diff stream and one tabbed sidebar (Z
 
 - Zone 1, Intent sidebar and radar tree (260px). Top: requirements (REQ-1, REQ-2) extracted from PR descriptions or agent prompts, mapped to hunks; unmapped diffs flagged as scope creep. Bottom: `@pierre/trees` package-aware tree that auto-expands packages with modified files, and highlights touched files. `f` toggles diff-only mode.
 - Zone 2, semantic diff stream (flexible). `@pierre/diffs` cards ordered by call-graph logic rather than path. Interdiff mode (rev 1 → rev 2). Inline tools: call-stack peek (`p`), control-flow graph (`Shift+p`), inline edit (`e`), open in IDE (`o`).
-- Zone 3, URA staging dock (320px). Collects patches, severity tags and notes; exports to GitHub PR review or Claude Code (XML with metrics).
+- Zone 3, notes list (320px). Collects patches, severity tags and notes; exports to GitHub PR review or Claude Code (XML with metrics).
 - Zone 4, read-only Q&A chat (toggleable drawer). Indexed on worktree files, diff hunks and LSP symbols. Cannot write files. Answers carry citation pills that jump Zone 2 to the hunk; review findings and proposed notes in them stage one by one, never the whole answer (ADR 0134).
 
 ## 5. Key components and workflows
@@ -118,4 +118,4 @@ The main window uses `titleBarStyle: 'hiddenInset'`, 1440×900, context isolatio
 
 - Phase 1: scaffold layout and aliases, SQLite init, git worktree manager, LSP JSON-RPC multiplexer, automated preliminary reviewer, embedded MCP server (later removed, ADR 0106).
 - Phase 2: `@pierre/diffs`, package-aware `@pierre/trees` with `f` toggle, Zone 4 chat drawer, AST control-flow visualizer.
-- Phase 3: global keyboard router, interdiff view, URA dock export targets.
+- Phase 3: global keyboard router, interdiff view, notes list export targets.

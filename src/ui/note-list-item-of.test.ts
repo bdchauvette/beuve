@@ -2,17 +2,17 @@ import { describe } from 'vitest';
 
 import type { UraItemView } from '#contract/ipc-contract.ts';
 
-import { dockItemOf } from './dock-item-of.ts';
+import { noteListItemOf } from './note-list-item-of.ts';
 import { createUraItemView } from './testing/create-ura-item-view.ts';
 import { test } from './testing/test.ts';
 
-describe('dockItemOf', () => {
+describe('noteListItemOf', () => {
   test('has nothing without a cursor item', ({ expect }) => {
-    expect(dockItemOf([])).toBeUndefined();
+    expect(noteListItemOf([])).toBeUndefined();
   });
 
   test('says whether the item is addressed, withdrawn or blocking', ({ expect }) => {
-    expect(dockItemOf([createUraItemView()])).toStrictEqual({
+    expect(noteListItemOf([createUraItemView()])).toStrictEqual({
       count: 1,
       isAddressed: false,
       isWithdrawn: false,
@@ -20,15 +20,15 @@ describe('dockItemOf', () => {
       status: 'staged',
       severity: 'issue',
     });
-    expect(dockItemOf([addressed()])).toMatchObject({ isAddressed: true, isWithdrawn: false });
-    expect(dockItemOf([withdrawn()])).toMatchObject({ isAddressed: false, isWithdrawn: true });
-    expect(dockItemOf([createUraItemView({ blocking: true })])).toMatchObject({
+    expect(noteListItemOf([addressed()])).toMatchObject({ isAddressed: true, isWithdrawn: false });
+    expect(noteListItemOf([withdrawn()])).toMatchObject({ isAddressed: false, isWithdrawn: true });
+    expect(noteListItemOf([createUraItemView({ blocking: true })])).toMatchObject({
       isBlocking: true,
     });
   });
 
   test('says so of a selection only when every note in it is', ({ expect }) => {
-    expect(dockItemOf([withdrawn(), withdrawn()])).toStrictEqual({
+    expect(noteListItemOf([withdrawn(), withdrawn()])).toStrictEqual({
       count: 2,
       isAddressed: false,
       isWithdrawn: true,
@@ -37,7 +37,7 @@ describe('dockItemOf', () => {
       severity: 'issue',
     });
     expect(
-      dockItemOf([
+      noteListItemOf([
         withdrawn(),
         createUraItemView({ blocking: true, severity: 'nitpick' }),
         addressed(),

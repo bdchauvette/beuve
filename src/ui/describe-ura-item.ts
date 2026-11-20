@@ -8,7 +8,7 @@ import type {
 import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 
-/** How the dock and the diff markers label one URA item. */
+/** How the notes list and the diff markers label one URA item. */
 export interface UraItemLabels {
   /** The label, with ` (blocking)` when the note blocks: `Issue (blocking)`. */
   readonly severity: string;

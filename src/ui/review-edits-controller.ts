@@ -21,7 +21,7 @@ export interface ReviewEditsEnvironment {
   /** The open review, if there is one. */
   readonly review: () => ReviewRef | undefined;
   readonly notify: (notice: StatusNotice) => void;
-  /** Staged suggestions show up in the dock: read its items again. */
+  /** Staged suggestions show up in the notes list: read its items again. */
   readonly refreshStaged: (sessionId: string) => Promise<void>;
 }
 

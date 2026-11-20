@@ -62,7 +62,7 @@ export interface ProposalRefDetail {
   readonly proposal: number;
 }
 
-/** A button of the dock's review-edits section (ADR 0088). */
+/** A button of the notes list's review-edits section (ADR 0088). */
 export interface ReviewEditsDetail {
   readonly op: string;
 }
@@ -123,7 +123,7 @@ export interface UraJumpDetail {
   readonly item: UraItemView;
 }
 
-/** The dock order after a move. */
+/** The note order after a move. */
 export interface UraReorderDetail {
   readonly itemIds: readonly string[];
 }

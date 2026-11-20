@@ -6,7 +6,7 @@ const notices: Readonly<Record<VerdictClearReason, string>> = {
   'head-moved': 'Verdict cleared: new commits since you chose it',
 };
 
-/** The sentence the dock shows when a stored verdict choice was dropped. */
+/** The sentence the notes list shows when a stored verdict choice was dropped. */
 export function verdictNoticeFrom(reason: VerdictClearReason): string {
   return notices[reason];
 }

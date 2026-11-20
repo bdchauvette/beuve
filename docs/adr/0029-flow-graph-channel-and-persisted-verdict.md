@@ -5,7 +5,7 @@
 
 ## Context
 
-ADR 0028 built control-flow graphs and a layout but nothing reached them. Separately, ADR 0027 left the reviewer's chosen verdict in the dock only, so `beuve_read_human_review` always reported the derived verdict and an agent never saw what the reviewer decided.
+ADR 0028 built control-flow graphs and a layout but nothing reached them. Separately, ADR 0027 left the reviewer's chosen verdict in the notes list only, so `beuve_read_human_review` always reported the derived verdict and an agent never saw what the reviewer decided.
 
 ## Decision
 
@@ -18,7 +18,7 @@ ADR 0028 built control-flow graphs and a layout but nothing reached them. Separa
 
 ## Consequences
 
-The graph costs one blob read and one parse the first time a function is asked for, and a map lookup afterwards. Pure renames (no blob ids in the diff) have no graph. The `p` peek now follows the focused hunk instead of always the file's first change. An agent reads the reviewer's decision over MCP, but a verdict is advisory until the reviewer exports: it was not tied to a head, so a new commit kept it (ADR 0045 now clears a choice when the head moves; a blocker added later still clears an approval). `ura:set-verdict` is a new write path every caller must go through; the dock no longer keeps its own copy.
+The graph costs one blob read and one parse the first time a function is asked for, and a map lookup afterwards. Pure renames (no blob ids in the diff) have no graph. The `p` peek now follows the focused hunk instead of always the file's first change. An agent reads the reviewer's decision over MCP, but a verdict is advisory until the reviewer exports: it was not tied to a head, so a new commit kept it (ADR 0045 now clears a choice when the head moves; a blocker added later still clears an approval). `ura:set-verdict` is a new write path every caller must go through; the notes list no longer keeps its own copy.
 
 ## Amendment 2026-10-29: migrations squashed
 

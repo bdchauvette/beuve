@@ -1,10 +1,10 @@
 import { describe } from 'vitest';
 
-import { dockSelectionAfter } from './dock-selection-after.ts';
-import type { DockGesture, DockSelection } from './dock-selection-after.ts';
+import { noteListSelectionAfter } from './note-list-selection-after.ts';
+import type { NoteListGesture, NoteListSelection } from './note-list-selection-after.ts';
 import { test } from './testing/test.ts';
 
-describe('dockSelectionAfter', () => {
+describe('noteListSelectionAfter', () => {
   test('extends a range with Shift from the cursor, then from the same anchor', ({ expect }) => {
     const down = after(empty(), { kind: 'extend', from: 'b', to: 'c' });
     expect(down).toStrictEqual({ selected: ['b', 'c'], anchor: 'b' });
@@ -28,7 +28,7 @@ describe('dockSelectionAfter', () => {
   });
 
   test('clears when the last toggled note goes', ({ expect }) => {
-    const one: DockSelection = { selected: ['a'], anchor: 'a' };
+    const one: NoteListSelection = { selected: ['a'], anchor: 'a' };
     expect(after(one, { kind: 'toggle', from: 'a', to: 'a' })).toStrictEqual(empty());
   });
 
@@ -41,7 +41,7 @@ describe('dockSelectionAfter', () => {
   });
 
   test.for([['move'], ['clear']] as const)('a %s clears the selection', ([kind], { expect }) => {
-    const picked: DockSelection = { selected: ['a', 'b'], anchor: 'a' };
+    const picked: NoteListSelection = { selected: ['a', 'b'], anchor: 'a' };
     expect(after(picked, { kind })).toStrictEqual(empty());
   });
 
@@ -58,10 +58,10 @@ describe('dockSelectionAfter', () => {
   });
 });
 
-function after(selection: DockSelection, gesture: DockGesture): DockSelection {
-  return dockSelectionAfter(selection, { gesture, order: ['a', 'b', 'c', 'd', 'e'] });
+function after(selection: NoteListSelection, gesture: NoteListGesture): NoteListSelection {
+  return noteListSelectionAfter(selection, { gesture, order: ['a', 'b', 'c', 'd', 'e'] });
 }
 
-function empty(): DockSelection {
+function empty(): NoteListSelection {
   return { selected: [], anchor: undefined };
 }

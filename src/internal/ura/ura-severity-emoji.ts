@@ -13,7 +13,7 @@ const emoji: Readonly<Record<UraSeverity, string>> = {
   chore: '🧹',
 };
 
-/** The emoji that marks a label at a glance, in the dock, the diff and posted reviews (ADR 0131). */
+/** The emoji that marks a label at a glance, in the notes list, the diff and posted reviews (ADR 0131). */
 export function uraSeverityEmoji(severity: UraSeverity): string {
   return emoji[severity];
 }

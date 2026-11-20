@@ -16,11 +16,11 @@ The URA (spec 1, Zone 3) is beuve's single output: the reviewer's decisions, com
 - **Status**: `staged → addressed | withdrawn`, and back to `staged` to undo. `addressed` records the later head and who judged it fixed (`reviewer` or `agent`), and can't be the head the item was written against. Only `staged` items are exported. No `verified_by_lsp` flag: nothing produces it yet, and adding a nullable column later is cheap.
 - **Suggested patch**: a unified diff for the anchored path only. For a line anchor, every changed run must lie inside the range (insertions directly before or after it are allowed); context lines may extend past it. Bare hunks get `--- a/`/`+++ b/` headers; the normalized text is stored and re-parsed on read. Whole-change anchors can't carry a patch.
 - **Re-anchoring** (`reanchorUraAnchor`), GitHub's outdated-comment rule: a line range follows its file through renames and shifts with edits above it; it is `outdated` when any of its lines changed or lines were inserted inside it. File anchors are outdated only by deletion; whole-change anchors never. The input is a `LineMapping` from the item's head to the current one: per file, `modified | renamed | deleted` with hunks that git's `DiffHunk` satisfies structurally. With hunk lines only the changed runs count, so context lines don't outdate anything. Re-anchoring is computed when an artifact is compiled, never stored.
-- **Artifact** (`compileUraArtifact`): summary (session, the session source's shape, fork point, head, `full | interdiff` scope), the staged items in dock order with their placement on the head (`current` anchor or `outdated` with a reason), and a verdict. The verdict is derived (any blocker requests changes; any issue or question comments; nits, praise or nothing approve) unless the reviewer chose one; the derived value is kept beside a chosen one. Approving over a staged blocker is refused.
+- **Artifact** (`compileUraArtifact`): summary (session, the session source's shape, fork point, head, `full | interdiff` scope), the staged items in note order with their placement on the head (`current` anchor or `outdated` with a reason), and a verdict. The verdict is derived (any blocker requests changes; any issue or question comments; nits, praise or nothing approve) unless the reviewer chose one; the derived value is kept beside a chosen one. Approving over a staged blocker is refused.
 - **Exporters**, all pure and deterministic:
   - `buildAgentReview`: JSON (`schema: "beuve.ura/1"`), what `beuve_read_human_review` returns as structured content. `renderAgentReviewXml`: the same data as XML, titles escaped, bodies and patches in CDATA with `]]>` split, characters XML 1.0 can't carry replaced by U+FFFD. Data only, no instructions.
   - `buildGithubReview`: the body of `POST /repos/{o}/{r}/pulls/{n}/reviews` with `commit_id`, `event`, `body` and `comments[]` (`line`, `side: RIGHT`, `start_line`/`start_side` for ranges). A one-hunk patch that shows every anchored line becomes a `suggestion` block for exactly those lines; any other patch a `diff` block. Whole-file, whole-change and outdated items, and lines outside the optional per-path `commentableRanges`, go into the body.
-- **Persistence** (ADR 0006): `uraMigrations` (`ura-0001-items`) creates `ura_items`, STRICT, with CHECKs mirroring the anchor, origin and status unions, `session_id` cascading from `sessions`, and an integer `position` for dock order. Partial unique indexes stage an insight once and an ImpactGate finding once per (session, head, path, function). Main runs it after the session migrations.
+- **Persistence** (ADR 0006): `uraMigrations` (`ura-0001-items`) creates `ura_items`, STRICT, with CHECKs mirroring the anchor, origin and status unions, `session_id` cascading from `sessions`, and an integer `position` for note order. Partial unique indexes stage an insight once and an ImpactGate finding once per (session, head, path, function). Main runs it after the session migrations.
 
 ## Consequences
 
@@ -32,7 +32,7 @@ Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchan
 
 ## Amendment 2026-10-29: the Markdown exporter is dropped
 
-`renderUraMarkdown`, the `markdown` export target, the `text/markdown` media type and the dock's "Copy Markdown" button are removed. Agent JSON, agent XML and GitHub remain.
+`renderUraMarkdown`, the `markdown` export target, the `text/markdown` media type and the notes list's "Copy Markdown" button are removed. Agent JSON, agent XML and GitHub remain.
 
 ## Amendment 2026-10-30: no agent-insight origin
 
@@ -40,7 +40,7 @@ ADR 0055 removes agent insights. The origin `agent-insight` and `insight_id` are
 
 ## Amendment 2026-11-16: items can be deleted
 
-A note of any status can be deleted (`ura:delete`, Review › Note › Delete Note, Shift+Delete in the dock). Deleting removes the row and, by cascade, its postings and review-edit bindings; a `/review` finding or proposed note it came from can be staged again. Withdrawing stays the way to keep a note out of the export without losing it. Main keeps the 20 latest deletions of the run in memory, so Undo (`ura:restore`, offered in the status notice) puts a note back in its old place; nothing is kept across a restart, and a restored note has lost the record that it was posted.
+A note of any status can be deleted (`ura:delete`, Review › Note › Delete Note, Shift+Delete in the notes list). Deleting removes the row and, by cascade, its postings and review-edit bindings; a `/review` finding or proposed note it came from can be staged again. Withdrawing stays the way to keep a note out of the export without losing it. Main keeps the 20 latest deletions of the run in memory, so Undo (`ura:restore`, offered in the status notice) puts a note back in its old place; nothing is kept across a restart, and a restored note has lost the record that it was posted.
 
 ## Amendment 2026-11-18: deletions of several notes, undone together (ADR 0144)
 

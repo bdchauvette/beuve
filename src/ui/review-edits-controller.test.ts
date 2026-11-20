@@ -75,7 +75,7 @@ describe('ReviewEditsController', () => {
     expect(reviewEdits.flow).toStrictEqual({ kind: 'failed', text: 'no edits' });
   });
 
-  test('stages exactly the previewed plan and refreshes the dock', async ({ expect }) => {
+  test('stages exactly the previewed plan and refreshes the notes list', async ({ expect }) => {
     const { reviewEdits, invoked, refreshed } = createReviewEditsHarness({
       review: reviewOf(),
       replies: {

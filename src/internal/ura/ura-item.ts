@@ -87,7 +87,7 @@ export interface SuggestedPatch {
 }
 
 /**
- * One reviewer decision in the URA staging dock (spec Zone 3). Timestamps are ISO-8601 UTC.
+ * One reviewer decision in the notes list (spec Zone 3). Timestamps are ISO-8601 UTC.
  * `headSha`, `anchor` and `origin` never change; re-anchoring to a later head is computed at
  * export time (`reanchorUraAnchor`).
  */

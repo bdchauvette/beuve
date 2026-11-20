@@ -1,7 +1,7 @@
 import type { GithubReviewPreviewView } from '#contract/ipc-contract.ts';
 
 /**
- * Where posting the dock's review to GitHub stands (ADR 0039): ready, posting, offering COMMENT
+ * Where posting the notes list's review to GitHub stands (ADR 0039): ready, posting, offering COMMENT
  * after GitHub refused an approval on the reviewer's own pull request, posted (with the review's
  * URL), failed, or voided because the head moved since the reviewer opened it (ADR 0078).
  */
@@ -14,7 +14,7 @@ export type GithubPostState =
   | { readonly kind: 'head-moved' };
 
 /**
- * What posting would send, which the dock shows beside the Post button (ADR 0039 amendment
+ * What posting would send, which the notes list shows beside the Post button (ADR 0039 amendment
  * 2026-11-18): not asked yet, being compiled (with the last answer, kept on screen meanwhile),
  * compiled, or failed.
  */
@@ -24,8 +24,8 @@ export type GithubPreviewState =
   | { readonly kind: 'ready'; readonly preview: GithubReviewPreviewView }
   | { readonly kind: 'failed'; readonly text: string };
 
-/** What the dock needs to offer posting for a pull request session. */
-export interface GithubDockState {
+/** What the notes list needs to offer posting for a pull request session. */
+export interface GithubNoteListState {
   /** `owner/repo#n`. */
   readonly target: string;
   readonly isSignedIn: boolean;

@@ -73,10 +73,10 @@ describe('planPalette', () => {
   test('names a command whose name follows the state as the state is', ({ expect }) => {
     expect(planPalette('>withdraw note', sources())[0]?.title).toBe('Withdraw Note');
     expect(
-      planPalette('>restore note', { ...sources(), checked: ['dock-withdraw'] })[0]?.title,
+      planPalette('>restore note', { ...sources(), checked: ['note-withdraw'] })[0]?.title,
     ).toBe('Restore Note');
     expect(
-      planPalette('>not addressed', { ...sources(), checked: ['dock-addressed'] })[0]?.title,
+      planPalette('>not addressed', { ...sources(), checked: ['note-addressed'] })[0]?.title,
     ).toBe('Mark Note as Not Addressed');
   });
 

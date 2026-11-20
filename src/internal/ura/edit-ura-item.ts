@@ -4,7 +4,7 @@ import type { UraItem, UraItemError } from './ura-item.ts';
 import type { UraSeverity } from './ura-severities.ts';
 import { validateUraItem } from './validate-ura-item.ts';
 
-/** Fields a reviewer can change in the dock. An empty `suggestion` removes the patch. */
+/** Fields a reviewer can change in the notes list. An empty `suggestion` removes the patch. */
 export interface UraItemEdit {
   readonly severity?: UraSeverity;
   readonly blocking?: boolean;

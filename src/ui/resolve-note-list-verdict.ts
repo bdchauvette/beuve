@@ -2,8 +2,8 @@ import type { UraVerdictView } from '#contract/ipc-contract.ts';
 
 import { nounFor } from './noun-for.ts';
 
-/** The verdict the dock exports with, and why a chosen one was refused. */
-export interface DockVerdict {
+/** The verdict the notes list exports with, and why a chosen one was refused. */
+export interface NoteListVerdict {
   readonly value: UraVerdictView;
   readonly source: 'derived' | 'chosen';
   readonly refusal?: string;
@@ -14,11 +14,11 @@ export interface DockVerdict {
  * is no choice at all, and approving while blocking notes are staged is refused, falling back to the
  * derived verdict with a message saying why.
  */
-export function resolveDockVerdict(
+export function resolveNoteListVerdict(
   chosen: UraVerdictView | undefined,
   derived: UraVerdictView,
   blocking: number,
-): DockVerdict {
+): NoteListVerdict {
   if (chosen === 'approve' && blocking > 0) {
     const staged = nounFor(blocking, {
       one: 'a blocking note is',

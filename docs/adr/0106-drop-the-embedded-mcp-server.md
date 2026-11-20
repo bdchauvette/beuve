@@ -7,7 +7,7 @@
 
 ADR 0011 gave beuve an MCP server (spec 5C) on `127.0.0.1`, so a coding agent in another process could reach the reviewer's live session. ADR 0021 and 0027 wired two tools to it: `beuve_get_lsp_diagnostics`, so an agent could check its own work against the session head, and `beuve_read_human_review`, the staged review as `beuve.ura/1` JSON plus XML.
 
-The reviewer is not sure the live channel is worth having. The same review already leaves beuve as text: the dock's "Copy for Claude Code (XML)" button and the `agent-json` and `agent-xml` export targets (ADR 0023, 0027), and making that copy-and-paste path easy is the direction of travel. An agent that has to be configured with a bearer token and a port to read what the reviewer could paste is a worse deal than the paste.
+The reviewer is not sure the live channel is worth having. The same review already leaves beuve as text: the notes list's "Copy for Claude Code (XML)" button and the `agent-json` and `agent-xml` export targets (ADR 0023, 0027), and making that copy-and-paste path easy is the direction of travel. An agent that has to be configured with a bearer token and a port to read what the reviewer could paste is a worse deal than the paste.
 
 The server also costs more than it shows. It is a network listener (loopback, but a listener), a bearer token and a discovery file in `userData`, a port setting, the MCP SDK and its HTTP stack in the main bundle, a status-bar indicator, an IPC channel, and a seam (`MainServices.mcpTools`) that several domains had to serve.
 

@@ -29,7 +29,7 @@ import './beuve-status-bar.ts';
 import './beuve-titlebar.ts';
 import './beuve-workspace.ts';
 import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
-import './beuve-ura-dock.ts';
+import './beuve-note-list.ts';
 import { beuveBridge } from './beuve-bridge.ts';
 import type { BeuveCommandPalette } from './beuve-command-palette.ts';
 import type { BeuveOpenPanel, FolderChooser, RepositoryInspector } from './beuve-open-panel.ts';
@@ -369,7 +369,7 @@ export class BeuveApp extends LitElement {
     this.runAppCommand('reload-review');
   };
 
-  /** The dock's Show beside its count of hidden closed notes. */
+  /** The notes list's Show beside its count of hidden closed notes. */
   private readonly onShowClosed = (): void => {
     this.runAppCommand('toggle-closed-notes');
   };

@@ -10,7 +10,7 @@ export interface UraMarker {
 
 /**
  * The markers a file card shows (ADR 0027): staged items whose current placement is on `path`,
- * in dock order. Outdated, withdrawn and addressed items, and whole-change notes, get none.
+ * in note order. Outdated, withdrawn and addressed items, and whole-change notes, get none.
  */
 export function uraMarkersFrom(path: string, items: readonly UraItemView[]): UraMarker[] {
   return items.flatMap((item): UraMarker[] => {

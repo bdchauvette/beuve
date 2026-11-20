@@ -86,7 +86,7 @@ import { uraSummaryFrom } from './ura-summary-from.ts';
 import { verdictNoticeFrom } from './verdict-notice-from.ts';
 import { uraFailure } from './ura-failure.ts';
 
-/** The URA staging dock (Zone 3) as the renderer reaches it (ADR 0023, 0027). */
+/** The notes list (Zone 3) as the renderer reaches it (ADR 0023, 0027). */
 export interface UraServices {
   readonly list: (request: ListUraItemsRequest) => Promise<IpcResult<UraListView>>;
   readonly create: (request: CreateUraItemRequest) => Promise<IpcResult<UraItemView>>;
@@ -138,7 +138,7 @@ export interface CompileArtifactOptions {
 /** How many deletions {@link UraServices.restore} remembers; one deletion may hold many items. */
 const deletionCapacity = 20;
 
-/** Deleted items of one session, and its dock order from before the deletion. */
+/** Deleted items of one session, and its note order from before the deletion. */
 interface Deletion {
   readonly sessionId: SessionId;
   readonly items: readonly UraItem[];

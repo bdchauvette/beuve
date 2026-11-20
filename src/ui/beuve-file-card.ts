@@ -72,6 +72,7 @@ import { loadDiffsLibrary } from './load-diffs-library.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
 import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { anchorFromTarget } from './anchor-from-target.ts';
+import { createSuggestionBadge } from './create-suggestion-badge.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { uraMarkersFrom } from './ura-markers-from.ts';
 import type { UraMarker } from './ura-markers-from.ts';
@@ -2417,14 +2418,14 @@ function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLE
   marker.classList.toggle('blocking', item.blocking);
   marker.dataset['action'] = 'note';
   marker.dataset['uraItemId'] = item.id;
-  marker.title = `Staged in the review dock: ${revealFormatControls(labels.anchor)}, from ${labels.origin}. Double-click to edit.`;
+  marker.title = `Staged in the notes list: ${revealFormatControls(labels.anchor)}, from ${labels.origin}. Double-click to edit.`;
   const kind = document.createElement('span');
   kind.className = 'ura-kind';
   kind.textContent = `${labels.emoji} Staged · ${labels.severity}`;
-  if (item.suggestedPatch !== undefined) {
-    kind.textContent += ' · suggestion';
-  }
   kind.prepend(createUraNoteIcon());
+  if (item.suggestedPatch !== undefined) {
+    kind.append(createSuggestionBadge());
+  }
   const title = document.createElement('span');
   title.className = 'ura-title';
   title.append(...parseInlineTitle(headlineOfUraItem(item)).map((span) => createInlineNode(span)));

@@ -82,7 +82,7 @@ import './primitives/beuve-menu.ts';
 import './beuve-review-range.ts';
 
 /**
- * A request to show a file's card from outside (the radar tree, the review dock), optionally at a
+ * A request to show a file's card from outside (the radar tree, the notes list), optionally at a
  * head line; `nonce` repeats a jump.
  */
 export interface FileJump {
@@ -114,7 +114,7 @@ interface ComposerOptions {
   readonly edit?: NoteEdit;
 }
 
-/** A request from the dock to (re-)edit an item's suggestion; `nonce` repeats it. */
+/** A request from the notes list to (re-)edit an item's suggestion; `nonce` repeats it. */
 export interface SuggestionJump {
   readonly itemId: string;
   readonly nonce: number;
@@ -171,7 +171,7 @@ export interface OpenCommitDetail {
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, Next/Previous Change step
  * through every hunk of every file, Show Callers toggles the active card's call-stack peek (Escape closes
  * it), and Add Note opens a composer
- * that stages the target into the review dock (ADR 0027); a staged note's marker (double-click or
+ * that stages the target into the notes list (ADR 0027); a staged note's marker (double-click or
  * Edit) opens it in the same composer, which saves it through `beuve-ura-update` (ADR 0129). Every line-taking action reads one
  * target: the selection, a jump's line, the focused hunk or the file (ADR 0063). View ▸ Diff switches side-by-side/inline diffs and hiding
  * whitespace (ADR 0042), and Add Suggestion edits the
@@ -966,7 +966,7 @@ export class BeuveDiffStream extends LitElement {
 
   /**
    * The card at `index`, its diff loaded first when it is collapsed: every jump to a line or hunk
-   * (citations, the dock, the palette, find) goes through here.
+   * (citations, the notes list, the palette, find) goes through here.
    */
   private async loadedCard(index: number): Promise<BeuveFileCard | undefined> {
     const file = this.shownFiles()[index];
@@ -1074,7 +1074,7 @@ export class BeuveDiffStream extends LitElement {
     void this.loadedCard(this.activeIndex).then(async (loaded) => loaded?.startEdit(target));
   }
 
-  /** The dock asked to (re-)edit an item's suggestion: its file, its lines, attached to it. */
+  /** The notes list asked to (re-)edit an item's suggestion: its file, its lines, attached to it. */
   private async editItem(itemId: string): Promise<void> {
     const item = this.uraItems.find((entry) => entry.id === itemId);
     let anchor: UraAnchorView | undefined;
@@ -1178,7 +1178,7 @@ export class BeuveDiffStream extends LitElement {
     });
   }
 
-  /** Saves the edited note through `ura:update`, as the dock's editor does, and closes the composer. */
+  /** Saves the edited note through `ura:update`, as the notes list's editor does, and closes the composer. */
   private saveEdit(edit: NoteEdit, draft: UraDraft): void {
     const detail: UpdateUraItemRequest = {
       itemId: edit.itemId,

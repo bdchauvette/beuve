@@ -1,7 +1,7 @@
 import type { UraSeverityView } from '#contract/ipc-contract.ts';
 
-/** What the dock's selected notes are, for the Note commands' names (ADR 0144). */
-export interface DockSelectionFacts {
+/** What the notes list's selected notes are, for the Note commands' names (ADR 0144). */
+export interface NoteListSelectionFacts {
   readonly count: number;
   /** Every one of them is addressed: Mark as Not Addressed. */
   readonly isAddressed: boolean;

@@ -28,25 +28,25 @@ export type ContextMenuLayout = readonly (readonly (ContextMenuCommand | Context
  */
 export const contextMenuLayouts: Readonly<Partial<Record<ContextKind, ContextMenuLayout>>> = {
   note: [
-    [{ id: 'dock-show' }, { id: 'open-in-editor' }],
+    [{ id: 'note-show' }, { id: 'open-in-editor' }],
     [
-      { id: 'dock-edit' },
+      { id: 'note-edit' },
       {
         submenu: 'Label',
         sections: [
           [
-            { id: 'dock-label-issue' },
-            { id: 'dock-label-suggestion' },
-            { id: 'dock-label-question' },
-            { id: 'dock-label-nitpick' },
-            { id: 'dock-label-thought' },
-            { id: 'dock-label-smell' },
-            { id: 'dock-label-praise' },
-            { id: 'dock-label-note' },
-            { id: 'dock-label-todo' },
-            { id: 'dock-label-chore' },
+            { id: 'note-label-issue' },
+            { id: 'note-label-suggestion' },
+            { id: 'note-label-question' },
+            { id: 'note-label-nitpick' },
+            { id: 'note-label-thought' },
+            { id: 'note-label-smell' },
+            { id: 'note-label-praise' },
+            { id: 'note-label-note' },
+            { id: 'note-label-todo' },
+            { id: 'note-label-chore' },
           ],
-          [{ id: 'dock-blocking', label: 'Blocking', toggle: 'checkbox' }],
+          [{ id: 'note-blocking', label: 'Blocking', toggle: 'checkbox' }],
         ],
       },
     ],
@@ -54,13 +54,13 @@ export const contextMenuLayouts: Readonly<Partial<Record<ContextKind, ContextMen
       {
         submenu: 'Status',
         sections: [
-          [{ id: 'dock-status-open' }],
-          [{ id: 'dock-status-addressed' }, { id: 'dock-status-withdrawn' }],
+          [{ id: 'note-status-open' }],
+          [{ id: 'note-status-addressed' }, { id: 'note-status-withdrawn' }],
         ],
       },
     ],
-    [{ id: 'dock-move-up' }, { id: 'dock-move-down' }],
+    [{ id: 'note-move-up' }, { id: 'note-move-down' }],
     [{ id: 'add-to-chat' }],
-    [{ id: 'dock-delete' }],
+    [{ id: 'note-delete' }],
   ],
 };

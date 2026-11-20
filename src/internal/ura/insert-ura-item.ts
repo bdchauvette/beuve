@@ -13,7 +13,7 @@ const primaryKeyViolation = 1555;
 const uniqueViolation = 2067;
 
 /**
- * Appends an item to the end of its session's dock. A `/review` finding or a proposed note can be
+ * Appends an item to the end of its session's notes list. A `/review` finding or a proposed note can be
  * staged once; a repeat is `duplicate-item`, so main can find and restore the existing item
  * instead.
  */

@@ -5,8 +5,8 @@ import type {
   ReviewRangeChoiceView,
 } from '#contract/ipc-contract.ts';
 
-import { dockCheckedCommands } from './dock-checked-commands.ts';
-import type { DockSelectionFacts } from './dock-selection-facts.ts';
+import { noteListCheckedCommands } from './note-list-checked-commands.ts';
+import type { NoteListSelectionFacts } from './note-list-selection-facts.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import type { ZoneId } from './zones.ts';
 
@@ -20,8 +20,8 @@ export interface MenuStateInput {
   /** Whether Add Suggestion can edit the file under the cursor (`uneditableReasonFrom`, ADR 0043). */
   readonly isActiveEditable: boolean;
   readonly focusedZone: ZoneId;
-  /** The dock's selected notes (or the one under its cursor), while the dock has the focus. */
-  readonly dockItem: DockSelectionFacts | undefined;
+  /** The notes list's selected notes (or the one under its cursor), while the notes list has the focus. */
+  readonly noteListItem: NoteListSelectionFacts | undefined;
   readonly isTextFocused: boolean;
   readonly isBusy: boolean;
   readonly isPullRequest: boolean;
@@ -57,7 +57,7 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ...has('file', isFile),
     ...has('diff-target', isDiffTarget),
     ...has('editable-target', isDiffTarget && input.isActiveEditable),
-    ...has('dock-item', input.hasSession && input.dockItem !== undefined),
+    ...has('note-item', input.hasSession && input.noteListItem !== undefined),
     ...has('busy', input.isBusy),
     ...has('pull-request', input.isPullRequest),
     ...has('staged', input.stagedCount > 0),
@@ -93,7 +93,7 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     conditions,
     checked: [
       ...checks.filter(([, isChecked]) => isChecked).map(([id]) => id),
-      ...dockCheckedCommands(input.dockItem),
+      ...noteListCheckedCommands(input.noteListItem),
     ],
   };
 }

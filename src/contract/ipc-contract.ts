@@ -1369,7 +1369,7 @@ export type UraPlacementView =
   | { readonly kind: 'outdated'; readonly reason: UraOutdatedReasonView };
 
 /**
- * One item of the URA staging dock (Zone 3). `anchor` is on `headSha`, the head it was written
+ * One item of the notes list (Zone 3). `anchor` is on `headSha`, the head it was written
  * against; `placement` is where it sits on the session's current head. `body` is Markdown.
  */
 export interface UraItemView {
@@ -1406,7 +1406,7 @@ export interface ListUraItemsRequest {
   readonly sessionId: string;
 }
 
-/** A session's items in dock order, every status, placed on its current head. */
+/** A session's items in note order, every status, placed on its current head. */
 export interface UraListView {
   readonly sessionId: string;
   readonly headSha: string;
@@ -1537,7 +1537,7 @@ export interface UraDeletedView {
 }
 
 /**
- * Puts a deletion's items back at their old places in the dock, together. Main remembers only the
+ * Puts a deletion's items back at their old places in the notes list, together. Main remembers only the
  * most recent deletions of this run, so an older one answers `not-found`.
  */
 export interface RestoreUraItemsRequest {
@@ -1550,7 +1550,7 @@ export interface UraRestoredView {
   readonly itemIds: readonly string[];
 }
 
-/** Every item of the session (any status), exactly once, in the new dock order. */
+/** Every item of the session (any status), exactly once, in the new note order. */
 export interface ReorderUraItemsRequest {
   readonly sessionId: string;
   readonly itemIds: readonly string[];
@@ -1599,7 +1599,7 @@ export type UraExportTarget = 'agent-json' | 'agent-xml' | 'github';
 /**
  * Compiles the staged items on the current head with the session's chosen verdict (else the
  * derived one); `verdict` overrides both for this export only. `summary` is the review summary
- * the reviewer typed in the dock for posting: the agent forms' `summary` and the GitHub body's top
+ * the reviewer typed in the notes list for posting: the agent forms' `summary` and the GitHub body's top
  * (`docs/review-format.md`); blank adds nothing.
  */
 export interface ExportUraRequest {
@@ -1825,7 +1825,7 @@ export interface DiffDisplayView {
   readonly showDiagnostics: boolean;
   /** Whether other reviewers' line comments show on the diff (ADR 0140); off until chosen. Always set by main. */
   readonly showReviewComments?: boolean;
-  /** Whether the review dock lists closed notes, addressed or withdrawn (ADR 0149); on until chosen. Always set by main. */
+  /** Whether the notes list lists closed notes, addressed or withdrawn (ADR 0149); on until chosen. Always set by main. */
   readonly showClosedNotes?: boolean;
   /** The saved `session:get-order` mode (ADR 0065); `path` until chosen. Always set by main. */
   readonly reviewOrder?: ReviewOrderMode;
@@ -1904,7 +1904,7 @@ export interface ReviewOrderView {
   readonly groups: readonly ReviewOrderGroupView[];
 }
 
-/** Pushed whenever a session's URA items change (from the dock or a moved head). */
+/** Pushed whenever a session's URA items change (from the notes list or a moved head). */
 export interface UraChangedView {
   readonly sessionId: string;
 }

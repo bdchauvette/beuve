@@ -934,7 +934,7 @@ describe('createIpcHandlers for the chat', () => {
   });
 });
 
-describe('createIpcHandlers for the review dock and clipboard', () => {
+describe('createIpcHandlers for the notes list and clipboard', () => {
   const id = '00000000-0000-4000-8000-000000000001';
 
   test('validates ura channels before delegating, dropping absent options', async ({ expect }) => {

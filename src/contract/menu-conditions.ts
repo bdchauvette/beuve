@@ -6,7 +6,7 @@ export const menuConditions = Object.freeze([
   'file',
   'diff-target',
   'editable-target',
-  'dock-item',
+  'note-item',
   'busy',
   'pull-request',
   'staged',

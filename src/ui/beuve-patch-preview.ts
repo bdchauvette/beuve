@@ -9,7 +9,7 @@ import { splitPatch } from './split-patch.ts';
  * A quiet, read-only preview of a suggested patch (ADR 0043): its hunk lines with the removed and
  * added ones tinted like the diff, file headers and hunk headers left out. Lines the edit kept are
  * shown as context, not as a removal and an identical addition (`minimizePatchPreview`). Used by the Add Note
- * composer and the review dock.
+ * composer and the notes list.
  */
 @customElement('beuve-patch-preview')
 export class BeuvePatchPreview extends LitElement {

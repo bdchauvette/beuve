@@ -43,7 +43,7 @@ import './beuve-setup-command-dialog.ts';
 import type { SetupCommandSaveDetail } from './beuve-setup-command-dialog.ts';
 import { SetupController } from './setup-controller.ts';
 import type { SetupTarget } from './setup-controller.ts';
-import './beuve-ura-dock.ts';
+import './beuve-note-list.ts';
 import { planDiffDeferrals } from './plan-diff-deferrals.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { beuveBridge } from './beuve-bridge.ts';
@@ -51,7 +51,7 @@ import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
 import type { BeuveDiffStream } from './beuve-diff-stream.ts';
 import type { ImageLoader } from './rich-view/beuve-rich-view.ts';
 import type { BeuveFilesSidebar } from './beuve-files-sidebar.ts';
-import type { BeuveUraDock } from './beuve-ura-dock.ts';
+import type { BeuveNoteList } from './beuve-note-list.ts';
 import type { MentionTarget } from './chat-draft.ts';
 import type { CommandId } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
@@ -83,8 +83,8 @@ import { DiagnosticsController } from './diagnostics-controller.ts';
 import type { DiagnosticsTarget } from './diagnostics-controller.ts';
 import type { DiagnosticsWantedDetail, FileDiagnostics } from './file-diagnostics.ts';
 import { cycleZone } from './cycle-zone.ts';
-import { dockCheckedCommands } from './dock-checked-commands.ts';
-import { dockItemOf } from './dock-item-of.ts';
+import { noteListCheckedCommands } from './note-list-checked-commands.ts';
+import { noteListItemOf } from './note-list-item-of.ts';
 import { uneditableReasonFrom } from './uneditable-reason-from.ts';
 import type { MenuStateInput } from './menu-state-from.ts';
 import type { AppModel } from './app-model.ts';
@@ -103,7 +103,7 @@ import type { StatusNotice } from './describe-editor-open.ts';
 import { mergeReviewInsights } from './merge-review-insights.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import { withoutStagedInsights } from './without-staged-insights.ts';
-import type { GithubDockState } from './github-post-state.ts';
+import type { GithubNoteListState } from './github-post-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import { relativeLineTextFrom } from './relative-line-text-from.ts';
 import { FileReferenceIndex } from './file-reference-index.ts';
@@ -261,7 +261,7 @@ export class BeuveReview extends LitElement {
     event.detail.respond(answer);
   };
 
-  /** `beuve-note-expand-request`: a note form's Expand (ADR 0125), through the dock's controller. */
+  /** `beuve-note-expand-request`: a note form's Expand (ADR 0125), through the notes list's controller. */
   private readonly onNoteExpand = (event: CustomEvent<NoteExpandRequestDetail>): void => {
     event.stopPropagation();
     const { draft, signal } = event.detail;
@@ -578,7 +578,7 @@ export class BeuveReview extends LitElement {
     void this.ura.update(event.detail);
   };
 
-  /** The dock's "Edit suggestion": the stream opens Add Suggestion on the item's lines (ADR 0043). */
+  /** The notes list's "Edit suggestion": the stream opens Add Suggestion on the item's lines (ADR 0043). */
   private readonly onUraEditSuggestion = (event: CustomEvent<UraItemIdDetail>): void => {
     this.jumpNonce += 1;
     this.suggestionJump = { itemId: event.detail.itemId, nonce: this.jumpNonce };
@@ -1013,7 +1013,7 @@ export class BeuveReview extends LitElement {
     }
     switch (this.focusedZone) {
       case 'ura': {
-        const item = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem();
+        const item = this.renderRoot.querySelector<BeuveNoteList>('beuve-note-list')?.cursorItem();
         if (item === undefined) {
           return nothingSelected;
         }
@@ -1168,10 +1168,10 @@ export class BeuveReview extends LitElement {
     return undefined;
   }
 
-  /** Open in Editor: the dock's note, the tree's file or the diff's line, by focus. */
+  /** Open in Editor: the notes list's note, the tree's file or the diff's line, by focus. */
   private openInEditorFromFocus(): void {
     if (this.focusedZone === 'ura') {
-      this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.runCommand('open-in-editor');
+      this.renderRoot.querySelector<BeuveNoteList>('beuve-note-list')?.runCommand('open-in-editor');
       return;
     }
     const path = this.treePath();
@@ -1217,8 +1217,8 @@ export class BeuveReview extends LitElement {
     }
   }
 
-  /** The dock's GitHub posting state, for pull request sessions only. */
-  private githubDock(): GithubDockState | undefined {
+  /** The notes list's GitHub posting state, for pull request sessions only. */
+  private githubNoteList(): GithubNoteListState | undefined {
     const source = this.review?.session.source;
     if (source?.kind !== 'github-pull-request') {
       return undefined;
@@ -1369,8 +1369,8 @@ export class BeuveReview extends LitElement {
     ></beuve-diff-stream>`;
   }
 
-  private renderDock(): TemplateResult {
-    return html`<beuve-ura-dock
+  private renderNoteList(): TemplateResult {
+    return html`<beuve-note-list
       data-zone="ura"
       tabindex="-1"
       ?hidden=${this.sidebarTab !== 'ura'}
@@ -1384,7 +1384,7 @@ export class BeuveReview extends LitElement {
       .verdictNotice=${this.ura.verdictNotice}
       .notice=${this.ura.notice}
       ?exporting=${this.ura.isExporting}
-      .github=${this.githubDock()}
+      .github=${this.githubNoteList()}
       .reviewEdits=${{ view: this.reviewEdits.view, flow: this.reviewEdits.flow }}
       @beuve-review-edits=${this.onReviewEdits}
       @beuve-github-post=${this.onGithubPost}
@@ -1399,7 +1399,7 @@ export class BeuveReview extends LitElement {
       @beuve-ura-reorder=${this.onUraReorder}
       @beuve-ura-export=${this.onUraExport}
       @beuve-ura-set-verdict=${this.onUraSetVerdict}
-    ></beuve-ura-dock>`;
+    ></beuve-note-list>`;
   }
 
   private renderChat(): TemplateResult {
@@ -1463,7 +1463,7 @@ export class BeuveReview extends LitElement {
       @beuve-sidebar-resize=${this.onSidebarResize}
       @beuve-sidebar-tab=${this.onSidebarTab}
     >
-      ${this.renderOverview()} ${this.renderFiles()} ${this.renderDock()} ${this.renderChat()}
+      ${this.renderOverview()} ${this.renderFiles()} ${this.renderNoteList()} ${this.renderChat()}
     </beuve-sidebar>`;
   }
 
@@ -1614,7 +1614,7 @@ export class BeuveReview extends LitElement {
 
   /**
    * Add to Chat (ADR 0046): what the focused region points at becomes a chip in the chat input. The diff
-   * gives its selection, hunk or file; the dock its item's anchor; the tree its focused file; the
+   * gives its selection, hunk or file; the notes list its item's anchor; the tree its focused file; the
    * palette its highlighted file or note. The chat tab opens with the input focused.
    */
   async addSelectionToChat(palette?: PaletteSelection): Promise<void> {
@@ -1648,7 +1648,7 @@ export class BeuveReview extends LitElement {
     const note = path.find((element) => element.dataset['itemId'] !== undefined);
     if (note !== undefined) {
       this.renderRoot
-        .querySelector<BeuveUraDock>('beuve-ura-dock')
+        .querySelector<BeuveNoteList>('beuve-note-list')
         ?.selectItem(note.dataset['itemId'] ?? '');
       this.focusedZone = 'ura';
       return 'note';
@@ -1903,10 +1903,10 @@ export class BeuveReview extends LitElement {
         return true;
       }
       case 'post-review': {
-        // The keyboard goes to the dock's summary, above its Post button.
+        // The keyboard goes to the notes list's summary, above its Post button.
         this.focusSidebar('ura');
         void this.updateComplete.then(() => {
-          this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.focusPostSummary();
+          this.renderRoot.querySelector<BeuveNoteList>('beuve-note-list')?.focusPostSummary();
         });
         return true;
       }
@@ -1964,24 +1964,25 @@ export class BeuveReview extends LitElement {
   }
 
   /**
-   * The commands whose checked names the palette shows (ADR 0144): the dock's Note commands for
+   * The commands whose checked names the palette shows (ADR 0144): the notes list's Note commands for
    * its selected notes, which a Note command run from the palette acts on, focused or not.
    */
   paletteChecked(): CommandId[] {
-    const notes = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.targetItems();
-    return dockCheckedCommands(dockItemOf(notes ?? []));
+    const notes = this.renderRoot.querySelector<BeuveNoteList>('beuve-note-list')?.targetItems();
+    return noteListCheckedCommands(noteListItemOf(notes ?? []));
   }
 
   /** What the review adds to the menu state: the focus, the cursor's file, the panels. */
-  /** The review summary typed in the dock for posting, which the exports carry too; blank is none. */
+  /** The review summary typed in the notes list for posting, which the exports carry too; blank is none. */
   reviewSummary(): string | undefined {
-    return this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.writtenSummary();
+    return this.renderRoot.querySelector<BeuveNoteList>('beuve-note-list')?.writtenSummary();
   }
 
   menuFacts(): ReviewMenuFacts {
-    let dock: readonly UraItemView[] = [];
+    let noteList: readonly UraItemView[] = [];
     if (this.focusedZone === 'ura') {
-      dock = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.targetItems() ?? [];
+      noteList =
+        this.renderRoot.querySelector<BeuveNoteList>('beuve-note-list')?.targetItems() ?? [];
     }
     const treePath = this.treePath();
     const markedPath = treePath ?? this.activePath;
@@ -1991,7 +1992,7 @@ export class BeuveReview extends LitElement {
       isActiveReviewed: markedPath !== undefined && this.reviewData.marks.get(markedPath) === 'yes',
       isActiveEditable: activeFile !== undefined && uneditableReasonFrom(activeFile) === undefined,
       focusedZone: this.focusedZone,
-      dockItem: dockItemOf(dock),
+      noteListItem: noteListItemOf(noteList),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
       isTerminalShown: this.review !== undefined && this.terminalShown,
       isTerminalFocused: this.isTerminalFocused,
@@ -2101,7 +2102,7 @@ export type ReviewMenuFacts = Pick<
   | 'isActiveReviewed'
   | 'isActiveEditable'
   | 'focusedZone'
-  | 'dockItem'
+  | 'noteListItem'
   | 'isSidebarShown'
   | 'isTerminalShown'
   | 'isTerminalFocused'

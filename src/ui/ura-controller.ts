@@ -13,11 +13,11 @@ import type {
 
 import type { UraCreateRequest } from './beuve-diff-stream.ts';
 import type { NoteExpandDraft, NoteExpandOutcome } from './beuve-note-expand.ts';
-import type { DockNotice } from './beuve-ura-dock.ts';
+import type { NoteListNotice } from './beuve-note-list.ts';
 import { countNoun } from './count-noun.ts';
 import type { ReviewRef } from './review-ref.ts';
 
-/** The fields of a staged item the dock edited. */
+/** The fields of a staged item the notes list edited. */
 export interface UraUpdateDetail {
   readonly itemId: string;
   readonly title?: string;
@@ -26,7 +26,7 @@ export interface UraUpdateDetail {
   readonly suggestedPatch?: string;
 }
 
-/** One change to the dock's selected notes (ADR 0144). */
+/** One change to the notes list's selected notes (ADR 0144). */
 export type UraEditManyDetail = EditUraItemsRequest;
 
 /** A deletion Undo can put back, and the titles of the notes it holds. */
@@ -48,7 +48,7 @@ interface UraSnapshot {
   readonly derivedVerdict: UraVerdictView;
   readonly chosenVerdict: UraVerdictView | undefined;
   readonly verdictNotice: string;
-  readonly notice: DockNotice | undefined;
+  readonly notice: NoteListNotice | undefined;
   readonly isExporting: boolean;
 }
 
@@ -61,14 +61,14 @@ const initial: UraSnapshot = {
   isExporting: false,
 };
 
-/** What {@link UraController.export} copies: which export, and the dock's summary, if written. */
+/** What {@link UraController.export} copies: which export, and the notes list's summary, if written. */
 export interface UraExportChoice {
   readonly target: UraExportTarget;
   readonly summary?: string | undefined;
 }
 
 /**
- * The review dock's state and flows (ADR 0027, 0043): the open session's staged items, its
+ * The notes list's state and flows (ADR 0027, 0043): the open session's staged items, its
  * derived and chosen verdict, the notice under the export buttons, and every call that changes
  * them. `ura:changed` refreshes the list while the host is connected. The open review comes in
  * through the {@link UraEnvironment}; the host re-renders when a getter's value changes.
@@ -85,7 +85,7 @@ export class UraController implements ReactiveController {
     host.addController(this);
   }
 
-  /** Runs a dock call; `ura:changed` refreshes the list, and failures show in the dock. */
+  /** Runs a notes list call; `ura:changed` refreshes the list, and failures show in the notes list. */
   private async call(run: (bridge: BeuveApi) => Promise<IpcResult<unknown>>): Promise<void> {
     const bridge = this.environment.bridge();
     if (bridge === undefined) {
@@ -147,7 +147,7 @@ export class UraController implements ReactiveController {
     return this.snapshot.verdictNotice;
   }
 
-  get notice(): DockNotice | undefined {
+  get notice(): NoteListNotice | undefined {
     return this.snapshot.notice;
   }
 

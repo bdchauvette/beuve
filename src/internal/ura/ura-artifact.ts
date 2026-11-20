@@ -57,7 +57,7 @@ export type UraArtifactVerdict =
   | { readonly value: UraVerdict; readonly source: 'derived' }
   | { readonly value: UraVerdict; readonly source: 'chosen'; readonly derived: UraVerdict };
 
-/** The reviewer's staged decisions on one head, in dock order: what every exporter reads. */
+/** The reviewer's staged decisions on one head, in note order: what every exporter reads. */
 export interface UraArtifact {
   readonly summary: UraSummary;
   readonly entries: readonly UraEntry[];
