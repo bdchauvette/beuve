@@ -135,25 +135,11 @@ describe('GithubController', () => {
       {
         tone: 'info',
         text: 'New commits on #7.',
-        action: { label: 'Show', command: 'show-new-commits' },
+        action: { label: 'Reload', command: 'reload-review' },
       },
     ]);
     expect(github.hasNewCommits).toBe(true);
     expect(selected).toStrictEqual([]);
-  });
-
-  test('Show New Commits loads the new head without the moved-head note', async ({ expect }) => {
-    const { github, emit, selected } = createGithubHarness({
-      review: reviewOf(),
-      replies: { 'github:get-timeline': emptyTimelineReply() },
-    });
-    github.hostConnected();
-    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
-    github.showNewCommits();
-    await expect.poll(() => selected).toStrictEqual(['s1']);
-    github.reviewLoaded({ isNewHead: true });
-    expect(github.post).toStrictEqual({ kind: 'idle' });
-    expect(github.hasNewCommits).toBe(false);
   });
 
   test('Reload Review loads the new head without the moved-head note', async ({ expect }) => {
@@ -169,6 +155,7 @@ describe('GithubController', () => {
     await github.reload(createSessionSummary(pullRequestSource()));
     github.reviewLoaded({ isNewHead: true });
     expect(github.post).toStrictEqual({ kind: 'idle' });
+    expect(github.hasNewCommits).toBe(false);
   });
 
   test('a new head the reviewer did not ask for keeps the note', async ({ expect }) => {
@@ -177,11 +164,12 @@ describe('GithubController', () => {
       replies: {
         'github:get-timeline': emptyTimelineReply(),
         'github:post-review': ok({ kind: 'failed', failure: 'head-moved', message: 'moved' }),
+        'github:open-pr': ok({ kind: 'opened', session: { id: 's1' } }),
       },
     });
     github.hostConnected();
     emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
-    github.showNewCommits();
+    await github.reload(createSessionSummary(pullRequestSource()));
     github.reviewLoaded({ isNewHead: false });
     emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
     github.reviewLoaded({ isNewHead: true });

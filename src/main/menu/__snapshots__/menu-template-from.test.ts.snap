@@ -659,10 +659,6 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "Re&load Review",
       },
       {
-        "id": "show-new-commits",
-        "label": "Sho&w New Commits",
-      },
-      {
         "id": "run-setup",
         "label": "Run Setu&p",
       },
@@ -1520,10 +1516,6 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Cmd+R",
         "id": "reload-review",
         "label": "Reload Review",
-      },
-      {
-        "id": "show-new-commits",
-        "label": "Show New Commits",
       },
       {
         "id": "run-setup",
