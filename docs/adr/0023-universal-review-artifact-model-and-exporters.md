@@ -45,3 +45,7 @@ A note of any status can be deleted (`ura:delete`, Review › Note › Delete No
 ## Amendment 2026-11-18: deletions of several notes, undone together (ADR 0144)
 
 `ura:delete` takes `itemIds` and deletes them in one transaction as one deletion, whose id `ura:restore` takes to put all of them back in their old places, together. Main still keeps the 20 latest deletions of the run, each of any size, so Undo brings back a whole selection.
+
+## Amendment 2026-11-20: status actions
+
+ADR 0151: a note changes status through `withdraw`, `mark-addressed` and `reopen` actions, each allowed from either of the other statuses, so addressed and withdrawn turn into each other directly; `ura:transition` is removed in favor of `ura:edit-many`, whose status change names the action.

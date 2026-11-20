@@ -931,13 +931,10 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
-  /**
-   * The context menu's Status (ADR 0150): every note not already there takes `status`; main
-   * restores a closed note first when it moves to the other closed status.
-   */
+  /** The context menu's Status (ADR 0150, 0151): every note not already there takes `status`. */
   private setStatus(items: readonly UraItemView[], status: UraStatusKind): void {
     const moving = items.filter((item) => item.status.kind !== status);
-    this.emitChange(moving, { kind: 'status', to: status });
+    this.emitChange(moving, { kind: statusActions[status] });
   }
 
   /** Sends one change for these notes, unless there are none. */
@@ -1822,6 +1819,13 @@ const statusOfCommand: Readonly<Partial<Record<CommandId, UraStatusKind>>> = {
   'dock-status-addressed': 'addressed',
   'dock-status-withdrawn': 'withdrawn',
 };
+
+/** The action that brings a note to each status (ADR 0151). */
+const statusActions = {
+  staged: 'reopen',
+  withdrawn: 'withdraw',
+  addressed: 'mark-addressed',
+} as const satisfies Readonly<Record<UraStatusKind, UraItemsChange['kind']>>;
 
 /** The label each of the context menu's Label commands sets (ADR 0150). */
 const severityOfCommand: Readonly<Partial<Record<CommandId, UraSeverityView>>> = Object.fromEntries(

@@ -8,7 +8,7 @@ import { uraItemRowFrom } from './ura-item-row-from.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
 
 /**
- * Persists an item that `editUraItem` or `transitionUraItem` produced: its label, blocking, text,
+ * Persists an item that `editUraItem` or a status action (`withdrawUraItem`, `markUraItemAddressed`, `reopenUraItem`) produced: its label, blocking, text,
  * patch, status and `updatedAt`. Its identity, head, anchor, origin and position are not touched.
  */
 export function updateUraItem(

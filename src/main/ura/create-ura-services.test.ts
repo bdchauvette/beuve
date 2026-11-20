@@ -78,18 +78,20 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     ).toBeUndefined();
 
     expect(
-      okValueFrom(await services.ura.transition({ itemId: second.id, to: 'withdrawn' })).status,
-    ).toStrictEqual({ kind: 'withdrawn' });
+      okValueFrom(
+        await services.ura.editMany({ itemIds: [second.id], change: { kind: 'withdraw' } }),
+      ).itemIds,
+    ).toStrictEqual([second.id]);
     expect(okValueFrom(await services.ura.list({ sessionId })).derivedVerdict).toBe('approve');
     await expect(
-      services.ura.transition({ itemId: second.id, to: 'addressed' }),
+      services.ura.editMany({ itemIds: [second.id], change: { kind: 'mark-addressed' } }),
     ).resolves.toMatchObject({
       ok: false,
       error: { code: 'refused' },
     });
-    okValueFrom(await services.ura.transition({ itemId: second.id, to: 'staged' }));
+    okValueFrom(await services.ura.editMany({ itemIds: [second.id], change: { kind: 'reopen' } }));
     await expect(
-      services.ura.transition({ itemId: first.id, to: 'addressed' }),
+      services.ura.editMany({ itemIds: [first.id], change: { kind: 'mark-addressed' } }),
     ).resolves.toMatchObject({
       ok: false,
       error: { code: 'refused' },
@@ -161,7 +163,9 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(byId.get(fileNote.id)?.placement).toMatchObject({ kind: 'current' });
     expect(changes).toContain(sessionId);
 
-    okValueFrom(await services.ura.transition({ itemId: replaced.id, to: 'addressed' }));
+    okValueFrom(
+      await services.ura.editMany({ itemIds: [replaced.id], change: { kind: 'mark-addressed' } }),
+    );
     const exported = okValueFrom(await services.ura.export({ sessionId, target: 'agent-json' }));
     expect(exported).toMatchObject({ headSha: newHead, itemCount: 2, outdatedCount: 0 });
     expect(exported.text).toContain('"startLine": 7');
@@ -186,7 +190,9 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     const first = await note({ startLine: 2, endLine: 3, title: 'First' });
     const second = await note({ startLine: 2, endLine: 3, title: 'Second' });
     const third = await note({ startLine: 2, endLine: 3, title: 'Third' });
-    okValueFrom(await services.ura.transition({ itemId: second.id, to: 'withdrawn' }));
+    okValueFrom(
+      await services.ura.editMany({ itemIds: [second.id], change: { kind: 'withdraw' } }),
+    );
 
     const deletion = okValueFrom(services.ura.delete({ itemIds: [second.id] }));
     expect(deletion).toStrictEqual({
@@ -267,14 +273,14 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     okValueFrom(
       await services.ura.editMany({
         itemIds: [first.id],
-        change: { kind: 'status', to: 'withdrawn' },
+        change: { kind: 'withdraw' },
       }),
     );
     expect(
       okValueFrom(
         await services.ura.editMany({
           itemIds: [first.id, second.id],
-          change: { kind: 'status', to: 'withdrawn' },
+          change: { kind: 'withdraw' },
         }),
       ),
     ).toStrictEqual({ sessionId, itemIds: [second.id] });
@@ -300,19 +306,19 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     okValueFrom(
       await services.ura.editMany({
         itemIds: [second.id],
-        change: { kind: 'status', to: 'staged' },
+        change: { kind: 'reopen' },
       }),
     );
     await expect(
       services.ura.editMany({
         itemIds: [second.id, first.id],
-        change: { kind: 'status', to: 'addressed' },
+        change: { kind: 'mark-addressed' },
       }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'refused' } });
     await expect(statuses()).resolves.toStrictEqual(['withdrawn', 'staged']);
   });
 
-  test('moves closed notes between addressed and withdrawn by restoring them first', async ({
+  test('moves closed notes straight between addressed and withdrawn', async ({
     expect,
     services,
     sessionId,
@@ -334,20 +340,20 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     okValueFrom(
       await services.ura.editMany({
         itemIds: [first.id],
-        change: { kind: 'status', to: 'addressed' },
+        change: { kind: 'mark-addressed' },
       }),
     );
     okValueFrom(
       await services.ura.editMany({
         itemIds: [first.id, second.id],
-        change: { kind: 'status', to: 'withdrawn' },
+        change: { kind: 'withdraw' },
       }),
     );
     await expect(statuses()).resolves.toStrictEqual(['withdrawn', 'withdrawn']);
     okValueFrom(
       await services.ura.editMany({
         itemIds: [first.id, second.id],
-        change: { kind: 'status', to: 'addressed' },
+        change: { kind: 'mark-addressed' },
       }),
     );
     await expect(statuses()).resolves.toStrictEqual(['addressed', 'addressed']);
@@ -385,7 +391,9 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(again).toStrictEqual({ item: staged.item, created: false });
     expect(okValueFrom(await services.ura.list({ sessionId })).items).toHaveLength(1);
 
-    okValueFrom(await services.ura.transition({ itemId: staged.item.id, to: 'withdrawn' }));
+    okValueFrom(
+      await services.ura.editMany({ itemIds: [staged.item.id], change: { kind: 'withdraw' } }),
+    );
     const restaged = okValueFrom(
       await services.ura.stageReviewFinding({
         messageId: reviewMessageId(),
@@ -467,7 +475,9 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       services.ura.export({ sessionId, target: 'github', verdict: 'approve' }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'refused' } });
 
-    okValueFrom(await services.ura.transition({ itemId: blocking.id, to: 'withdrawn' }));
+    okValueFrom(
+      await services.ura.editMany({ itemIds: [blocking.id], change: { kind: 'withdraw' } }),
+    );
     expect(
       okValueFrom(await services.ura.export({ sessionId, target: 'github', verdict: 'approve' })),
     ).toMatchObject({ verdict: 'approve', itemCount: 1 });
@@ -716,7 +726,9 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       error: { code: 'refused' },
     });
 
-    okValueFrom(await services.ura.transition({ itemId: blocking.id, to: 'withdrawn' }));
+    okValueFrom(
+      await services.ura.editMany({ itemIds: [blocking.id], change: { kind: 'withdraw' } }),
+    );
     expect(okValueFrom(await services.ura.list({ sessionId })).verdictNotice).toContain('cleared');
     okValueFrom(
       services.ura.setVerdict({

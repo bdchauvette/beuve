@@ -8,7 +8,7 @@ import { insertUraItem } from './insert-ura-item.ts';
 import { listUraItems } from './list-ura-items.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
-import { transitionUraItem } from './transition-ura-item.ts';
+import { markUraItemAddressed } from './mark-ura-item-addressed.ts';
 import type { SessionId, UraItem } from './ura-item.ts';
 import { updateUraItem } from './update-ura-item.ts';
 import { test } from './testing/test.ts';
@@ -89,8 +89,13 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
     );
     expect(updateUraItem(db, edited)).toStrictEqual({ ok: true, value: undefined });
     expect(findUraItem(db, item.id)).toStrictEqual({ ok: true, value: edited });
-    const status = { kind: 'addressed', atSha: testUraIds.laterHeadSha, by: 'reviewer' } as const;
-    const done = okValueFrom(transitionUraItem(edited, status, later()));
+    const done = okValueFrom(
+      markUraItemAddressed(edited, {
+        atSha: testUraIds.laterHeadSha,
+        by: 'reviewer',
+        now: later(),
+      }),
+    );
     updateUraItem(db, done);
     expect(findUraItem(db, item.id)).toStrictEqual({ ok: true, value: done });
     const moved = { ...done, anchor: { kind: 'change' } } as const;

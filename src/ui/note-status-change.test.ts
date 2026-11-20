@@ -7,31 +7,30 @@ import { createUraItemView } from './testing/create-ura-item-view.ts';
 import { test } from './testing/test.ts';
 
 describe('noteStatusChange', () => {
-  test('withdraws the staged notes of a mixed selection, leaving the others', ({ expect }) => {
+  test('withdraws every note of a mixed selection that is not withdrawn yet', ({ expect }) => {
     expect(
       noteStatusChange(
-        [note('a', 'staged'), note('b', 'withdrawn'), note('c', 'staged')],
+        [note('a', 'staged'), note('b', 'withdrawn'), note('c', 'addressed')],
         'withdrawn',
       ),
-    ).toStrictEqual({ itemIds: ['a', 'c'], change: { kind: 'status', to: 'withdrawn' } });
+    ).toStrictEqual({ itemIds: ['a', 'c'], change: { kind: 'withdraw' } });
     expect(
-      noteStatusChange([note('a', 'addressed'), note('b', 'staged')], 'withdrawn'),
-    ).toStrictEqual({ itemIds: ['b'], change: { kind: 'status', to: 'withdrawn' } });
+      noteStatusChange([note('a', 'withdrawn'), note('b', 'staged')], 'addressed'),
+    ).toStrictEqual({ itemIds: ['a', 'b'], change: { kind: 'mark-addressed' } });
   });
 
-  test('restores every note when all of them have the status', ({ expect }) => {
+  test('reopens every note when all of them have the status', ({ expect }) => {
     expect(
       noteStatusChange([note('a', 'withdrawn'), note('b', 'withdrawn')], 'withdrawn'),
-    ).toStrictEqual({ itemIds: ['a', 'b'], change: { kind: 'status', to: 'staged' } });
+    ).toStrictEqual({ itemIds: ['a', 'b'], change: { kind: 'reopen' } });
     expect(noteStatusChange([note('a', 'addressed')], 'addressed')).toStrictEqual({
       itemIds: ['a'],
-      change: { kind: 'status', to: 'staged' },
+      change: { kind: 'reopen' },
     });
   });
 
-  test('does nothing with no notes, or none staged to change', ({ expect }) => {
+  test('does nothing with no notes', ({ expect }) => {
     expect(noteStatusChange([], 'addressed')).toBeUndefined();
-    expect(noteStatusChange([note('a', 'withdrawn')], 'addressed')).toBeUndefined();
   });
 });
 

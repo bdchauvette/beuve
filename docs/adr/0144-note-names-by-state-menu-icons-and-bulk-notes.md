@@ -29,3 +29,7 @@ On macOS the arrows rendered far larger than a menu's text. `createFromNamedImag
 ## Amendment 2026-11-20: the note's context menu is laid out by hand
 
 ADR 0150 replaces the note's derived context menu with a hand-made layout: Label and Status submenus take the place of Change Label…, Withdraw and Mark as Addressed there, and the arrows show no icons in it. The menu bar's Review › Note keeps them, icons included.
+
+## Amendment 2026-11-20: status actions
+
+ADR 0151: a note changes status through `withdraw`, `mark-addressed` and `reopen` actions, each allowed from either of the other statuses, so addressed and withdrawn turn into each other directly; `ura:transition` is removed in favor of `ura:edit-many`, whose status change names the action.
