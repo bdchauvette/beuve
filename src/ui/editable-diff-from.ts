@@ -26,7 +26,7 @@ export interface EditableDiffLibrary<T> {
   processFile(patch: string, options: CompleteParse): T | undefined;
 }
 
-/** A card's parsed diff, the patch it parsed, and the head file Suggest Edit loaded. */
+/** A card's parsed diff, the patch it parsed, and the head file Add Suggestion loaded. */
 export interface EditableDiffInput<T> {
   readonly library: EditableDiffLibrary<T>;
   readonly shown: T;
@@ -35,7 +35,7 @@ export interface EditableDiffInput<T> {
 }
 
 /**
- * The diff Suggest Edit attaches `@pierre/diffs/edit` to (ADR 0043). The card parses each patch
+ * The diff Add Suggestion attaches `@pierre/diffs/edit` to (ADR 0043). The card parses each patch
  * without its files, so its diffs are partial. `FileDiff.prepareForEditing` hydrates a changed
  * or renamed file through `loadDiffFiles`, but refuses an added one ("this partial diff cannot
  * be hydrated"); for that, this is the complete diff of the same patch with an empty base and

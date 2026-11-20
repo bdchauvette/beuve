@@ -558,11 +558,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "accelerator": "Ctrl+Shift+E",
-        "id": "suggest-edit",
-        "label": "Suggest &Edit…",
+        "id": "add-suggestion",
+        "label": "&Add Suggestion…",
       },
       {
-        "label": "Re&view Edits",
+        "label": "Review &Edits",
         "submenu": [
           {
             "id": "open-review-edits",
@@ -1497,8 +1497,8 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       },
       {
         "accelerator": "Alt+Cmd+E",
-        "id": "suggest-edit",
-        "label": "Suggest Edit…",
+        "id": "add-suggestion",
+        "label": "Add Suggestion…",
       },
       {
         "label": "Review Edits",

@@ -6,7 +6,7 @@ import type { ReviewTarget } from './target-from.ts';
 import { uneditableReasonFrom } from './uneditable-reason-from.ts';
 
 /**
- * The head lines Suggest Edit edits (ADR 0043), and the staged item the suggestion attaches to, if any;
+ * The head lines Add Suggestion edits (ADR 0043), and the staged item the suggestion attaches to, if any;
  * without one, saving opens the Add Note composer with the patch.
  */
 export interface EditTarget {
@@ -19,7 +19,7 @@ export interface EditTarget {
 }
 
 /**
- * What Suggest Edit edits for `target` (ADR 0043, 0063): when its head line (as Open in Editor takes it) lies on the
+ * What Add Suggestion edits for `target` (ADR 0043, 0063): when its head line (as Open in Editor takes it) lies on the
  * anchor of a staged line note written against the head being shown, that note's lines, so the
  * suggestion attaches to it; otherwise the lines Add Note would stage. Nothing for a file
  * {@link uneditableReasonFrom} rules out (deleted, binary, no hunks), or when the target is a whole file or the whole change. Notes from an older head are

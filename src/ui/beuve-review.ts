@@ -578,7 +578,7 @@ export class BeuveReview extends LitElement {
     void this.ura.update(event.detail);
   };
 
-  /** The dock's "Edit suggestion": the stream opens Suggest Edit on the item's lines (ADR 0043). */
+  /** The dock's "Edit suggestion": the stream opens Add Suggestion on the item's lines (ADR 0043). */
   private readonly onUraEditSuggestion = (event: CustomEvent<UraItemIdDetail>): void => {
     this.jumpNonce += 1;
     this.suggestionJump = { itemId: event.detail.itemId, nonce: this.jumpNonce };

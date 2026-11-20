@@ -125,7 +125,7 @@ export interface ComposerState {
   readonly where: string;
   readonly saving: boolean;
   readonly error: string;
-  /** The suggestion an Suggest Edit edit produced, staged with the note (ADR 0043). */
+  /** The suggestion an Add Suggestion edit produced, staged with the note (ADR 0043). */
   readonly suggestedPatch?: string;
   /** The staged note this composer edits in place of its marker (ADR 0129); absent for a new one. */
   readonly edit?: NoteEdit;
@@ -137,7 +137,7 @@ export interface NoteEditDetail {
 }
 
 /**
- * An Suggest Edit edit on this card (ADR 0043): loading the file pair and the editor, editing, or failed
+ * An Add Suggestion edit on this card (ADR 0043): loading the file pair and the editor, editing, or failed
  * to start; `error` is shown in the edit bar (e.g. an edit outside the range).
  */
 export interface EditSession {
@@ -170,7 +170,7 @@ export interface SideLines {
   readonly side: 'head' | 'base';
 }
 
-/** Sent when an Suggest Edit edit is saved: the edited range and its suggested patch. */
+/** Sent when an Add Suggestion edit is saved: the edited range and its suggested patch. */
 export interface SuggestionSaveDetail {
   readonly target: EditTarget;
   readonly patch: string;
@@ -786,7 +786,7 @@ export class BeuveFileCard extends LitElement {
   private clickedToken: ClickedToken | undefined;
   /** The head line a jump (citation or flow node) landed on, until Next/Previous Change moves on. */
   private focusedLine: number | undefined;
-  /** The Suggest Edit editor attached to the diff, and the head text it started from. */
+  /** The Add Suggestion editor attached to the diff, and the head text it started from. */
   private editor: Editor<'file-diff', PlacedSlot> | undefined;
   private editHead: string | undefined;
   /** Insight notes the reviewer expanded, by insight key. */
@@ -1005,7 +1005,7 @@ export class BeuveFileCard extends LitElement {
 
   /** The {@link crossing} listeners, while the card has something they act on. */
   private crossingDelegation: AbortController | undefined;
-  /** The editing keys' listeners, while a Suggest Edit edit is in progress. */
+  /** The editing keys' listeners, while a Add Suggestion edit is in progress. */
   private editKeys: AbortController | undefined;
   /** The ⌘/Ctrl tracking that shows the pointer on tokens, while the card is in the document. */
   /** Context the reviewer revealed for notes outside the hunks, until the file changes. */
@@ -1057,7 +1057,7 @@ export class BeuveFileCard extends LitElement {
    */
   @property({ reflect: true }) accessor reviewed: FileReviewStateView = 'no';
 
-  /** The Suggest Edit edit in progress on this card (ADR 0043). */
+  /** The Add Suggestion edit in progress on this card (ADR 0043). */
   @state() accessor edit: EditSession | undefined;
 
   @state() accessor isFallback = false;
@@ -2100,7 +2100,7 @@ ${splitPatch(file.patch).map((line) => {
     this.scrollToRow(row);
   }
 
-  /** What Suggest Edit would edit here: the target's lines, or the staged note under them. */
+  /** What Add Suggestion would edit here: the target's lines, or the staged note under them. */
   editTarget(items: readonly UraItemView[], headSha: string): EditTarget | undefined {
     return editTargetFrom(this.target(), items, headSha);
   }
@@ -2138,7 +2138,7 @@ ${splitPatch(file.patch).map((line) => {
       this.edit = { target, phase: 'failed', error: reason };
       return;
     }
-    // Suggest Edit edits the source (ADR 0123): a rendered file shows its diff for it.
+    // Add Suggestion edits the source (ADR 0123): a rendered file shows its diff for it.
     this.view = 'source';
     this.edit = { target, phase: 'loading', error: '' };
     this.mounted = true;
@@ -2422,7 +2422,7 @@ function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLE
   kind.className = 'ura-kind';
   kind.textContent = `${labels.emoji} Staged · ${labels.severity}`;
   if (item.suggestedPatch !== undefined) {
-    kind.textContent += ' · patch';
+    kind.textContent += ' · suggestion';
   }
   kind.prepend(createUraNoteIcon());
   const title = document.createElement('span');
@@ -2522,7 +2522,7 @@ function startWorkerPool(workers: typeof DiffsWorker): WorkerPoolManager {
 
 const sharedEditor: { module: Promise<typeof DiffsEdit> | undefined } = { module: undefined };
 
-/** `@pierre/diffs/edit`, a lazy chunk loaded by the first Suggest Edit (ADR 0043). */
+/** `@pierre/diffs/edit`, a lazy chunk loaded by the first Add Suggestion (ADR 0043). */
 async function loadEditor(): Promise<typeof DiffsEdit> {
   sharedEditor.module ??= import('@pierre/diffs/edit');
   return sharedEditor.module;

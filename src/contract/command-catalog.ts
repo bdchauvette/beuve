@@ -691,8 +691,8 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
-    id: 'suggest-edit',
-    title: 'Suggest Edit…',
+    id: 'add-suggestion',
+    title: 'Add Suggestion…',
     menu: { menu: 'review', group: 2 },
     keys: { mac: 'Alt+Cmd+E', linux: 'Ctrl+Shift+E' },
     context: ['line'],

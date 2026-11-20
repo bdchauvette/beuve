@@ -20,7 +20,7 @@ export interface LineRange {
 
 /**
  * What the reviewer points at in the diff stream (ADR 0063), the one answer every action
- * (Add Note, Add to Chat, Suggest Edit, Open in Editor, Show Callers, Show Control Flow, Copy Relative Line Number) adapts to what it needs:
+ * (Add Note, Add to Chat, Add Suggestion, Open in Editor, Show Callers, Show Control Flow, Copy Relative Line Number) adapts to what it needs:
  *
  * - `selection`: lines the reviewer selected, or a citation or find hit selected for them.
  *   `side` says which numbering `start`–`end` use: `base` when both ends are on deleted rows or

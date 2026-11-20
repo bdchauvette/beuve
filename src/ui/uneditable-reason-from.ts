@@ -1,7 +1,7 @@
 import type { DiffFileView } from '#contract/ipc-contract.ts';
 
 /**
- * Why Suggest Edit (ADR 0043) cannot edit `file`, or `undefined` when it can: a deleted file has
+ * Why Add Suggestion (ADR 0043) cannot edit `file`, or `undefined` when it can: a deleted file has
  * no head side, a binary file no text, and a file with no hunks (a pure rename or mode change,
  * an empty new file) no changed lines to pick.
  */

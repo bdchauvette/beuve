@@ -123,7 +123,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'range-since-saved': app,
     'range-whole': app,
     stage: diff,
-    'suggest-edit': diff,
+    'add-suggestion': diff,
     peek: diff,
     flow: diff,
     stop: app,

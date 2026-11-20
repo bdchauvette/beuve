@@ -32,7 +32,7 @@ export interface UraDraft {
  * and a body. Enter in
  * the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels. Both fields complete `:shortcode:` emoji
  * (ADR 0145), whose open list takes Enter and Escape first.
- * With a suggestion from an Suggest Edit edit (ADR 0043) it previews the patch that is staged with the
+ * With a suggestion from an Add Suggestion edit (ADR 0043) it previews the patch that is staged with the
  * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Given a staged
  * note's {@link draft}, it opens with that note's text and saves it instead (ADR 0129). Emits
  * `beuve-ura-compose-submit` with a {@link UraDraft} and `beuve-ura-compose-cancel`.

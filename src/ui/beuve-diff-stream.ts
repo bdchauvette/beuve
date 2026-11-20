@@ -103,7 +103,7 @@ export interface UraCreateRequest {
   readonly anchor: UraAnchorView;
   readonly headSha: string;
   readonly draft: UraDraft;
-  /** The suggestion an Suggest Edit edit produced (ADR 0043), staged with the note. */
+  /** The suggestion an Add Suggestion edit produced (ADR 0043), staged with the note. */
   readonly suggestedPatch?: string;
   readonly settle: (error: string | undefined) => void;
 }
@@ -174,7 +174,7 @@ export interface OpenCommitDetail {
  * that stages the target into the review dock (ADR 0027); a staged note's marker (double-click or
  * Edit) opens it in the same composer, which saves it through `beuve-ura-update` (ADR 0129). Every line-taking action reads one
  * target: the selection, a jump's line, the focused hunk or the file (ADR 0063). View ▸ Diff switches side-by-side/inline diffs and hiding
- * whitespace (ADR 0042), and Suggest Edit edits the
+ * whitespace (ADR 0042), and Add Suggestion edits the
  * hunk or selected lines into a suggested patch for a new or the underlying note (ADR 0043).
  * File Reviewed marks the active file reviewed or not (ADR 0064): reviewed cards collapse to their header,
  * and Next/Previous Change can skip them. Files show in the order main computed (ADR 0065), with a divider
@@ -476,7 +476,7 @@ export class BeuveDiffStream extends LitElement {
     this.closeComposer();
   };
 
-  /** An Suggest Edit edit saved: onto the note it was made for, else into a new note's composer. */
+  /** An Add Suggestion edit saved: onto the note it was made for, else into a new note's composer. */
   private readonly onSuggestionSave = (event: CustomEvent<SuggestionSaveDetail>): void => {
     const { target, patch } = event.detail;
     if (target.itemId === undefined) {
@@ -1052,7 +1052,7 @@ export class BeuveDiffStream extends LitElement {
     );
   }
 
-  /** Suggest Edit: edits the target's lines, or the staged note under them, on the active card. */
+  /** Add Suggestion: edits the target's lines, or the staged note under them, on the active card. */
   private editActive(): void {
     const { review } = this;
     const reviewTarget = this.target();
@@ -1118,7 +1118,7 @@ export class BeuveDiffStream extends LitElement {
 
   /**
    * Add Note: a composer on the active card, staging the target's head lines (ADR 0063), or `anchor`
-   * with the suggestion an Suggest Edit edit produced, or the staged note it edits.
+   * with the suggestion an Add Suggestion edit produced, or the staged note it edits.
    */
   private openComposer(given?: UraAnchorView, options: ComposerOptions = {}): void {
     const { suggestedPatch, edit } = options;
@@ -1731,7 +1731,7 @@ export class BeuveDiffStream extends LitElement {
         this.openComposer();
         return true;
       }
-      case 'suggest-edit': {
+      case 'add-suggestion': {
         this.editActive();
         return true;
       }
