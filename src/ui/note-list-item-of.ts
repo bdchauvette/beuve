@@ -9,12 +9,12 @@ import type { NoteListSelectionFacts } from './note-list-selection-facts.ts';
  * blocking, and Status and Label check the status and label they all share. Pure.
  */
 export function noteListItemOf(items: readonly UraItemView[]): NoteListSelectionFacts | undefined {
-  if (items.length === 0) {
+  const [first] = items;
+  if (first === undefined) {
     return undefined;
   }
-  const [first] = items;
-  const status = first?.status.kind;
-  const severity = first?.severity;
+  const status = first.status.kind;
+  const { severity } = first;
   return {
     count: items.length,
     isAddressed: items.every((item) => item.status.kind === 'addressed'),
