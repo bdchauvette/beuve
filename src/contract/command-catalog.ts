@@ -927,8 +927,8 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
-    id: 'toggle-addressed-notes',
-    title: 'Show Addressed Notes',
+    id: 'toggle-closed-notes',
+    title: 'Show Closed Notes',
     menu: { menu: 'review', group: 5, submenu: 'Note', subgroup: 4 },
     toggle: 'checkbox',
     windows: ['main'],

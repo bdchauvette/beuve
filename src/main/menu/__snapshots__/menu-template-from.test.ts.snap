@@ -644,8 +644,8 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "type": "separator",
           },
           {
-            "id": "toggle-addressed-notes",
-            "label": "S&how Addressed Notes",
+            "id": "toggle-closed-notes",
+            "label": "S&how Closed Notes",
             "type": "checkbox",
           },
         ],
@@ -1503,8 +1503,8 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
             "type": "separator",
           },
           {
-            "id": "toggle-addressed-notes",
-            "label": "Show Addressed Notes",
+            "id": "toggle-closed-notes",
+            "label": "Show Closed Notes",
             "type": "checkbox",
           },
         ],
