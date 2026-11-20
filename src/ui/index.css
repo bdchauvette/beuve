@@ -358,6 +358,9 @@
   --beuve-code-text: var(--beuve-scale-gray-12);
   /* Other occurrences of the selected text (ADR 0126): a neutral tint, fainter than the selection. */
   --beuve-code-selection-match: var(--beuve-scale-gray-a6);
+  /* Selected terminal text, purple like selected diff lines; xterm's own default is invisible on light. */
+  --beuve-terminal-selection-bg: var(--beuve-scale-purple-a6);
+  --beuve-terminal-selection-inactive-bg: var(--beuve-scale-gray-a6);
 
   /* ── 3. Component: diffs ───────────────────────────────────────────────── */
 

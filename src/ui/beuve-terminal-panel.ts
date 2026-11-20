@@ -43,6 +43,8 @@ interface TerminalColors {
   background: string;
   foreground: string;
   cursor: string;
+  selectionBackground: string;
+  selectionInactiveBackground: string;
 }
 
 /** A design token and the color to use when the page does not define it. */
@@ -489,6 +491,14 @@ export class BeuveTerminalPanel extends LitElement {
       background: read({ name: '--beuve-surface', fallback: '#ffffff' }),
       foreground: read({ name: '--beuve-text', fallback: '#1c2024' }),
       cursor: read({ name: '--beuve-accent', fallback: '#3a5bc7' }),
+      selectionBackground: read({
+        name: '--beuve-terminal-selection-bg',
+        fallback: 'rgb(0 0 255 / 0.3)',
+      }),
+      selectionInactiveBackground: read({
+        name: '--beuve-terminal-selection-inactive-bg',
+        fallback: 'rgb(128 128 128 / 0.3)',
+      }),
     };
     probe.remove();
     return colors;
