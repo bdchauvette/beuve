@@ -31,6 +31,7 @@ import { FileReferenceIndex } from './file-reference-index.ts';
 import type { FileReference } from './file-reference-index.ts';
 import { fileReferencePartsFrom } from './file-reference-parts-from.ts';
 import { insertDraftMention } from './insert-draft-mention.ts';
+import { insertDraftText } from './insert-draft-text.ts';
 import { planTranscriptCompaction } from './plan-transcript-compaction.ts';
 import { removeDraftMention } from './remove-draft-mention.ts';
 import { serializeChatDraft } from './serialize-chat-draft.ts';
@@ -653,7 +654,9 @@ export class BeuveChatDrawer extends LitElement {
     switch (event.key) {
       case 'Enter': {
         event.preventDefault();
-        if (chip === undefined) {
+        if (event.shiftKey) {
+          this.insertLineBreak();
+        } else if (chip === undefined) {
           this.submit();
         } else {
           this.showChip(chip);
@@ -921,12 +924,36 @@ export class BeuveChatDrawer extends LitElement {
         return this.chipNode(part.mention);
       }),
     );
+    const last = draft.parts.at(-1);
+    if (last?.kind === 'text' && last.text.endsWith('\n')) {
+      // A pre-wrapped box shows no empty last line for a final line break; a `<br>` holds it.
+      editor.append(document.createElement('br'));
+    }
     this.syncEmpty();
     this.syncCompletions();
     if (this.shadowRoot?.activeElement === editor) {
       this.placeCaret(draft.caret);
     }
     this.savedCaret = draft.caret;
+  }
+
+  /** Shift+Return: a line break at the caret, in place of any selected text. */
+  private insertLineBreak(): void {
+    const editor = this.editorElement();
+    if (editor === undefined) {
+      return;
+    }
+    const selection = this.selection();
+    if (selection !== null && !selection.isCollapsed) {
+      selection.deleteFromDocument();
+    }
+    const parts = this.readParts();
+    const caret = this.caretOffset() ?? draftLength(parts);
+    const next = insertDraftText({ parts, caret }, '\n');
+    this.renderDraft(next);
+    if (next.caret === draftLength(next.parts)) {
+      editor.scrollTop = editor.scrollHeight;
+    }
   }
 
   private chipNode(mention: ChatMentionView): HTMLElement {
@@ -2019,7 +2046,7 @@ export class BeuveChatDrawer extends LitElement {
           contenteditable="plaintext-only"
           role="textbox"
           aria-label="Ask a question or run a command"
-          aria-multiline="false"
+          aria-multiline="true"
           aria-autocomplete="list"
           aria-controls="chat-commands"
           aria-activedescendant=${
