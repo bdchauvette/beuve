@@ -146,6 +146,7 @@ import { subscribeChatStreamOf } from './subscribe-chat-stream-of.ts';
 import { isEditableElement } from './is-editable-element.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 import type { CommitInfoRequestDetail, CopyTextDetail } from './primitives/beuve-commit.ts';
+import type { ShowInChatDetail } from './primitives/beuve-agent-mark.ts';
 import type { BeuveNoteExpand, NoteExpandRequestDetail } from './beuve-note-expand.ts';
 
 /**
@@ -478,6 +479,16 @@ export class BeuveReview extends LitElement {
     this.sidebarTab = 'chat';
     void this.updateComplete.then(async () => {
       return this.chatDrawer()?.revealFinding(event.detail.messageId, event.detail.finding);
+    });
+  };
+
+  /** A note's ✨ card: the answer, finding or proposal it came from (ADR 0154). */
+  private readonly onShowInChat = (event: CustomEvent<ShowInChatDetail>): void => {
+    event.stopPropagation();
+    this.sidebarHidden = false;
+    this.sidebarTab = 'chat';
+    void this.updateComplete.then(async () => {
+      return this.chatDrawer()?.revealSource(event.detail);
     });
   };
 
@@ -1395,6 +1406,7 @@ export class BeuveReview extends LitElement {
       @beuve-ura-update=${this.onUraUpdate}
       @beuve-ura-edit-suggestion=${this.onUraEditSuggestion}
       @beuve-ura-edit-many=${this.onUraEditMany}
+      @beuve-show-in-chat=${this.onShowInChat}
       @beuve-ura-delete=${this.onUraDelete}
       @beuve-ura-reorder=${this.onUraReorder}
       @beuve-ura-export=${this.onUraExport}
