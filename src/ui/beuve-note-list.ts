@@ -1157,8 +1157,8 @@ export class BeuveNoteList extends LitElement {
 
   /**
    * One note (ADR 0154): its label's emoji in a column of its own, then what it says, its path,
-   * and the facts that differ from the default, if any (✨ for an agent's note, then Blocking,
-   * Outdated, Posted, Addressed or Withdrawn). The cursor row adds the suggestion's preview.
+   * and the facts that differ from the default, if any (Blocking, Outdated, Posted, Addressed or
+   * Withdrawn, then ✨ for an agent's note). The cursor row adds the suggestion's preview.
    */
   private renderItem(item: UraItemView, index: number): TemplateResult {
     const labels = describeUraItem(item);
@@ -1224,7 +1224,7 @@ export class BeuveNoteList extends LitElement {
     return html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`;
   }
 
-  /** ✨ for an agent's note, then the words for what is marked; nothing when nothing is. */
+  /** The words for what is marked, then ✨ for an agent's note, the least of them; nothing when nothing is. */
   private renderMarks(item: UraItemView, isCursor: boolean): TemplateResult | typeof nothing {
     const marks = noteMarksFrom(item);
     const isAgent = item.origin.kind !== 'human';
@@ -1232,6 +1232,9 @@ export class BeuveNoteList extends LitElement {
       return nothing;
     }
     return html`<span class="note-marks">
+      ${marks.map((mark) => {
+        return html`<span class="mark mark-${mark.kind}" title=${mark.title}>${mark.text}</span>`;
+      })}
       ${
         isAgent
           ? html`<beuve-agent-mark
@@ -1240,9 +1243,6 @@ export class BeuveNoteList extends LitElement {
             ></beuve-agent-mark>`
           : nothing
       }
-      ${marks.map((mark) => {
-        return html`<span class="mark mark-${mark.kind}" title=${mark.title}>${mark.text}</span>`;
-      })}
     </span>`;
   }
 
