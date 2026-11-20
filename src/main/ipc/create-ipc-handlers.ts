@@ -421,20 +421,16 @@ const uraUpdateRequest = z.strictObject({
   suggestedPatch: uraPatch.optional(),
 });
 
-const uraTransitionRequest = z.strictObject({
-  itemId: uuid,
-  to: z.enum(['staged', 'withdrawn', 'addressed']),
-});
-
 /** At most this many items in one `ura:edit-many` or `ura:delete` (ADR 0144). */
 const uraBatchLimit = 1000;
 
 const uraItemIds = z.array(uuid).min(1).max(uraBatchLimit);
 
-const uraStatusChange = z.strictObject({
-  kind: z.literal('status'),
-  to: z.enum(['staged', 'withdrawn', 'addressed']),
-});
+const uraStatusActions = [
+  z.strictObject({ kind: z.literal('withdraw') }),
+  z.strictObject({ kind: z.literal('mark-addressed') }),
+  z.strictObject({ kind: z.literal('reopen') }),
+] as const;
 
 const uraSeverityChange = z.strictObject({ kind: z.literal('severity'), severity: uraSeverity });
 
@@ -442,7 +438,7 @@ const uraBlockingChange = z.strictObject({ kind: z.literal('blocking'), blocking
 
 const uraEditManyRequest = z.strictObject({
   itemIds: uraItemIds,
-  change: z.discriminatedUnion('kind', [uraStatusChange, uraSeverityChange, uraBlockingChange]),
+  change: z.discriminatedUnion('kind', [...uraStatusActions, uraSeverityChange, uraBlockingChange]),
 });
 
 const uraDeleteRequest = z.strictObject({ itemIds: uraItemIds });
@@ -1010,13 +1006,6 @@ export function createIpcHandlers(
         ...(body !== undefined && { body }),
         ...(suggestedPatch !== undefined && { suggestedPatch }),
       });
-    },
-    'ura:transition': async (request): Promise<IpcResult<UraItemView>> => {
-      const parsed = uraTransitionRequest.safeParse(request);
-      if (parsed.success) {
-        return services.ura.transition(parsed.data);
-      }
-      return invalid(parsed.error);
     },
     'ura:edit-many': async (request): Promise<IpcResult<UraItemsEditedView>> => {
       const parsed = uraEditManyRequest.safeParse(request);

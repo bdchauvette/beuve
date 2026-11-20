@@ -79,7 +79,9 @@ describe(
       );
       expect(again).toMatchObject({ created: false, item: { id: staged.item.id } });
 
-      okValueFrom(await services.ura.transition({ itemId: staged.item.id, to: 'withdrawn' }));
+      okValueFrom(
+        await services.ura.editMany({ itemIds: [staged.item.id], change: { kind: 'withdraw' } }),
+      );
       const restaged = okValueFrom(
         await services.ura.stageNoteProposal({
           messageId: asked.answer.id,

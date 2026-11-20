@@ -1495,18 +1495,9 @@ export type ExpandedNoteView =
   | { readonly outcome: 'failed'; readonly errorKind: string; readonly message: string };
 
 /**
- * Withdraws an item, marks it addressed (by the reviewer, at the session's current head), or
- * restages it.
- */
-export interface TransitionUraItemRequest {
-  readonly itemId: string;
-  readonly to: 'staged' | 'withdrawn' | 'addressed';
-}
-
-/**
  * `ura:edit-many` (ADR 0144): one change to several items of one session, all or none, in one
- * transaction: their status (as {@link TransitionUraItemRequest} does for one), their label or
- * their Blocking decoration. Items already in the asked-for state are left alone.
+ * transaction: a status action (ADR 0151), their label or their Blocking decoration. Items
+ * already in the state the change leads to are left alone.
  */
 export interface EditUraItemsRequest {
   readonly itemIds: readonly string[];
@@ -1515,7 +1506,12 @@ export interface EditUraItemsRequest {
 
 /** What `ura:edit-many` changes on every item it names. */
 export type UraItemsChange =
-  | { readonly kind: 'status'; readonly to: 'staged' | 'withdrawn' | 'addressed' }
+  /** Drops the notes from the export; staged and addressed ones alike (ADR 0151). */
+  | { readonly kind: 'withdraw' }
+  /** The reviewer judges them fixed at the session's current head; staged and withdrawn ones alike. */
+  | { readonly kind: 'mark-addressed' }
+  /** Puts closed notes back among the staged ones. */
+  | { readonly kind: 'reopen' }
   | { readonly kind: 'severity'; readonly severity: UraSeverityView }
   | { readonly kind: 'blocking'; readonly blocking: boolean };
 
@@ -2868,10 +2864,6 @@ export interface InvokeChannelMap {
   };
   'ura:update': {
     readonly request: UpdateUraItemRequest;
-    readonly response: IpcResult<UraItemView>;
-  };
-  'ura:transition': {
-    readonly request: TransitionUraItemRequest;
     readonly response: IpcResult<UraItemView>;
   };
   'ura:edit-many': {

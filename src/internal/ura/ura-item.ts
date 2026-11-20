@@ -49,7 +49,8 @@ export type UraOrigin =
 
 /**
  * `staged` items are exported. `addressed` records the later head at which a reviewer or an agent
- * judged the issue fixed; `withdrawn` items were dropped. Both can be restored to `staged`.
+ * judged the issue fixed; `withdrawn` items were dropped. Each status is reached by its own action,
+ * from either of the others (ADR 0151).
  */
 export type UraStatus =
   | { readonly kind: 'staged' }

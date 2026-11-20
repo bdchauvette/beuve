@@ -951,7 +951,6 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
           ...base.ura,
           create: record,
           update: record,
-          transition: record,
           editMany: record,
           stageReviewFinding: record,
           stageNoteProposal: record,
@@ -988,7 +987,10 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       await expectInvalid(expect, handlers['ura:create'](bad));
     }
     await expectInvalid(expect, handlers['ura:update']({ itemId: 'x' }));
-    await expectInvalid(expect, handlers['ura:transition']({ itemId: id, to: 'deleted' }));
+    await expectInvalid(
+      expect,
+      handlers['ura:edit-many']({ itemIds: [id], change: { kind: 'status', to: 'withdrawn' } }),
+    );
     await expectInvalid(expect, handlers['ura:reorder']({ sessionId: 's1', itemIds: ['x'] }));
     await expectInvalid(expect, handlers['ura:delete']({ itemId: 'x' }));
     await expectInvalid(expect, handlers['ura:delete']({ itemIds: [] }));
@@ -1032,7 +1034,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
 
     await handlers['ura:create'](note);
     await handlers['ura:update']({ itemId: id, title: 'New' });
-    await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
+    await handlers['ura:edit-many']({ itemIds: [id], change: { kind: 'withdraw' } });
     await handlers['ura:edit-many']({
       itemIds: [id],
       change: { kind: 'blocking', blocking: true },
@@ -1054,7 +1056,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     expect(calls).toStrictEqual([
       note,
       { itemId: id, title: 'New' },
-      { itemId: id, to: 'withdrawn' },
+      { itemIds: [id], change: { kind: 'withdraw' } },
       { itemIds: [id], change: { kind: 'blocking', blocking: true } },
       { sessionId: 's1', itemIds: [id] },
       { messageId: id, finding: 2 },
@@ -1431,7 +1433,6 @@ function stubServices(
       list: notWired,
       create: notWired,
       update: notWired,
-      transition: notWired,
       editMany: notWired,
       delete: notWiredError,
       restore: notWiredError,

@@ -12,7 +12,6 @@ import type {
   DeleteUraItemsRequest,
   EditUraItemsRequest,
   RestoreUraItemsRequest,
-  TransitionUraItemRequest,
   UpdateUraItemRequest,
   UraExportView,
   UraItemView,
@@ -50,7 +49,9 @@ import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
 import { settleVerdictChoice } from '#internal/ura/settle-verdict-choice.ts';
 import { stageNoteProposal } from '#internal/ura/stage-note-proposal.ts';
 import { stageReviewFinding } from '#internal/ura/stage-review-finding.ts';
-import { transitionUraItem } from '#internal/ura/transition-ura-item.ts';
+import { markUraItemAddressed } from '#internal/ura/mark-ura-item-addressed.ts';
+import { reopenUraItem } from '#internal/ura/reopen-ura-item.ts';
+import { withdrawUraItem } from '#internal/ura/withdraw-ura-item.ts';
 import { updateUraItem } from '#internal/ura/update-ura-item.ts';
 import { writeVerdictChoice } from '#internal/ura/write-verdict-choice.ts';
 import type { UraArtifact, UraSummary } from '#internal/ura/ura-artifact.ts';
@@ -61,7 +62,6 @@ import type {
   UraItem,
   UraItemError,
   UraItemId,
-  UraStatus,
   UraStoreError,
 } from '#internal/ura/ura-item.ts';
 import type { UraPosting } from '#internal/ura/ura-posting.ts';
@@ -91,7 +91,6 @@ export interface UraServices {
   readonly list: (request: ListUraItemsRequest) => Promise<IpcResult<UraListView>>;
   readonly create: (request: CreateUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly update: (request: UpdateUraItemRequest) => Promise<IpcResult<UraItemView>>;
-  readonly transition: (request: TransitionUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly reorder: (request: ReorderUraItemsRequest) => IpcResult<UraOrderView>;
   /** One change to several items of a session, all or none (ADR 0144). */
   readonly editMany: (request: EditUraItemsRequest) => Promise<IpcResult<UraItemsEditedView>>;
@@ -321,24 +320,6 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     return ok({ sessionId: first.sessionId, items });
   };
 
-  /** The status a status change asks for; marking addressed reads the session's head. */
-  const statusFor = async (
-    sessionId: SessionId,
-    to: Extract<UraItemsChange, { kind: 'status' }>['to'],
-  ): Promise<IpcResult<UraStatus>> => {
-    if (to === 'staged') {
-      return ok({ kind: 'staged' });
-    }
-    if (to === 'withdrawn') {
-      return ok({ kind: 'withdrawn' });
-    }
-    const head = await headOf(sessionId);
-    if (!head.ok) {
-      return head;
-    }
-    return ok({ kind: 'addressed', atSha: head.value.headSha, by: 'reviewer' });
-  };
-
   const stored = <T>(result: StoreResult<T>): IpcResult<T> => {
     if (result.ok) {
       return result;
@@ -365,7 +346,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     if (existing.value.status.kind !== 'withdrawn') {
       return ok({ item: existing.value, created: false });
     }
-    const restaged = transitionUraItem(existing.value, { kind: 'staged' }, Temporal.Now.instant());
+    const restaged = reopenUraItem(existing.value, Temporal.Now.instant());
     if (!restaged.ok) {
       return restaged;
     }
@@ -572,51 +553,24 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return viewOne(edited.value);
     },
 
-    transition: async ({ itemId, to }): Promise<IpcResult<UraItemView>> => {
-      const found = findUraItem(db, itemId as UraItemId);
-      if (!found.ok) {
-        return uraFailure(logger, found.error);
-      }
-      let status: UraStatus = { kind: 'withdrawn' };
-      if (to === 'staged') {
-        status = { kind: 'staged' };
-      } else if (to === 'addressed') {
-        const head = await headOf(found.value.sessionId);
-        if (!head.ok) {
-          return head;
-        }
-        status = { kind: 'addressed', atSha: head.value.headSha, by: 'reviewer' };
-      }
-      const moved = transitionUraItem(found.value, status, Temporal.Now.instant());
-      if (!moved.ok) {
-        return uraFailure(logger, moved.error);
-      }
-      const saved = updateUraItem(db, moved.value);
-      if (!saved.ok) {
-        return uraFailure(logger, saved.error);
-      }
-      changed(moved.value.sessionId);
-      return viewOne(moved.value);
-    },
-
     editMany: async ({ itemIds, change }): Promise<IpcResult<UraItemsEditedView>> => {
       const found = sessionItemsOf(itemIds);
       if (!found.ok) {
         return found;
       }
       const { sessionId, items } = found.value;
-      let status: UraStatus | undefined;
-      if (change.kind === 'status') {
-        const asked = await statusFor(sessionId, change.to);
-        if (!asked.ok) {
-          return asked;
+      let atSha: CommitSha | undefined;
+      if (change.kind === 'mark-addressed') {
+        const head = await headOf(sessionId);
+        if (!head.ok) {
+          return head;
         }
-        status = asked.value;
+        atSha = head.value.headSha;
       }
       const now = Temporal.Now.instant();
       const edited: UraItem[] = [];
       for (const item of items) {
-        const next = changedItem(item, { change, status, now });
+        const next = changedItem(item, { change, atSha, now });
         if (!next.ok) {
           return uraFailure(logger, next.error);
         }
@@ -830,32 +784,36 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   };
 }
 
-/** One item's share of an `ura:edit-many`: the change, the status it asks for, and when. */
+/** One item's share of an `ura:edit-many`: the change, the head marking addressed records, and when. */
 interface ItemChange {
   readonly change: UraItemsChange;
-  readonly status: UraStatus | undefined;
+  readonly atSha: CommitSha | undefined;
   readonly now: Temporal.Instant;
 }
 
 /** The item after the change, or `undefined` when it is in the asked-for state already. */
 function changedItem(
   item: UraItem,
-  { change, status, now }: ItemChange,
+  { change, atSha, now }: ItemChange,
 ): Result<UraItem | undefined, UraItemError> {
   switch (change.kind) {
-    case 'status': {
-      if (status === undefined || item.status.kind === status.kind) {
+    case 'withdraw': {
+      if (item.status.kind === 'withdrawn') {
         return ok(undefined);
       }
-      if (item.status.kind === 'staged' || status.kind === 'staged') {
-        return transitionUraItem(item, status, now);
+      return withdrawUraItem(item, now);
+    }
+    case 'mark-addressed': {
+      if (atSha === undefined || item.status.kind === 'addressed') {
+        return ok(undefined);
       }
-      // Addressed and withdrawn never turn into each other: restore first (ADR 0150).
-      const restored = transitionUraItem(item, { kind: 'staged' }, now);
-      if (!restored.ok) {
-        return restored;
+      return markUraItemAddressed(item, { atSha, by: 'reviewer', now });
+    }
+    case 'reopen': {
+      if (item.status.kind === 'staged') {
+        return ok(undefined);
       }
-      return transitionUraItem(restored.value, status, now);
+      return reopenUraItem(item, now);
     }
     case 'severity': {
       if (item.severity === change.severity) {

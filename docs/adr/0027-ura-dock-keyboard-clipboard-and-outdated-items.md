@@ -38,3 +38,7 @@ The diff never expands on its own: expanding is the reviewer's choice everywhere
 ## Amendment 2026-11-18: selection, dragging and batch changes (ADR 0144)
 
 The dock selects several notes (⇧↑/⇧↓, Shift+click, ⌘/Ctrl+click, ⌘A / Ctrl+A, Escape to clear), and the Note commands but Show, Edit and Open in Editor act on all of them; staged notes also drag to a new place among the staged ones. `ura:edit-many` changes the status, label or Blocking of several notes in one transaction, all or none, and the dock sends every status change through it.
+
+## Amendment 2026-11-20: status actions
+
+ADR 0151: a note changes status through `withdraw`, `mark-addressed` and `reopen` actions, each allowed from either of the other statuses, so addressed and withdrawn turn into each other directly; `ura:transition` is removed in favor of `ura:edit-many`, whose status change names the action.
