@@ -23,3 +23,7 @@ The reviewer can say "this" and mean exact lines, both sides of a change include
 ## Amendment 2026-10-29: migrations squashed
 
 Squashed into `chat-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. `mentions` is a column of the original `chat_messages`; the rebuild that kept rowids is gone.
+
+## Amendment 2026-11-20: Shift+Return adds a line
+
+Return still sends; Shift+Return puts a line break at the caret, in place of any selection, through the draft model (`insertDraftText`) rather than the browser's own editing, which in a `plaintext-only` box leaves an extra placeholder line break that the caret math would count. A draft that ends in a line break gets a trailing `<br>` so its empty last line shows; the model ignores `<br>`. The box is `aria-multiline="true"`. Questions already show pre-wrapped in the transcript, so their lines are kept.
