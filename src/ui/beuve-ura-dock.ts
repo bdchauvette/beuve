@@ -7,6 +7,7 @@ import type {
   ReviewEditPreviewView,
   UraAnchorView,
   UraExportTarget,
+  UraItemsChange,
   UraItemView,
   UraSeverityView,
   UraVerdictView,
@@ -29,6 +30,7 @@ import { describeEditCounts } from './describe-edit-counts.ts';
 import { dropUraItems } from './drop-ura-items.ts';
 import { moveUraItems } from './move-ura-items.ts';
 import { noteStatusChange } from './note-status-change.ts';
+import { uraSeverityViews } from './ura-severity-views.ts';
 import { dockSelectionAfter } from './dock-selection-after.ts';
 import type { DockGesture, DockSelection } from './dock-selection-after.ts';
 import { countNoun } from './count-noun.ts';
@@ -929,6 +931,23 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
+  /**
+   * The context menu's Status (ADR 0150): every note not already there takes `status`; main
+   * restores a closed note first when it moves to the other closed status.
+   */
+  private setStatus(items: readonly UraItemView[], status: UraStatusKind): void {
+    const moving = items.filter((item) => item.status.kind !== status);
+    this.emitChange(moving, { kind: 'status', to: status });
+  }
+
+  /** Sends one change for these notes, unless there are none. */
+  private emitChange(items: readonly UraItemView[], change: UraItemsChange): void {
+    if (items.length === 0) {
+      return;
+    }
+    this.emit('beuve-ura-edit-many', { itemIds: items.map((item) => item.id), change });
+  }
+
   /** Mark as Blocking, or Not Blocking when every note blocks already. */
   private toggleBlocking(items: readonly UraItemView[]): void {
     if (items.length === 0) {
@@ -1588,6 +1607,16 @@ export class BeuveUraDock extends LitElement {
     const ordered = this.ordered();
     const current = ordered[this.cursor];
     const targets = this.targetItems();
+    const status = statusOfCommand[id];
+    if (status !== undefined) {
+      this.setStatus(targets, status);
+      return true;
+    }
+    const severity = severityOfCommand[id];
+    if (severity !== undefined) {
+      this.emitChange(targets, { kind: 'severity', severity });
+      return true;
+    }
     switch (id) {
       case 'dock-move':
       case 'dock-extend-selection':
@@ -1783,6 +1812,23 @@ interface DragOverPlace {
 
 /** The drag data's type: the dragged ids, which no text field takes as a drop. */
 const dragType = 'application/x-beuve-ura-items';
+
+/** A note's status, as the context menu's Status sets it. */
+type UraStatusKind = UraItemView['status']['kind'];
+
+/** The status each of the context menu's Status commands sets (ADR 0150). */
+const statusOfCommand: Readonly<Partial<Record<CommandId, UraStatusKind>>> = {
+  'dock-status-open': 'staged',
+  'dock-status-addressed': 'addressed',
+  'dock-status-withdrawn': 'withdrawn',
+};
+
+/** The label each of the context menu's Label commands sets (ADR 0150). */
+const severityOfCommand: Readonly<Partial<Record<CommandId, UraSeverityView>>> = Object.fromEntries(
+  uraSeverityViews.map((severity) => {
+    return [`dock-label-${severity}`, severity];
+  }),
+);
 
 const inPlaceKeys: Readonly<Record<string, CommandId>> = {
   Enter: 'dock-show',

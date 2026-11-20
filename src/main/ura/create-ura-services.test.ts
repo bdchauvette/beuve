@@ -312,6 +312,47 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     await expect(statuses()).resolves.toStrictEqual(['withdrawn', 'staged']);
   });
 
+  test('moves closed notes between addressed and withdrawn by restoring them first', async ({
+    expect,
+    services,
+    sessionId,
+    note,
+    repo,
+  }) => {
+    const first = await note({ startLine: 2, endLine: 3, title: 'First' });
+    const second = await note({ startLine: 2, endLine: 3, title: 'Second' });
+    await repo.git('switch', '--quiet', 'feature');
+    repo.write('NOTES.md', 'moved\n');
+    await repo.commit('move the head');
+    await repo.git('switch', '--quiet', 'main');
+    okValueFrom(await services.ura.list({ sessionId }));
+    const statuses = async (): Promise<string[]> => {
+      const { items } = okValueFrom(await services.ura.list({ sessionId }));
+      return items.map((item) => item.status.kind);
+    };
+
+    okValueFrom(
+      await services.ura.editMany({
+        itemIds: [first.id],
+        change: { kind: 'status', to: 'addressed' },
+      }),
+    );
+    okValueFrom(
+      await services.ura.editMany({
+        itemIds: [first.id, second.id],
+        change: { kind: 'status', to: 'withdrawn' },
+      }),
+    );
+    await expect(statuses()).resolves.toStrictEqual(['withdrawn', 'withdrawn']);
+    okValueFrom(
+      await services.ura.editMany({
+        itemIds: [first.id, second.id],
+        change: { kind: 'status', to: 'addressed' },
+      }),
+    );
+    await expect(statuses()).resolves.toStrictEqual(['addressed', 'addressed']);
+  });
+
   test('stages a /review finding from its stored answer, once, restaging a withdrawn one', async ({
     expect,
     services,

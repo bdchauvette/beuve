@@ -14,6 +14,17 @@ test('names the Note commands that say Restore and Mark as Not …', ({ expect }
   ]);
 });
 
+test('checks the Status and Label the notes all share', ({ expect }) => {
+  expect(dockCheckedCommands(facts({ status: 'staged', severity: 'nitpick' }))).toStrictEqual([
+    'dock-status-open',
+    'dock-label-nitpick',
+  ]);
+  expect(dockCheckedCommands(facts({ isAddressed: true, status: 'addressed' }))).toStrictEqual([
+    'dock-addressed',
+    'dock-status-addressed',
+  ]);
+});
+
 function facts(overrides: Partial<DockSelectionFacts>): DockSelectionFacts {
   return { count: 1, isAddressed: false, isWithdrawn: false, isBlocking: false, ...overrides };
 }

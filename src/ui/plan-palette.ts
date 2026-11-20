@@ -149,7 +149,9 @@ function candidates(group: PaletteGroup, text: string, sources: PaletteSources):
 
 function commandCandidates({ commands, platform, checked = [] }: PaletteSources): Candidate[] {
   return commands
-    .filter((command) => command.run.kind !== 'none' && command.id !== 'palette')
+    .filter((command) => {
+      return command.run.kind !== 'none' && command.id !== 'palette' && command.inPalette !== false;
+    })
     .map((command) => {
       const keys = commandKeys(command, platform);
       const menu = command.menu?.menu;
