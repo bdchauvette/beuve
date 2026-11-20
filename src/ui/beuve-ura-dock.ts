@@ -98,7 +98,7 @@ const dockExports: Readonly<Record<DockExportTarget, DockExport>> = {
  * edits it too (ADR 0129). ⇧↑/⇧↓, Shift+click and ⌘/Ctrl+click select several notes, ⌘A / Ctrl+A
  * selects them all and Escape clears the selection; the Note commands but Show and Edit then act
  * on every selected note, and a bar above the list shows the count and relabels them (ADR 0144).
- * Review ▸ Note and the context menu run the same commands (`runCommand`, ADR 0068), and Open in
+ * The Note menu and the context menu run the same commands (`runCommand`, ADR 0068), and Open in
  * Editor opens it (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocking note; export buttons copy the compiled review. Items carrying
  * a suggested patch say `patch` and preview it under the cursor; the editor can re-edit the
@@ -1597,7 +1597,7 @@ export class BeuveUraDock extends LitElement {
   }
 
   /**
-   * Runs a Review ▸ Note command, or Open in Editor: Show, Edit and Open in Editor on the note
+   * Runs a Note menu command, or Open in Editor: Show, Edit and Open in Editor on the note
    * under the cursor, the others on every selected note (ADR 0144).
    */
   runCommand(id: CommandId): boolean {
@@ -1737,7 +1737,7 @@ export class BeuveUraDock extends LitElement {
               ? html`<p class="empty">
                   ${
                     this.hasSession
-                      ? 'Nothing staged yet. Choose Review ▸ Add Note on a diff selection, or Stage on a chat answer.'
+                      ? 'Nothing staged yet. Choose Note ▸ Add Note on a diff selection, or Stage on a chat answer.'
                       : 'Open a review session to stage notes.'
                   }
                 </p>`

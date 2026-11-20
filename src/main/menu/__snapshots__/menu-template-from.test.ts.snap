@@ -19,7 +19,40 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
-        "label": "&Export Review",
+        "accelerator": "Ctrl+R",
+        "id": "reload-review",
+        "label": "R&eload Review",
+      },
+      {
+        "id": "stop",
+        "label": "&Stop",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+Shift+O",
+        "id": "open-in-editor",
+        "label": "Open &in Editor",
+      },
+      {
+        "accelerator": "Ctrl+Return",
+        "id": "open-in-sheet",
+        "label": "O&pen in Sheet",
+      },
+      {
+        "id": "open-description-in-sheet",
+        "label": "Open &Description in Sheet",
+      },
+      {
+        "id": "open-permalink",
+        "label": "Open on &GitHub",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "E&xport Review",
         "submenu": [
           {
             "id": "export-agent-xml",
@@ -37,7 +70,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "id": "post-review",
-        "label": "&Post Review to GitHub…",
+        "label": "Post Review &to GitHub…",
       },
       {
         "type": "separator",
@@ -156,6 +189,10 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "accelerator": "Ctrl+,",
         "id": "settings",
         "label": "Pr&eferences…",
+      },
+      {
+        "id": "editor-settings",
+        "label": "E&ditor Settings…",
       },
     ],
   },
@@ -358,7 +395,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
     ],
   },
   {
-    "label": "&Go",
+    "label": "&Navigate",
     "submenu": [
       {
         "accelerator": "Alt+Left",
@@ -435,6 +472,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "Go to Type &Definition",
       },
       {
+        "accelerator": "Ctrl+I",
+        "id": "peek",
+        "label": "Show &Callers",
+      },
+      {
         "type": "separator",
       },
       {
@@ -462,6 +504,16 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
     ],
   },
   {
+    "label": "&Analyze",
+    "submenu": [
+      {
+        "accelerator": "Ctrl+Shift+I",
+        "id": "flow",
+        "label": "&Show Control Flow",
+      },
+    ],
+  },
+  {
     "label": "&Review",
     "submenu": [
       {
@@ -480,6 +532,9 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Undo Save Progress",
       },
       {
+        "type": "separator",
+      },
+      {
         "label": "&Review Range",
         "submenu": [
           {
@@ -495,55 +550,16 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         ],
       },
       {
-        "type": "separator",
+        "id": "commit-pairs",
+        "label": "Filter &by Commit…",
       },
       {
-        "accelerator": "Ctrl+/",
-        "id": "stage",
-        "label": "&Add Note",
+        "type": "separator",
       },
       {
         "accelerator": "Ctrl+Shift+E",
         "id": "suggest-edit",
         "label": "Suggest &Edit…",
-      },
-      {
-        "type": "separator",
-      },
-      {
-        "accelerator": "Ctrl+I",
-        "id": "peek",
-        "label": "Show &Callers",
-      },
-      {
-        "accelerator": "Ctrl+Shift+I",
-        "id": "flow",
-        "label": "S&how Control Flow",
-      },
-      {
-        "id": "stop",
-        "label": "S&top",
-      },
-      {
-        "type": "separator",
-      },
-      {
-        "accelerator": "Ctrl+Shift+O",
-        "id": "open-in-editor",
-        "label": "&Open in Editor",
-      },
-      {
-        "accelerator": "Ctrl+Return",
-        "id": "open-in-sheet",
-        "label": "Open &in Sheet",
-      },
-      {
-        "id": "open-description-in-sheet",
-        "label": "Open &Description in Sheet",
-      },
-      {
-        "id": "editor-settings",
-        "label": "Editor Setti&ngs…",
       },
       {
         "label": "Re&view Edits",
@@ -566,86 +582,135 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         ],
       },
       {
-        "id": "open-permalink",
-        "label": "Open on &GitHub",
-      },
-      {
         "type": "separator",
       },
       {
-        "id": "commit-pairs",
-        "label": "Filter &by Commit…",
-      },
-      {
-        "type": "separator",
-      },
-      {
-        "label": "Note",
+        "label": "&Checkout",
         "submenu": [
           {
-            "id": "dock-show",
-            "label": "&Show in Diff",
+            "id": "run-setup",
+            "label": "&Run Setup",
           },
           {
-            "id": "dock-edit",
-            "label": "&Edit Note…",
+            "id": "edit-setup-command",
+            "label": "&Edit Setup Command…",
           },
           {
-            "checkedLabel": "&Restore",
-            "id": "dock-withdraw",
-            "label": "&Withdraw",
+            "id": "restart-language-servers",
+            "label": "Restart &Language Servers",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    "label": "N&ote",
+    "submenu": [
+      {
+        "accelerator": "Ctrl+/",
+        "id": "stage",
+        "label": "&Add Note",
+      },
+      {
+        "id": "expand-note",
+        "label": "&Flesh Out Draft",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "dock-show",
+        "label": "&Show in Diff",
+      },
+      {
+        "id": "dock-edit",
+        "label": "&Edit…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "&Label",
+        "submenu": [
+          {
+            "id": "dock-label-issue",
+            "label": "&Issue",
+            "type": "checkbox",
           },
           {
-            "id": "dock-delete",
-            "label": "&Delete Note",
+            "id": "dock-label-suggestion",
+            "label": "&Suggestion",
+            "type": "checkbox",
           },
           {
-            "checkedLabel": "Mark &as Not Blocking",
+            "id": "dock-label-question",
+            "label": "&Question",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-nitpick",
+            "label": "&Nitpick",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-thought",
+            "label": "&Thought",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-smell",
+            "label": "S&mell",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-praise",
+            "label": "&Praise",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-note",
+            "label": "N&ote",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-todo",
+            "label": "To&do",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-chore",
+            "label": "&Chore",
+            "type": "checkbox",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "checkedLabel": "Mark as Not &Blocking",
             "id": "dock-blocking",
-            "label": "&Mark as Blocking",
+            "label": "Mark &as Blocking",
           },
+        ],
+      },
+      {
+        "label": "S&tatus",
+        "submenu": [
           {
-            "id": "dock-change-label",
-            "label": "&Change Label…",
-          },
-          {
-            "checkedLabel": "Mark as &Not Addressed",
-            "id": "dock-addressed",
-            "label": "Mar&k as Addressed",
-          },
-          {
-            "type": "separator",
-          },
-          {
-            "icon": "arrow-up",
-            "id": "dock-move-up",
-            "label": "Move &Up",
-          },
-          {
-            "icon": "arrow-down",
-            "id": "dock-move-down",
-            "label": "M&ove Down",
+            "id": "dock-status-open",
+            "label": "&Open",
+            "type": "checkbox",
           },
           {
             "type": "separator",
           },
           {
-            "id": "expand-note",
-            "label": "&Flesh Out Draft",
+            "id": "dock-status-addressed",
+            "label": "&Addressed",
+            "type": "checkbox",
           },
           {
-            "type": "separator",
-          },
-          {
-            "id": "dock-select-all",
-            "label": "Se&lect All",
-          },
-          {
-            "type": "separator",
-          },
-          {
-            "id": "toggle-closed-notes",
-            "label": "S&how Closed Notes",
+            "id": "dock-status-withdrawn",
+            "label": "&Withdrawn",
             "type": "checkbox",
           },
         ],
@@ -654,21 +719,36 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
-        "accelerator": "Ctrl+R",
-        "id": "reload-review",
-        "label": "Re&load Review",
+        "icon": "arrow-up",
+        "id": "dock-move-up",
+        "label": "&Move Up",
       },
       {
-        "id": "run-setup",
-        "label": "Run Setu&p",
+        "icon": "arrow-down",
+        "id": "dock-move-down",
+        "label": "Move &Down",
       },
       {
-        "id": "edit-setup-command",
-        "label": "Edit Setup Co&mmand…",
+        "type": "separator",
       },
       {
-        "id": "restart-language-servers",
-        "label": "Restart Language Servers",
+        "id": "dock-select-all",
+        "label": "Sele&ct All",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "toggle-closed-notes",
+        "label": "Show Closed &Notes",
+        "type": "checkbox",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "dock-delete",
+        "label": "Delete",
       },
     ],
   },
@@ -840,6 +920,10 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Settings…",
       },
       {
+        "id": "editor-settings",
+        "label": "Editor Settings…",
+      },
+      {
         "type": "separator",
       },
       {
@@ -885,6 +969,40 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Shift+Cmd+R",
         "id": "review-queue",
         "label": "Review Queue",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+R",
+        "id": "reload-review",
+        "label": "Reload Review",
+      },
+      {
+        "accelerator": "Cmd+.",
+        "id": "stop",
+        "label": "Stop",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Alt+Cmd+O",
+        "id": "open-in-editor",
+        "label": "Open in Editor",
+      },
+      {
+        "accelerator": "Cmd+Return",
+        "id": "open-in-sheet",
+        "label": "Open in Sheet",
+      },
+      {
+        "id": "open-description-in-sheet",
+        "label": "Open Description in Sheet",
+      },
+      {
+        "id": "open-permalink",
+        "label": "Open on GitHub",
       },
       {
         "type": "separator",
@@ -1216,7 +1334,7 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
     ],
   },
   {
-    "label": "Go",
+    "label": "Navigate",
     "submenu": [
       {
         "accelerator": "Cmd+[",
@@ -1293,6 +1411,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Go to Type Definition",
       },
       {
+        "accelerator": "Cmd+I",
+        "id": "peek",
+        "label": "Show Callers",
+      },
+      {
         "type": "separator",
       },
       {
@@ -1320,6 +1443,16 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
     ],
   },
   {
+    "label": "Analyze",
+    "submenu": [
+      {
+        "accelerator": "Shift+Cmd+I",
+        "id": "flow",
+        "label": "Show Control Flow",
+      },
+    ],
+  },
+  {
     "label": "Review",
     "submenu": [
       {
@@ -1338,6 +1471,9 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Undo Save Progress",
       },
       {
+        "type": "separator",
+      },
+      {
         "label": "Review Range",
         "submenu": [
           {
@@ -1353,56 +1489,16 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         ],
       },
       {
-        "type": "separator",
+        "id": "commit-pairs",
+        "label": "Filter by Commit…",
       },
       {
-        "accelerator": "Cmd+/",
-        "id": "stage",
-        "label": "Add Note",
+        "type": "separator",
       },
       {
         "accelerator": "Alt+Cmd+E",
         "id": "suggest-edit",
         "label": "Suggest Edit…",
-      },
-      {
-        "type": "separator",
-      },
-      {
-        "accelerator": "Cmd+I",
-        "id": "peek",
-        "label": "Show Callers",
-      },
-      {
-        "accelerator": "Shift+Cmd+I",
-        "id": "flow",
-        "label": "Show Control Flow",
-      },
-      {
-        "accelerator": "Cmd+.",
-        "id": "stop",
-        "label": "Stop",
-      },
-      {
-        "type": "separator",
-      },
-      {
-        "accelerator": "Alt+Cmd+O",
-        "id": "open-in-editor",
-        "label": "Open in Editor",
-      },
-      {
-        "accelerator": "Cmd+Return",
-        "id": "open-in-sheet",
-        "label": "Open in Sheet",
-      },
-      {
-        "id": "open-description-in-sheet",
-        "label": "Open Description in Sheet",
-      },
-      {
-        "id": "editor-settings",
-        "label": "Editor Settings…",
       },
       {
         "label": "Review Edits",
@@ -1425,86 +1521,135 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         ],
       },
       {
-        "id": "open-permalink",
-        "label": "Open on GitHub",
-      },
-      {
         "type": "separator",
       },
       {
-        "id": "commit-pairs",
-        "label": "Filter by Commit…",
-      },
-      {
-        "type": "separator",
-      },
-      {
-        "label": "Note",
+        "label": "Checkout",
         "submenu": [
           {
-            "id": "dock-show",
-            "label": "Show in Diff",
+            "id": "run-setup",
+            "label": "Run Setup",
           },
           {
-            "id": "dock-edit",
-            "label": "Edit Note…",
+            "id": "edit-setup-command",
+            "label": "Edit Setup Command…",
           },
           {
-            "checkedLabel": "Restore",
-            "id": "dock-withdraw",
-            "label": "Withdraw",
+            "id": "restart-language-servers",
+            "label": "Restart Language Servers",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    "label": "Note",
+    "submenu": [
+      {
+        "accelerator": "Cmd+/",
+        "id": "stage",
+        "label": "Add Note",
+      },
+      {
+        "id": "expand-note",
+        "label": "Flesh Out Draft",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "dock-show",
+        "label": "Show in Diff",
+      },
+      {
+        "id": "dock-edit",
+        "label": "Edit…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Label",
+        "submenu": [
+          {
+            "id": "dock-label-issue",
+            "label": "Issue",
+            "type": "checkbox",
           },
           {
-            "id": "dock-delete",
-            "label": "Delete Note",
+            "id": "dock-label-suggestion",
+            "label": "Suggestion",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-question",
+            "label": "Question",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-nitpick",
+            "label": "Nitpick",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-thought",
+            "label": "Thought",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-smell",
+            "label": "Smell",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-praise",
+            "label": "Praise",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-note",
+            "label": "Note",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-todo",
+            "label": "Todo",
+            "type": "checkbox",
+          },
+          {
+            "id": "dock-label-chore",
+            "label": "Chore",
+            "type": "checkbox",
+          },
+          {
+            "type": "separator",
           },
           {
             "checkedLabel": "Mark as Not Blocking",
             "id": "dock-blocking",
             "label": "Mark as Blocking",
           },
+        ],
+      },
+      {
+        "label": "Status",
+        "submenu": [
           {
-            "id": "dock-change-label",
-            "label": "Change Label…",
-          },
-          {
-            "checkedLabel": "Mark as Not Addressed",
-            "id": "dock-addressed",
-            "label": "Mark as Addressed",
-          },
-          {
-            "type": "separator",
-          },
-          {
-            "icon": "arrow-up",
-            "id": "dock-move-up",
-            "label": "Move Up",
-          },
-          {
-            "icon": "arrow-down",
-            "id": "dock-move-down",
-            "label": "Move Down",
+            "id": "dock-status-open",
+            "label": "Open",
+            "type": "checkbox",
           },
           {
             "type": "separator",
           },
           {
-            "id": "expand-note",
-            "label": "Flesh Out Draft",
+            "id": "dock-status-addressed",
+            "label": "Addressed",
+            "type": "checkbox",
           },
           {
-            "type": "separator",
-          },
-          {
-            "id": "dock-select-all",
-            "label": "Select All",
-          },
-          {
-            "type": "separator",
-          },
-          {
-            "id": "toggle-closed-notes",
-            "label": "Show Closed Notes",
+            "id": "dock-status-withdrawn",
+            "label": "Withdrawn",
             "type": "checkbox",
           },
         ],
@@ -1513,21 +1658,36 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "type": "separator",
       },
       {
-        "accelerator": "Cmd+R",
-        "id": "reload-review",
-        "label": "Reload Review",
+        "icon": "arrow-up",
+        "id": "dock-move-up",
+        "label": "Move Up",
       },
       {
-        "id": "run-setup",
-        "label": "Run Setup",
+        "icon": "arrow-down",
+        "id": "dock-move-down",
+        "label": "Move Down",
       },
       {
-        "id": "edit-setup-command",
-        "label": "Edit Setup Command…",
+        "type": "separator",
       },
       {
-        "id": "restart-language-servers",
-        "label": "Restart Language Servers",
+        "id": "dock-select-all",
+        "label": "Select All",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "toggle-closed-notes",
+        "label": "Show Closed Notes",
+        "type": "checkbox",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "dock-delete",
+        "label": "Delete",
       },
     ],
   },

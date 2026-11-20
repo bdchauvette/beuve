@@ -63,8 +63,10 @@ const topMenus: readonly TopMenu[] = [
   'file',
   'edit',
   'view',
-  'go',
+  'navigate',
+  'analyze',
   'review',
+  'note',
   'chat',
   'window',
   'help',
@@ -75,8 +77,10 @@ const topLabels: Readonly<Record<TopMenu, string>> = {
   file: '&File',
   edit: '&Edit',
   view: '&View',
-  go: '&Go',
+  navigate: '&Navigate',
+  analyze: '&Analyze',
   review: '&Review',
+  note: 'N&ote',
   chat: '&Chat',
   window: '&Window',
   help: '&Help',
@@ -84,7 +88,7 @@ const topLabels: Readonly<Record<TopMenu, string>> = {
 
 /**
  * The menu bar (ADR 0068) for `platform`, from the command catalog: on macOS the app menu and
- * File, Edit, View, Go, Review, Chat, Window and Help; on Linux the same without the app menu
+ * File, Edit, View, Navigate, Analyze, Review, Note, Chat, Window and Help; on Linux the same without the app menu
  * (About in Help, Preferences in Edit, Quit in File) and with `&` mnemonics, unique per menu.
  * Items sort by group, then catalog order, with separators between groups; a command's first
  * accelerator is shown, the others are hidden items that still work. A command with
@@ -302,13 +306,13 @@ function roleItemsFor(
         ],
         4: [{ role: 'quit', label: 'Quit beuve', accelerator: 'Cmd+Q' }],
       },
-      file: { 2: [closeWindow] },
+      file: { 4: [closeWindow] },
       edit,
       view,
     };
   }
   return {
-    file: { 2: [closeWindow], 9: [{ role: 'quit', label: 'Quit', accelerator: 'Ctrl+Q' }] },
+    file: { 4: [closeWindow], 9: [{ role: 'quit', label: 'Quit', accelerator: 'Ctrl+Q' }] },
     edit,
     view,
     window: { 0: [{ role: 'minimize', label: 'Minimize' }] },

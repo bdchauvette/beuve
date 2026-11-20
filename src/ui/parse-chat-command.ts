@@ -29,7 +29,7 @@ const whitespace = /\s+/u;
 const paletteAndMenus = 'Use the command palette or the menus.';
 /** Former preference commands, and where each is set now (ADR 0139). */
 const settingCommands: ReadonlyMap<string, string> = new Map([
-  ['/editor', 'Choose the editor in Settings › Editors (Review › Editor Settings…).'],
+  ['/editor', 'Choose the editor in Settings › Editors.'],
   ['/diff', paletteAndMenus],
   ['/whitespace', paletteAndMenus],
   ['/generated', paletteAndMenus],

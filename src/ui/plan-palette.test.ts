@@ -63,7 +63,7 @@ function sources(): PaletteSources {
 describe('planPalette', () => {
   test('lists commands with their shortcuts after >', ({ expect }) => {
     const entries = planPalette('>show callers', sources());
-    expect(entries[0]).toMatchObject({ title: 'Show Callers', detail: 'Review', keys: ['⌘I'] });
+    expect(entries[0]).toMatchObject({ title: 'Show Callers', detail: 'Navigate', keys: ['⌘I'] });
     expect(entries.every((entry) => entry.group === 'commands')).toBe(true);
     expect(
       planPalette('>show callers', { ...sources(), platform: 'linux' })[0]?.keys,

@@ -14,8 +14,10 @@ describe('shortcutSectionsFor', () => {
       'File',
       'Edit',
       'View',
-      'Go',
+      'Navigate',
+      'Analyze',
       'Review',
+      'Note',
       'Chat',
       'Review notes',
       'Chat',
@@ -23,7 +25,7 @@ describe('shortcutSectionsFor', () => {
       'Sheets',
       'Files and lists',
     ]);
-    expect(sections.find((section) => section.title === 'Go')?.rows[2]).toStrictEqual({
+    expect(sections.find((section) => section.title === 'Navigate')?.rows[2]).toStrictEqual({
       title: 'Next Change',
       keys: ['⌘↓', 'F7'],
     });

@@ -53,3 +53,7 @@ The preferred editor has no menu toggle any more: Review › Open With and its r
 ## Amendment 2026-11-18: names that follow the state, menu icons and platform in-place keys (ADR 0144)
 
 The catalog gains three fields. `checkedNames` gives a command the title and label it shows while the window lists it in `menu:set-state`'s `checked`, for a command whose action flips with its subject (Withdraw Note / Restore Note, Mark Note as Addressed / Not Addressed, Mark Note as Blocking / Not Blocking); such a command has no `toggle` and shows no check mark, main swaps the label in place, the palette shows the current name and the shortcuts window both. `icon` names a symbol from a closed list that main draws beside the item (an SF Symbol template image on macOS, beuve's own bitmap on Linux). `inPlace.linuxKeys` lists in-place keys that differ on Linux (Ctrl+A for the review notes' ⌘A, which the dock handles itself while its list has the focus, so Edit › Select All stays the text fields'). Review › Note › Note Addressed is now Mark as Addressed, no longer a checkbox.
+
+## Amendment 2026-11-20: menus grouped by concern
+
+ADR 0152 regroups the menu bar: Go becomes Navigate; Analyze and Note are new top-level menus; File holds the review's lifecycle and the commands that open it elsewhere; Review keeps progress and edits.
