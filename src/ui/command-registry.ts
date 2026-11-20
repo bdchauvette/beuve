@@ -89,6 +89,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'toggle-generated': app,
     'toggle-insights': app,
     'toggle-review-comments': app,
+    'toggle-addressed-notes': app,
     'toggle-diagnostics': {
       ...app,
       help: "show or hide the language servers' underlines and counts on the diff; the servers keep running and the configuration is untouched; remembered in settings.json",

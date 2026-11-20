@@ -518,6 +518,8 @@ export class BeuveUraDock extends LitElement {
   @property({ type: Boolean }) accessor hasSession = false;
   /** The open session's items in dock order, every status (`ura:list`). */
   @property({ attribute: false }) accessor items: readonly UraItemView[] = [];
+  /** Whether addressed notes are listed (View preference `showAddressedNotes`, ADR 0149). */
+  @property({ type: Boolean }) accessor showAddressed = true;
   @property() accessor derivedVerdict: UraVerdictView = 'approve';
   /** The verdict stored for the session (`ura:list`); absent when the derived one applies. */
   @property() accessor chosenVerdict: UraVerdictView | undefined;
@@ -558,6 +560,10 @@ export class BeuveUraDock extends LitElement {
     this.addController(
       new ActionDelegation(this, {
         click: {
+          'show-addressed': (_data, event): void => {
+            event.stopPropagation();
+            this.emit('beuve-ura-show-addressed', undefined);
+          },
           'review-edits': ({ op = '' }, event): void => {
             event.stopPropagation();
             this.emit('beuve-review-edits', { op });
@@ -769,12 +775,24 @@ export class BeuveUraDock extends LitElement {
     });
   }
 
-  /** Staged items first, in export order, then withdrawn and addressed ones. */
+  /**
+   * The listed items: staged ones first, in export order, then withdrawn and addressed ones,
+   * leaving out the addressed ones while they are hidden (ADR 0149).
+   */
   private ordered(): UraItemView[] {
     return [
       ...this.items.filter((item) => item.status.kind === 'staged'),
-      ...this.items.filter((item) => item.status.kind !== 'staged'),
+      ...this.items.filter((item) => item.status.kind !== 'staged' && this.isListed(item)),
     ];
+  }
+
+  private isListed(item: UraItemView): boolean {
+    return this.showAddressed || item.status.kind !== 'addressed';
+  }
+
+  /** How many addressed notes the dock is hiding. */
+  private hiddenCount(): number {
+    return this.items.filter((item) => !this.isListed(item)).length;
   }
 
   /** Open in Editor: the item's file at its current first line (line 1 for file notes and outdated items). */
@@ -1530,6 +1548,22 @@ export class BeuveUraDock extends LitElement {
     </div>`;
   }
 
+  /** The line that says how many addressed notes are hidden, with a button that lists them. */
+  private renderHidden(listedCount: number): TemplateResult | typeof nothing {
+    const hidden = this.hiddenCount();
+    if (hidden === 0) {
+      return nothing;
+    }
+    let lead = '';
+    if (listedCount === 0) {
+      lead = 'Every note is addressed. ';
+    }
+    return html`<p class="empty hidden-notes">
+      ${lead}${countNoun(hidden, 'addressed note')} hidden.
+      <button type="button" class="button link" data-action="show-addressed">Show</button>
+    </p>`;
+  }
+
   private saveKey(): string {
     const platform = keyPlatformOf(this.platform);
     return displayAccelerator(saveAccelerators[platform], platform);
@@ -1673,7 +1707,7 @@ export class BeuveUraDock extends LitElement {
       <div class="body">
         <section>
           ${
-            ordered.length === 0
+            ordered.length === 0 && this.items.length === 0
               ? html`<p class="empty">
                   ${
                     this.hasSession
@@ -1683,6 +1717,7 @@ export class BeuveUraDock extends LitElement {
                 </p>`
               : html`${this.renderSelectionBar()}
                   <ol
+                    ?hidden=${ordered.length === 0}
                     aria-label="Staged review items"
                     aria-multiselectable="true"
                     data-action="list"
@@ -1690,6 +1725,7 @@ export class BeuveUraDock extends LitElement {
                     ${ordered.map((item, index) => this.renderItem(item, index))}
                   </ol>`
           }
+          ${this.renderHidden(ordered.length)}
         </section>
         ${this.renderReviewEdits()} ${this.renderExport(stagedCount)}
       </div>
@@ -1698,9 +1734,10 @@ export class BeuveUraDock extends LitElement {
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
-    if (changed.has('items')) {
-      this.cursor = Math.min(this.cursor, Math.max(0, this.items.length - 1));
-      const present = new Set(this.items.map((item) => item.id));
+    if (changed.has('items') || changed.has('showAddressed')) {
+      const listed = this.ordered();
+      this.cursor = Math.min(this.cursor, Math.max(0, listed.length - 1));
+      const present = new Set(listed.map((item) => item.id));
       if (this.selection.selected.some((id) => !present.has(id))) {
         const selected = this.selection.selected.filter((id) => present.has(id));
         let { anchor } = this.selection;

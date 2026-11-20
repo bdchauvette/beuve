@@ -640,6 +640,14 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "id": "dock-select-all",
             "label": "Se&lect All",
           },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "toggle-addressed-notes",
+            "label": "S&how Addressed Notes",
+            "type": "checkbox",
+          },
         ],
       },
       {
@@ -1494,6 +1502,14 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "id": "dock-select-all",
             "label": "Select All",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "toggle-addressed-notes",
+            "label": "Show Addressed Notes",
+            "type": "checkbox",
           },
         ],
       },

@@ -77,6 +77,7 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ['toggle-insights', display.showInsights],
     ['toggle-diagnostics', display.showDiagnostics],
     ['toggle-review-comments', display.showReviewComments === true],
+    ['toggle-addressed-notes', display.showAddressedNotes !== false],
     ['tree-mode', input.treeMode === 'diff-only'],
     ['order-path', order === 'path'],
     ['order-imports', order === 'imports'],

@@ -1378,6 +1378,7 @@ export class BeuveReview extends LitElement {
       ?hasSession=${this.review !== undefined}
       .platform=${this.platform}
       .items=${this.ura.items}
+      ?showAddressed=${this.settings.display.showAddressedNotes !== false}
       .derivedVerdict=${this.ura.derivedVerdict}
       .chosenVerdict=${this.ura.chosenVerdict}
       .verdictNotice=${this.ura.verdictNotice}
