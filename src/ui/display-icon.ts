@@ -2,7 +2,7 @@ import { svg } from 'lit';
 import type { TemplateResult } from 'lit';
 
 /**
- * The glyphs of icon-only controls (the review header's display controls, a note's Blocking, the
+ * The glyphs of icon-only controls (the review header's display controls, the Files tab's layout, a note's Blocking, the
  * queue's Refresh and the titlebar's Reload) and of the status bar (its branches, the language
  * servers and the GitHub account): 14px outlines that
  * follow the text color.
@@ -12,6 +12,8 @@ export type DisplayIconName =
   | 'inline'
   | 'whitespace'
   | 'sort'
+  | 'tree'
+  | 'flat'
   | 'chevron'
   | 'check'
   | 'dash'
@@ -42,6 +44,8 @@ const shapes: Readonly<Record<DisplayIconName, TemplateResult>> = {
   inline: svg`<rect x="2" y="2.5" width="12" height="11" rx="1.5" /><path d="M5 6h6M5 10h6" />`,
   whitespace: svg`<path d="M2.5 6.5v4h11v-4" />`,
   sort: svg`<path d="M3 4h10M3 8h7M3 12h4" />`,
+  tree: svg`<path d="M2.5 3.5h5M4 5.5v7M4 8h2M4 12.5h2M7.5 8h6M7.5 12.5h6" />`,
+  flat: svg`<path d="M3 4h10M3 8h10M3 12h10" />`,
   chevron: svg`<path d="M4.5 6.5 8 10l3.5-3.5" />`,
   check: svg`<path d="m3.5 8.5 3 3 6-7" />`,
   dash: svg`<path d="M4 8h8" />`,
