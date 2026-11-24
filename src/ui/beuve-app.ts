@@ -370,7 +370,7 @@ export class BeuveApp extends LitElement {
   };
 
   /** The notes list's Show beside its count of hidden closed notes. */
-  private readonly onShowClosed = (): void => {
+  private readonly onToggleClosed = (): void => {
     this.runAppCommand('toggle-closed-notes');
   };
 
@@ -1015,7 +1015,7 @@ export class BeuveApp extends LitElement {
         .platform=${this.appInfo?.platform ?? ''}
         ?isModalOpen=${this.paletteText !== undefined || this.openDialog || this.queueOpen}
         .revision=${this.revision}
-        @beuve-ura-show-closed=${this.onShowClosed}
+        @beuve-ura-toggle-closed=${this.onToggleClosed}
       >
         ${this.showsEmptyPanel() ? this.renderQueue('queue') : nothing}
         ${this.showsEmptyPanel() ? this.renderOpenPanel(false, 'empty') : nothing}

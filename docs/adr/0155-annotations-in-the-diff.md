@@ -18,3 +18,8 @@ Three kinds of annotation sit under diff lines, and each looked and behaved diff
 ## Consequences
 
 Every annotation reads and behaves the same way: one line until the reviewer asks for more. A suggestion shows where it applies, once its note is opened. Other reviewers' threads no longer fill the diff until opened. An open thread repeats its first comment in its head and in its body.
+
+## Amendment 2026-11-24: A note opens in its editor, at the note measure
+
+- **A click on a note's head edits it.** The head's toggle and the head itself run `edit-note`, which puts the composer in the note's place (ADR 0129); the composer already shows the body and the suggestion, so a note has no read-only open state, no `aria-expanded` and no chevron, and the card no longer remembers notes by `data-annotation-key`. Opening a note and then pressing Edit took two actions to do the one thing a reviewer opens their own note for, and the open note repeated its head's text in its body. Insights and threads still open in place.
+- **Every annotation keeps the note measure** (`--beuve-size-note-measure`), as the composer's form does, so a note does not change width when it is edited.

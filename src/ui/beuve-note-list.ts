@@ -373,12 +373,39 @@ export class BeuveNoteList extends LitElement {
       }
 
       .list-heading {
-        display: flex;
-        justify-content: space-between;
         margin: var(--beuve-space-3) var(--beuve-space-2) var(--beuve-space-1);
-        color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
+      }
+
+      .list-heading > button {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-1);
+        inline-size: 100%;
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--beuve-text-muted);
+        font: inherit;
         font-weight: var(--beuve-font-weight-semibold);
+        text-align: start;
+        cursor: pointer;
+      }
+
+      .list-heading > button:hover {
+        color: var(--beuve-text);
+      }
+
+      .list-chevron::before {
+        content: '▾';
+      }
+
+      .list-heading > button[aria-expanded='false'] .list-chevron::before {
+        content: '▸';
+      }
+
+      .list-heading .list-count {
+        margin-inline-start: auto;
       }
 
       .list-count {
@@ -660,9 +687,9 @@ export class BeuveNoteList extends LitElement {
     this.addController(
       new ActionDelegation(this, {
         click: {
-          'show-closed': (_data, event): void => {
+          'toggle-closed': (_data, event): void => {
             event.stopPropagation();
-            this.emit('beuve-ura-show-closed', undefined);
+            this.emit('beuve-ura-toggle-closed', undefined);
           },
           'review-edits': ({ op = '' }, event): void => {
             event.stopPropagation();
@@ -885,14 +912,6 @@ export class BeuveNoteList extends LitElement {
       return staged;
     }
     return [...staged, ...this.items.filter((item) => item.status.kind !== 'staged')];
-  }
-
-  /** How many closed notes the notes list is hiding. */
-  private hiddenCount(): number {
-    if (this.showClosed) {
-      return 0;
-    }
-    return this.items.filter((item) => item.status.kind !== 'staged').length;
   }
 
   /** Open in Editor: the item's file at its current first line (line 1 for file notes and outdated items). */
@@ -1691,11 +1710,19 @@ export class BeuveNoteList extends LitElement {
     </div>`;
   }
 
-  /** The open notes, then the closed ones under their own heading (ADR 0154). */
+  /**
+   * The open notes, then the closed ones under their own heading (ADR 0154), which collapses and
+   * expands them: it runs Show Closed Notes (ADR 0149 amendment).
+   */
   private renderLists(ordered: readonly UraItemView[]): TemplateResult {
     const openCount = ordered.filter((item) => item.status.kind === 'staged').length;
     const closed = ordered.slice(openCount);
-    return html`<ol
+    return html`${
+        openCount === 0 && !this.showClosed
+          ? html`<p class="empty">Every note is closed.</p>`
+          : nothing
+      }
+      <ol
         ?hidden=${openCount === 0}
         aria-label="Open notes"
         aria-multiselectable="true"
@@ -1703,32 +1730,38 @@ export class BeuveNoteList extends LitElement {
       >
         ${ordered.slice(0, openCount).map((item, index) => this.renderItem(item, index))}
       </ol>
+      ${this.renderClosedHeading()}
       ${
         closed.length === 0
           ? nothing
-          : html`<h3 class="list-heading" id="closed-notes">
-                Closed <span class="list-count">${closed.length}</span>
-              </h3>
-              <ol aria-labelledby="closed-notes" aria-multiselectable="true" data-action="list">
-                ${closed.map((item, index) => this.renderItem(item, openCount + index))}
-              </ol>`
+          : html`<ol aria-labelledby="closed-notes" aria-multiselectable="true" data-action="list">
+              ${closed.map((item, index) => this.renderItem(item, openCount + index))}
+            </ol>`
       }`;
   }
 
-  /** The line that says how many closed notes are hidden, with a button that lists them. */
-  private renderHidden(listedCount: number): TemplateResult | typeof nothing {
-    const hidden = this.hiddenCount();
-    if (hidden === 0) {
+  /** The Closed heading, a disclosure button with the count, listed or hidden. */
+  private renderClosedHeading(): TemplateResult | typeof nothing {
+    const count = this.items.filter((item) => item.status.kind !== 'staged').length;
+    if (count === 0) {
       return nothing;
     }
-    let lead = '';
-    if (listedCount === 0) {
-      lead = 'Every note is closed. ';
+    let title = 'Hide closed notes: addressed and withdrawn';
+    if (!this.showClosed) {
+      title = 'Show closed notes: addressed and withdrawn';
     }
-    return html`<p class="empty hidden-notes" title="Addressed and withdrawn notes are closed">
-      ${lead}${countNoun(hidden, 'closed note')} hidden.
-      <button type="button" class="button link" data-action="show-closed">Show</button>
-    </p>`;
+    return html`<h3 class="list-heading">
+      <button
+        type="button"
+        id="closed-notes"
+        aria-expanded=${String(this.showClosed)}
+        data-action="toggle-closed"
+        title=${title}
+      >
+        <span class="list-chevron" aria-hidden="true"></span>Closed
+        <span class="list-count">${count}</span>
+      </button>
+    </h3>`;
   }
 
   private saveKey(): string {
@@ -1894,7 +1927,6 @@ export class BeuveNoteList extends LitElement {
                 </p>`
               : html`${this.renderSelectionBar()} ${this.renderLists(ordered)}`
           }
-          ${this.renderHidden(ordered.length)}
         </section>
         ${this.renderReviewEdits()} ${this.renderExport(stagedCount)}
       </div>
