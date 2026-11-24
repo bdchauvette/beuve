@@ -1,5 +1,10 @@
 import type * as Trees from '@pierre/trees';
-import type { FileTree, FileTreeRowDecoration, FileTreeRowDecorationContext } from '@pierre/trees';
+import type {
+  FileTree,
+  FileTreeLabelsOption,
+  FileTreeRowDecoration,
+  FileTreeRowDecorationContext,
+} from '@pierre/trees';
 import { css, html, LitElement } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -20,6 +25,20 @@ import { rowDecorationsFrom } from './row-decorations-from.ts';
 import type { TreeDecoration } from './tree-decoration.ts';
 
 const trailingSlash = /\/$/u;
+/**
+ * The tooltips on a row's status letter and a folder's dot. The status is a change in the review,
+ * not the working tree's `git status`, and `ignored` marks a generated file (ADR 0026).
+ */
+const treeLabels: FileTreeLabelsOption = {
+  gitStatusTitles: {
+    added: 'Added in this review',
+    modified: 'Modified in this review',
+    deleted: 'Deleted in this review',
+    renamed: 'Renamed in this review',
+    ignored: 'Generated file',
+  },
+  containsGitStatusTitle: 'Contains changed files',
+};
 const planKeys: readonly string[] = [
   'tree',
   'files',
@@ -138,6 +157,7 @@ export class BeuveRadarTree extends LitElement {
       initialExpansion: 'closed',
       flattenEmptyDirectories: true,
       stickyFolders: true,
+      labels: treeLabels,
       gitStatus: this.shownGitStatus(plan.gitStatus),
       renderRowDecoration: (context): FileTreeRowDecoration | null => {
         return this.decorate(context);
