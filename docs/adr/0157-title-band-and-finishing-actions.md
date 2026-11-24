@@ -51,3 +51,7 @@ How the diff is shown is something the reviewer changes often enough to keep at 
 ## Amendment 2026-11-24: No prominent finishing button
 
 Finishing a round should not be thoughtless, so no finishing action gets a large button that is visible everywhere: there is no Finish button in the title bar (nor a Go to File field). Finishing happens from the notes list, where the notes are in view, or from the File menu and the palette, which copy or open Post at once: a reviewer going through the menu knows what they are doing.
+
+## Amendment 2026-11-24: The name is in parts, and it alone gives way
+
+The title bar's name is built from parts that look different (`sessionHeadingFrom`): where the review is (`owner/repo`, or a local repository's folder) in muted text, a pull request's number in the muted code font, then what it is in semibold: the pull request's title, or the branch in the code font. Only the name gives way when the band is narrow, and only its last part ellipsizes; the repository and number stay whole, and the diff's size and the view controls never shrink, so a long title can no longer push the controls off the edge. The parts sit in spans because the button lays out as a flex box, where bare text does not ellipsize.
