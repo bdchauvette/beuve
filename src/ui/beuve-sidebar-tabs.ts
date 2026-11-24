@@ -37,24 +37,36 @@ export class BeuveSidebarTabs extends LitElement {
        */
       beuve-tab-list {
         display: flex;
-        gap: var(--beuve-space-4);
+        align-items: stretch;
         block-size: var(--beuve-titlebar-height);
-        padding-inline: var(--beuve-sidebar-tabs-inset, var(--beuve-space-3)) var(--beuve-space-3);
+        padding-inline-start: var(--beuve-sidebar-tabs-inset, 0);
         border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
         -webkit-app-region: drag;
         user-select: none;
       }
 
+      /*
+       * Tabs fill the band's height, so the chosen one's full-height lines match the title bar's
+       * section lines (ADR 0157 amendment). Each reaches over the band's bottom border, so the
+       * chosen one's bar sits on the band's very bottom edge, against the panel's own focus line.
+       */
       button {
-        -webkit-app-region: no-drag;
-        padding: 0;
+        position: relative;
+        margin-block-end: calc(-1 * var(--beuve-border-width));
+        padding: 0 var(--beuve-space-3);
         border: none;
+        border-inline: var(--beuve-border-width) solid transparent;
         background: none;
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
-        box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 transparent;
         cursor: pointer;
+        -webkit-app-region: no-drag;
+      }
+
+      /* The first tab's start line lies over the sidebar's own edge rather than beside it. */
+      button:first-child {
+        margin-inline-start: calc(-1 * var(--beuve-border-width));
       }
 
       button:not([aria-selected='true']):hover {
@@ -62,12 +74,23 @@ export class BeuveSidebarTabs extends LitElement {
       }
 
       /*
-       * The chosen tab says so as the chosen segment of a segmented control does (ADR 0115): accent
-       * text over an accent bar along the row's bottom edge.
+       * The chosen tab is open onto the panel below: full-height lines on both sides, the panel's
+       * background, accent text, and an accent bar along the band's bottom edge (as the chosen
+       * segment of a segmented control has, ADR 0115).
        */
       button[aria-selected='true'] {
+        border-inline-color: var(--beuve-border);
+        background: var(--beuve-surface);
         color: var(--beuve-accent);
-        box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 var(--beuve-accent);
+      }
+
+      button[aria-selected='true']::after {
+        content: '';
+        position: absolute;
+        inset-inline: calc(-1 * var(--beuve-border-width));
+        inset-block-end: 0;
+        block-size: var(--beuve-border-width-thick);
+        background: var(--beuve-accent);
       }
 
       button[aria-selected='true'] .count {
