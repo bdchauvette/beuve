@@ -34,6 +34,7 @@ describe('describeGithubAuth', () => {
       tone: 'warn',
       text: 'GitHub: not signed in — run gh auth login',
       title: 'Run: gh auth login --hostname github.com',
+      remedy: 'gh auth login --hostname github.com',
     });
     expect(
       describeGithubAuth({

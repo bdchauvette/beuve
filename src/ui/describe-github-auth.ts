@@ -5,6 +5,8 @@ export interface GithubAuthLine {
   readonly tone: 'ok' | 'warn' | 'muted';
   readonly text: string;
   readonly title: string;
+  /** The command that fixes it, such as `gh auth login --hostname github.com`, when gh says one. */
+  readonly remedy?: string;
 }
 
 /**
@@ -22,6 +24,7 @@ export function describeGithubAuth(auth: GithubAuthStatusView): GithubAuthLine {
         tone: 'warn',
         text: 'GitHub: not signed in — run gh auth login',
         title: remedyOf(auth),
+        ...(auth.remedy !== undefined && { remedy: auth.remedy }),
       };
     }
     case 'cli-not-installed': {

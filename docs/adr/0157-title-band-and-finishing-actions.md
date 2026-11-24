@@ -37,3 +37,9 @@ The title bar is for what the reviewer needs all the time; the status bar is for
 ## Amendment 2026-11-24: Ambient facts leave the title bar
 
 By the same rule, three more things move. A pull request's CI (a chip whose click runs `sidebar-overview`) and whose turn it is go back to the status bar's right side, after the branches. The commits the diff spans (`reviewSpanFrom`) move to the status bar after the range menu, each still opening on the remote; the title band ends with how big the diff is, `3 files · +5 −1` (`beuve-review-diffstat`). A local review's name drops its base (`folder · head`), which the status bar's branches give. The title bar now holds the review's name, the switcher, Reload and the diff's size.
+
+## Amendment 2026-11-24: The status bar reads from broad to narrow, and its app state is icons
+
+- The left side reads from broad to narrow: the branches, what the diff shows (the range menu) and the commits it spans, how many files are reviewed, whether the head is saved, then a transient notice. Progress no longer leads.
+- The right side holds the ambient facts: whose turn, CI, a followed branch's state, then the language servers and GitHub sign-in as icon buttons (`displayIcon('braces')`, `displayIcon('account')`). Each has a status dot at its corner only when something needs a look (a server starting; signed out, gh missing or GitHub unavailable), its details in the tooltip, and its actions in a popover: the language servers' list and Restart, as before; for GitHub, Copy Sign-In Command (the remedy gh gives, `describeGithubAuth().remedy`) and Check Again.
+- The app's version is gone from the status bar; it stays in the About window.
