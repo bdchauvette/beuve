@@ -56,15 +56,15 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "submenu": [
           {
             "id": "export-agent-xml",
-            "label": "&Copy as XML…",
+            "label": "&Copy as XML",
           },
           {
             "id": "export-agent-json",
-            "label": "Copy &as JSON…",
+            "label": "Copy &as JSON",
           },
           {
             "id": "export-github",
-            "label": "Copy &GitHub Review (JSON)…",
+            "label": "Copy &GitHub Review (JSON)",
           },
         ],
       },
@@ -1012,15 +1012,15 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "submenu": [
           {
             "id": "export-agent-xml",
-            "label": "Copy as XML…",
+            "label": "Copy as XML",
           },
           {
             "id": "export-agent-json",
-            "label": "Copy as JSON…",
+            "label": "Copy as JSON",
           },
           {
             "id": "export-github",
-            "label": "Copy GitHub Review (JSON)…",
+            "label": "Copy GitHub Review (JSON)",
           },
         ],
       },
