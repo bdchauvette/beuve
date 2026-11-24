@@ -17,3 +17,7 @@ Sheets (ADR 0067) open only in their own windows, and only from a definition jum
 ## Consequences
 
 Any file an answer names is one click from a sheet, and the Files tab can open what it shows. ⌘↩ is taken in the main window outside text fields. A unique bare file name (`beuve-review.ts`) links even when the answer meant something else by it; an ambiguous one does not link at all. Paths are resolved against the head only: a file the answer names at the base side, or one deleted by the change, stays text. The tree's paths are indexed once per tree, with every directory-boundary suffix, which costs memory proportional to the paths times their depth.
+
+## Amendment 2026-11-24: A pop-out glyph, after the file's controls
+
+The file header's Open in Sheet button uses a pop-out glyph (`displayIcon('pop-out')`, a box with an arrow leaving it), which says the file opens in a window of its own; the page glyph it replaces read as a printer. A rich file's Rendered and Source toggle (ADR 0123) moves after the line counts, beside it, so the header's controls sit together at its end and the counts keep their column; before, the counts' reserved width left a wide gap between the toggle and them.

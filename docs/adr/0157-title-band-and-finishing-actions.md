@@ -55,3 +55,7 @@ Finishing a round should not be thoughtless, so no finishing action gets a large
 ## Amendment 2026-11-24: The name is in parts, and it alone gives way
 
 The title bar's name is built from parts that look different (`sessionHeadingFrom`): where the review is (`owner/repo`, or a local repository's folder) in muted text, a pull request's number in the muted code font, then what it is in semibold: the pull request's title, or the branch in the code font. Only the name gives way when the band is narrow, and only its last part ellipsizes; the repository and number stay whole, and the diff's size and the view controls never shrink, so a long title can no longer push the controls off the edge. The parts sit in spans because the button lays out as a flex box, where bare text does not ellipsize.
+
+## Amendment 2026-11-24: No picker in the title band, and full-height lines between its sections
+
+The ▾ that opened the Open dialog is gone from the title band, and so is a non-pull-request name's click that opened it: File › Open and its key open another review. A pull request's name still shows its Overview tab; another review's name is plain text, and with no review open the band shows no name. Each section the band's owner slots in (the diff's size, then how it is shown) is parted from what comes before it by a full-height line, as the sidebar's edge is; the size is left out for an empty diff, so no line stands alone.
