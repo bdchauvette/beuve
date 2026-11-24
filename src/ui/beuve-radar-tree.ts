@@ -14,18 +14,29 @@ import { restoreFormatControls } from '#x/text/restore-format-controls.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import { planRadarTree } from './plan-radar-tree.ts';
-import type { RadarTreeMode, RadarTreePlan } from './plan-radar-tree.ts';
+import type { RadarTreeLayout, RadarTreeMode, RadarTreePlan } from './plan-radar-tree.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 import { rowDecorationsFrom } from './row-decorations-from.ts';
 import type { TreeDecoration } from './tree-decoration.ts';
 
 const trailingSlash = /\/$/u;
+const planKeys: readonly string[] = [
+  'tree',
+  'files',
+  'mode',
+  'layout',
+  'query',
+  'generatedPaths',
+  'reviewMarks',
+];
 
 /**
  * The radar tree in Zone 1 (spec section 4, ADR 0026): a `@pierre/trees` view of the repository at
  * the session head that opens the packages a change touches down to its files, marks changed
  * files with their git status, with a `✓` on files marked reviewed (ADR 0064). `mode` is neighborhood or diff-only (View ▸ Changed Files Only). Arrow keys move through
  * the rows; selecting a file (click, Enter or Space) emits `beuve-tree-select` with `{ path }`
- * when that file is part of the review.
+ * when that file is part of the review. `query` narrows the listing to paths containing its terms,
+ * and the `flat` layout lists every path whole, with no folders.
  *
  * `@pierre/trees` renders each name itself and takes no display hook, so the tree is handed every
  * path with its invisible and bidi characters escaped (`revealFormatControls`, ADR 0082) and maps
@@ -33,40 +44,49 @@ const trailingSlash = /\/$/u;
  */
 @customElement('beuve-radar-tree')
 export class BeuveRadarTree extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      min-block-size: 0;
-    }
+  static override styles = [
+    emptyStateStyles,
+    css`
+      :host {
+        display: block;
+        min-block-size: 0;
+      }
 
-    .mount {
-      block-size: 100%;
-      --trees-bg-override: var(--beuve-surface);
-      --trees-fg-override: var(--beuve-text);
-      --trees-fg-muted-override: var(--beuve-text-muted);
-      --trees-bg-muted-override: var(--beuve-surface-sunken);
-      --trees-border-color-override: var(--beuve-border);
-      --trees-accent-override: var(--beuve-accent);
-      --trees-selected-bg-override: var(--beuve-accent-soft);
-      --trees-selected-fg-override: var(--beuve-text);
-      --trees-selected-focused-border-color-override: var(--beuve-accent);
-      --trees-focus-ring-color-override: var(--beuve-accent);
-      --trees-font-family-override: var(--beuve-font-family-sans);
-      --trees-font-size-override: var(--beuve-font-size-small);
-      --trees-padding-inline-override: 0;
-      --trees-git-added-color-override: var(--beuve-ok);
-      --trees-git-modified-color-override: var(--beuve-warn);
-      --trees-git-deleted-color-override: var(--beuve-danger);
-      --trees-git-renamed-color-override: var(--beuve-accent);
-      --trees-status-added-override: var(--beuve-ok);
-      --trees-status-modified-override: var(--beuve-warn);
-      --trees-status-deleted-override: var(--beuve-danger);
-      --trees-status-renamed-override: var(--beuve-accent);
-    }
-  `;
+      .empty {
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+      }
+
+      .mount {
+        block-size: 100%;
+        --trees-bg-override: var(--beuve-surface);
+        --trees-fg-override: var(--beuve-text);
+        --trees-fg-muted-override: var(--beuve-text-muted);
+        --trees-bg-muted-override: var(--beuve-surface-sunken);
+        --trees-border-color-override: var(--beuve-border);
+        --trees-accent-override: var(--beuve-accent);
+        --trees-selected-bg-override: var(--beuve-accent-soft);
+        --trees-selected-fg-override: var(--beuve-text);
+        --trees-selected-focused-border-color-override: var(--beuve-accent);
+        --trees-focus-ring-color-override: var(--beuve-accent);
+        --trees-font-family-override: var(--beuve-font-family-sans);
+        --trees-font-size-override: var(--beuve-font-size-small);
+        --trees-padding-inline-override: 0;
+        --trees-git-added-color-override: var(--beuve-ok);
+        --trees-git-modified-color-override: var(--beuve-warn);
+        --trees-git-deleted-color-override: var(--beuve-danger);
+        --trees-git-renamed-color-override: var(--beuve-accent);
+        --trees-status-added-override: var(--beuve-ok);
+        --trees-status-modified-override: var(--beuve-warn);
+        --trees-status-deleted-override: var(--beuve-danger);
+        --trees-status-renamed-override: var(--beuve-accent);
+      }
+    `,
+  ];
 
   private fileTree: FileTree | undefined;
   private plan: RadarTreePlan | undefined;
+  /** In the flat layout, each shown name's real path; empty while nested. */
+  private readonly realByShown = new Map<string, string>();
   private decorations: ReadonlyMap<string, TreeDecoration> = new Map();
   private readonly reviewed = new Set<string>();
 
@@ -74,6 +94,9 @@ export class BeuveRadarTree extends LitElement {
   @property({ attribute: false }) accessor tree: RepositoryTreeView | undefined;
   @property({ attribute: false }) accessor files: readonly DiffFileView[] = [];
   @property() accessor mode: RadarTreeMode = 'neighborhood';
+  @property() accessor layout: RadarTreeLayout = 'tree';
+  /** Terms a path must all contain; blank lists everything. */
+  @property() accessor query = '';
   /**
    * Generated review files (ADR 0052): their rows take the library's dimmed `ignored` lane
    * instead of their change status; they stay selectable.
@@ -110,12 +133,12 @@ export class BeuveRadarTree extends LitElement {
       return;
     }
     this.fileTree = new library.FileTree({
-      paths: plan.paths.map((path) => revealFormatControls(path)),
+      paths: this.shownPaths(plan.paths),
       initialExpandedPaths: plan.expandedPaths.map((path) => revealFormatControls(path)),
       initialExpansion: 'closed',
       flattenEmptyDirectories: true,
       stickyFolders: true,
-      gitStatus: shownGitStatus(plan.gitStatus),
+      gitStatus: this.shownGitStatus(plan.gitStatus),
       renderRowDecoration: (context): FileTreeRowDecoration | null => {
         return this.decorate(context);
       },
@@ -127,9 +150,7 @@ export class BeuveRadarTree extends LitElement {
   }
 
   private decorate({ item }: FileTreeRowDecorationContext): FileTreeRowDecoration | null {
-    const decoration = this.decorations.get(
-      restoreFormatControls(item.path).replace(trailingSlash, ''),
-    );
+    const decoration = this.decorations.get(this.realPath(item.path).replace(trailingSlash, ''));
     if (decoration === undefined) {
       // eslint-disable-next-line unicorn/no-null -- the library's "no decoration" is null.
       return null;
@@ -142,13 +163,47 @@ export class BeuveRadarTree extends LitElement {
     if (shown === undefined) {
       return;
     }
-    const path = restoreFormatControls(shown);
+    const path = this.realPath(shown);
     if (!this.reviewed.has(path)) {
       return;
     }
     this.dispatchEvent(
       new CustomEvent('beuve-tree-select', { detail: { path }, bubbles: true, composed: true }),
     );
+  }
+
+  /** `path` as the tree names it: escaped, and with no folders in the flat layout. */
+  private shownPath(path: string): string {
+    const revealed = revealFormatControls(path);
+    if (this.layout === 'flat') {
+      // U+2215 stands in for `/`: the library nests a path at every real one.
+      return revealed.replaceAll('/', '\u{2215}');
+    }
+    return revealed;
+  }
+
+  /** What the tree is handed for `paths`; the flat layout also records each name's real path. */
+  private shownPaths(paths: readonly string[]): string[] {
+    this.realByShown.clear();
+    return paths.map((path) => {
+      const shown = this.shownPath(path);
+      if (this.layout === 'flat') {
+        this.realByShown.set(shown, path);
+      }
+      return shown;
+    });
+  }
+
+  /** Git status entries keyed by the names the tree shows. */
+  private shownGitStatus(entries: RadarTreePlan['gitStatus']): RadarTreePlan['gitStatus'] {
+    return entries.map((entry) => {
+      return { ...entry, path: this.shownPath(entry.path) };
+    });
+  }
+
+  /** The real path of a name the tree hands back. */
+  private realPath(shown: string): string {
+    return this.realByShown.get(shown) ?? restoreFormatControls(shown);
   }
 
   /** Moves keyboard focus into the tree, on the first changed file when there is one. */
@@ -158,7 +213,7 @@ export class BeuveRadarTree extends LitElement {
       this.fileTree?.focusFirstItem();
       return;
     }
-    this.fileTree?.focusPath(revealFormatControls(first.path));
+    this.fileTree?.focusPath(this.shownPath(first.path));
   }
 
   /** The file whose row has keyboard focus, for Add to Chat (ADR 0046); `undefined` on a folder. */
@@ -167,64 +222,64 @@ export class BeuveRadarTree extends LitElement {
     if (shown === undefined || shown.endsWith('/')) {
       return undefined;
     }
-    return restoreFormatControls(shown);
+    return this.realPath(shown);
   }
 
   /** Focuses `path`'s row and scrolls it into view, for the palette's unchanged files. */
   revealPath(path: string): void {
-    this.fileTree?.scrollToPath(revealFormatControls(path));
+    this.fileTree?.scrollToPath(this.shownPath(path));
   }
 
-  protected override updated(changed: PropertyValues<this>): void {
-    const { library } = this;
-    const isRelevant = ['tree', 'files', 'mode', 'library', 'generatedPaths', 'reviewMarks'].some(
-      (key) => {
-        return changed.has(key as keyof BeuveRadarTree);
-      },
-    );
-    if (library === undefined || !isRelevant) {
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    const isStale = planKeys.some((key) => changed.has(key as keyof BeuveRadarTree));
+    if (!isStale && this.plan !== undefined) {
       return;
     }
-    const plan = planRadarTree(
+    this.plan = planRadarTree(
       {
         paths: this.tree?.paths ?? [],
         packageRoots: this.tree?.packageRoots ?? [],
         files: this.files,
       },
       this.mode,
+      { layout: this.layout, query: this.query },
     );
     this.decorations = rowDecorationsFrom({
       files: this.files,
       marks: this.reviewMarks,
       generated: this.generatedPaths,
     });
+    this.reviewed.clear();
+    for (const file of this.files) {
+      this.reviewed.add(file.path);
+    }
+  }
+
+  protected override updated(changed: PropertyValues<this>): void {
+    const { library, plan } = this;
+    if (library === undefined || plan === undefined) {
+      return;
+    }
     const gitStatus = plan.gitStatus.map((entry) => {
       if (this.generatedPaths.has(entry.path)) {
         return { ...entry, status: 'ignored' as const };
       }
       return entry;
     });
-    this.reviewed.clear();
-    for (const file of this.files) {
-      this.reviewed.add(file.path);
-    }
-    const isNewListing =
-      this.plan === undefined ||
-      changed.has('tree') ||
-      changed.has('files') ||
-      changed.has('mode') ||
-      changed.has('generatedPaths');
-    this.plan = plan;
     if (this.fileTree === undefined) {
       this.mountTree(library, { ...plan, gitStatus });
       return;
     }
+    const isNewListing = ['tree', 'files', 'mode', 'layout', 'query', 'generatedPaths'].some(
+      (key) => {
+        return changed.has(key as keyof BeuveRadarTree);
+      },
+    );
     if (isNewListing) {
-      this.fileTree.resetPaths(
-        plan.paths.map((path) => revealFormatControls(path)),
-        { initialExpandedPaths: plan.expandedPaths.map((path) => revealFormatControls(path)) },
-      );
-      this.fileTree.setGitStatus(shownGitStatus(gitStatus));
+      this.fileTree.resetPaths(this.shownPaths(plan.paths), {
+        initialExpandedPaths: plan.expandedPaths.map((path) => revealFormatControls(path)),
+      });
+      this.fileTree.setGitStatus(this.shownGitStatus(gitStatus));
     }
     if (changed.has('reviewMarks') || changed.has('files') || changed.has('generatedPaths')) {
       // Re-renders the rows, so they ask `renderRowDecoration` again.
@@ -233,15 +288,10 @@ export class BeuveRadarTree extends LitElement {
   }
 
   override render(): TemplateResult {
-    return html`<div class="mount"></div>`;
+    const isUnmatched = this.plan?.paths.length === 0 && this.query.trim() !== '';
+    return html`<p class="empty" role="status" ?hidden=${!isUnmatched}>No files match.</p>
+      <div class="mount"></div>`;
   }
-}
-
-/** Git status entries keyed by the paths the tree shows. */
-function shownGitStatus(entries: RadarTreePlan['gitStatus']): RadarTreePlan['gitStatus'] {
-  return entries.map((entry) => {
-    return { ...entry, path: revealFormatControls(entry.path) };
-  });
 }
 
 declare global {
