@@ -1884,18 +1884,6 @@ export class BeuveNoteList extends LitElement {
     });
   }
 
-  /**
-   * Focuses the Copy button for `target` (ADR 0157 amendment): a copy asked for from the menu or
-   * the palette lands here, with the notes in view, and the reviewer presses it.
-   */
-  focusExport(target: UraExportTarget): void {
-    void this.updateComplete.then(() => {
-      this.renderRoot
-        .querySelector<HTMLElement>(`[data-action="export"][data-target="${CSS.escape(target)}"]`)
-        ?.focus();
-    });
-  }
-
   /** The summary the reviewer wrote, or `undefined` when they left it blank; exports carry it too. */
   writtenSummary(): string | undefined {
     if (this.summary.trim() === '') {
