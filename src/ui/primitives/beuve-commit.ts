@@ -275,6 +275,23 @@ export class BeuveCommit extends LitElement {
     });
   }
 
+  private renderHash(): TemplateResult {
+    return html`<button class="hash" type="button" aria-label="Commit ${this.sha}">
+      ${this.sha.slice(0, this.abbreviation)}
+    </button>`;
+  }
+
+  private renderCardPopover(): TemplateResult {
+    return html`<div
+      popover="manual"
+      role="group"
+      @click=${this.onCardClick}
+      aria-label="Commit ${this.sha.slice(0, this.abbreviation)}"
+    >
+      ${this.renderCard()}
+    </div>`;
+  }
+
   private renderCard(): TemplateResult {
     const { loaded } = this;
     if (loaded.status === 'ready') {
@@ -343,17 +360,9 @@ export class BeuveCommit extends LitElement {
   }
 
   protected override render(): TemplateResult {
-    return html`<button class="hash" type="button" aria-label="Commit ${this.sha}">
-        ${this.sha.slice(0, this.abbreviation)}
-      </button>
-      <div
-        popover="manual"
-        role="group"
-        @click=${this.onCardClick}
-        aria-label="Commit ${this.sha.slice(0, this.abbreviation)}"
-      >
-        ${this.renderCard()}
-      </div>`;
+    // Joined with no whitespace: the host is inline, so a space between the hash and its card
+    // would trail the hash in running text (`abc1234 ..def5678`).
+    return html`${this.renderHash()}${this.renderCardPopover()}`;
   }
 }
 

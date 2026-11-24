@@ -10,6 +10,7 @@ import type {
   OpenPullRequestRequest,
   ReviewOrderMode,
   ReviewQueuePrefsView,
+  ReviewRangeChoiceView,
   ReviewView,
   SetDiffDisplayRequest,
   UraExportTarget,
@@ -68,7 +69,8 @@ import type { ReviewRef } from './review-ref.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import { saveStateFrom } from './save-state-from.ts';
-import './beuve-review-scope.ts';
+import './beuve-review-diffstat.ts';
+import { describeReviewScope } from './describe-review-scope.ts';
 import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
 import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
 import { describeGenerated } from './describe-generated.ts';
@@ -390,6 +392,16 @@ export class BeuveApp extends LitElement {
   /** A check's link in the status bar's CI popover. */
   private readonly onStatusOpenUrl = (event: CustomEvent<StatusOpenUrlDetail>): void => {
     void this.openUrl(event.detail.url);
+  };
+
+  /** The status bar's range menu (ADR 0142, 0157): stores the choice and reloads the review. */
+  private readonly onStatusRange = (event: CustomEvent<ReviewRangeChoiceView>): void => {
+    void this.session.setReviewRange(event.detail);
+  };
+
+  /** The range menu's Remove Last Saved Progress, in the status bar (ADR 0156, 0157). */
+  private readonly onStatusRemoveSaved = (): void => {
+    this.runAppCommand('undo-save-progress');
   };
 
   /** The language servers' list opened: read their state afresh. */
@@ -1000,7 +1012,7 @@ export class BeuveApp extends LitElement {
       @beuve-titlebar-open=${this.onTitlebarOpen}
       @beuve-titlebar-reload=${this.onTitlebarReload}
     >
-      <beuve-review-scope .review=${this.review}></beuve-review-scope>
+      <beuve-review-diffstat .review=${this.review}></beuve-review-diffstat>
     </beuve-titlebar>`;
   }
 
@@ -1059,6 +1071,10 @@ export class BeuveApp extends LitElement {
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
         .progress=${this.reviewData.progress}
+        .range=${this.review?.range}
+        .scopeText=${this.review === undefined ? '' : describeReviewScope(this.review.scope)}
+        @beuve-review-range=${this.onStatusRange}
+        @beuve-remove-saved-progress=${this.onStatusRemoveSaved}
         .saveState=${saveStateFrom({
           review: this.review,
           savedProgress: this.session.savedProgress,

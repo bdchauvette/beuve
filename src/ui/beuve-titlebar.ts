@@ -15,8 +15,8 @@ import { statusDotStyles } from './primitives/status-dot-styles.ts';
  * open review's name, which shows a pull request's Overview tab (or, for another review, the Open
  * dialog), ▾ for the Open dialog, the pull request's CI as a dot (which shows the Overview tab too)
  * and whose turn it is, an icon-only Reload while a review is open (ADR 0146), marked with a dot
- * while polling has found commits the review does not show yet, then what the owner slots in:
- * what the diff shows. Narrow, whose turn gives way first, then the slotted content, then the
+ * while polling has found commits the review does not show yet, then, at the end, what the owner
+ * slots in: what the diff spans. Narrow, whose turn gives way first, then the slotted content, then the
  * name. The band drags the window; its controls do not. On macOS it leaves room for the window
  * buttons unless `--beuve-titlebar-inset` says the sidebar beside it does. Emits
  * `beuve-titlebar-open`, `beuve-titlebar-overview` and `beuve-titlebar-reload`.
@@ -84,16 +84,10 @@ export class BeuveTitlebar extends LitElement {
         font-weight: var(--beuve-font-weight-semibold);
       }
 
-      .separator {
-        flex: none;
-        align-self: stretch;
-        margin-block: var(--beuve-space-2);
-        border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
-      }
-
       ::slotted(*) {
         flex: 0 100 auto;
         min-inline-size: 0;
+        margin-inline-start: auto;
       }
 
       .reload {
@@ -247,7 +241,6 @@ export class BeuveTitlebar extends LitElement {
       </span>
       ${this.ci === undefined ? nothing : this.renderCi(this.ci)} ${this.renderAttention()}
       ${this.canReload ? this.renderReload() : nothing}
-      ${this.canReload ? html`<span class="separator" aria-hidden="true"></span>` : nothing}
       <slot></slot>`;
   }
 }
