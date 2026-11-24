@@ -1,0 +1,25 @@
+# 0157. One title band beside a full-height sidebar, progress in the status bar, and finishing actions
+
+- Status: Accepted; amends [0142](0142-undo-save-progress-and-review-range.md), [0146](0146-opening-progress-and-reload-review.md) and [0156](0156-export-saves-progress.md)
+- Date: 2026-11-24
+
+## Context
+
+The window stacked two bars over the diff: a title bar ("beuve", the review's name, Reload) across the whole window, then the diff stream's summary row (the scope, a range menu, the commits, the counts, progress, the order and display controls and a large Save Progress button). The title bar was mostly empty, the summary row was crowded, and the scope and the range menu side by side ("Up to date", "Since last saved progress ▾") read as two names for one thing. The sidebar started below the title bar, wherever it sat.
+
+What the window says falls into levels: which review is open, its state (CI, whose turn, new commits), what the diff shows, the reviewer's progress, and how the diff is displayed. The Overview tab already holds a pull request's details. Now that copying the review saves progress (ADR 0156), Save Progress is rarely pressed, but whether the head is saved matters more, because a save can happen without a click.
+
+## Decision
+
+- **The sidebar runs the full height of the window**, on either side; the title band runs over the main column only. The sidebar's tabs are its part of the band: as tall as the title bar, on its background, and they drag the window. `beuve-app` slots `beuve-titlebar` into `beuve-review` (`slot="titlebar"`), at the top of the main column. On macOS the window buttons sit at the window's left edge: with the sidebar on the right the title bar leaves room for them, and with it on the left the tabs do (`--beuve-titlebar-inset`, `--beuve-sidebar-tabs-inset`, set by `beuve-review` from its `sidebar-left` attribute).
+- **The title band says what is open and what the diff shows.** In order: the review's name, without "beuve" (for a pull request it shows the Overview tab; otherwise it opens the Open dialog), ▾ for the Open dialog, a pull request's CI as a dot (which shows the Overview tab, where the checks are listed), whose turn it is, Reload (ADR 0146), then `beuve-review-scope`: the range menu, now named by what the diff shows (`rangeTriggerLabelFrom`: the scope itself since the last save, "Whole change", or the scope "since an earlier save"; plain text before the first save), the commits it spans and its file and line counts (left out for an empty diff). When the window narrows, whose turn gives way first, then the commits, then the name.
+- **The status bar holds the reviewer's progress**: how many files are marked reviewed, with a small meter, and whether the head is saved (`saveStateFrom`): "Saved at abc1234 · 11:37", "Unsaved since abc1234" (accent) or "Not saved yet". Clicking it opens a popover that says what saving does, with Remove Last Saved Progress and Save Progress. CI and whose turn leave the status bar for the title band; the CI checks popover is gone, since the Overview tab lists the checks.
+- **The diff stream loses its summary row.** The order and display controls, and a session error, sit right-aligned above the first card and scroll with the diff; they are also in the View menu. There is no Save Progress button: it is the Review menu's, with Cmd+S / Ctrl+S, and the status bar's.
+- **Finishing actions.** Copying the review (ADR 0156) and Post Review to GitHub each end a round of review, and each saves progress at the head once it succeeds, keeping the review as shown (`finishRound`). A failed or refused post saves nothing.
+
+## Consequences
+
+- The window has one band over the diff instead of two rows, and every item in it is about the open review. The tabs line up with it, so the band reads as one row across the window.
+- Progress and the save state sit together, in a place that never moves; the unsaved state is tinted so it is not missed there. A reviewer who never copies or posts saves with Cmd+S or the status bar.
+- The CI checks are one click further away (Overview), in exchange for a status bar that holds only the app's own state beside the reviewer's progress.
+- Whatever new finishing action comes later (a merge, say) saves progress the same way.

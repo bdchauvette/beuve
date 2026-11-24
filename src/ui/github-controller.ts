@@ -659,12 +659,15 @@ export class GithubController implements ReactiveController {
     this.patch({ preview: { kind: 'ready', preview: preview.value } });
   }
 
-  /** Posts on the head the reviewer sees, which the preview names; one post at a time (ADR 0078). */
-  async postReview({ verdict, summary }: GithubPostDetail): Promise<void> {
+  /**
+   * Posts on the head the reviewer sees, which the preview names; one post at a time (ADR 0078).
+   * Answers whether it posted.
+   */
+  async postReview({ verdict, summary }: GithubPostDetail): Promise<boolean> {
     const bridge = this.environment.bridge();
     const review = this.environment.review();
     if (bridge === undefined || review === undefined || this.snapshot.post.kind === 'busy') {
-      return;
+      return false;
     }
     this.patch({ post: { kind: 'busy', text: 'Posting to GitHub…' } });
     const posted = await bridge.invoke('github:post-review', {
@@ -674,24 +677,24 @@ export class GithubController implements ReactiveController {
       ...(summary !== undefined && { summary }),
     });
     if (this.environment.review()?.sessionId !== review.sessionId) {
-      return;
+      return false;
     }
     if (!posted.ok) {
       this.patch({ post: { kind: 'failed', text: posted.error.message } });
-      return;
+      return false;
     }
     const result = posted.value;
     if (result.kind === 'failed') {
       if (result.failure === 'head-moved') {
         this.headMoved(review.sessionId);
-        return;
+        return false;
       }
       if (result.failure === 'own-pull-request') {
         this.patch({ post: { kind: 'own-pull-request', message: result.message } });
       } else {
         this.patch({ post: { kind: 'failed', text: result.message } });
       }
-      return;
+      return false;
     }
     let moved = '';
     if (result.movedToBody > 0) {
@@ -705,6 +708,7 @@ export class GithubController implements ReactiveController {
       },
     });
     await this.refreshPreview();
+    return true;
   }
 }
 

@@ -48,8 +48,6 @@ import { shortcutOf } from './shortcut-of.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { describeOrderFallback } from './describe-order-fallback.ts';
 import { displayIcon } from './display-icon.ts';
-import { describeReviewProgress } from './describe-review-progress.ts';
-import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { anchorFromTarget } from './anchor-from-target.ts';
 import { lineFromTarget } from './line-from-target.ts';
@@ -80,7 +78,6 @@ import { menuItemStyles } from './primitives/menu-item-styles.ts';
 import './primitives/beuve-commit.ts';
 import './primitives/beuve-time.ts';
 import './primitives/beuve-menu.ts';
-import './beuve-review-range.ts';
 
 /**
  * A request to show a file's card from outside (the radar tree, the notes list), optionally at a
@@ -161,14 +158,9 @@ interface NoteAddDetail {
   readonly anchor: UraAnchorView;
 }
 
-/** `beuve-open-commit`: a commit hash of the header, to open on the remote (ADR 0108). */
-export interface OpenCommitDetail {
-  readonly sha: string;
-}
-
 /**
- * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards with a
- * header naming the review kind. Cards
+ * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards, under
+ * the order and display controls (what the diff shows is in the title band, ADR 0157). Cards
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, Next/Previous Change step
  * through every hunk of every file, Show Callers toggles the active card's call-stack peek (Escape closes
  * it), and Add Note opens a composer
@@ -181,9 +173,9 @@ export interface OpenCommitDetail {
  * and Next/Previous Change can skip them. Files show in the order main computed (ADR 0065), with a divider
  * above the config and mechanical group, and an interdiff's commit pairs can narrow the stream
  * to what one commit produced (ADR 0054).
- * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`,
- * `beuve-review-range` (ADR 0142, also from its `beuve-review-range` header menu), `beuve-peek-request`,
- * `beuve-peek-close`, `beuve-open-commit`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
+ * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`,
+ * `beuve-review-range` and `beuve-remove-saved-progress` (ADR 0142, 0156, from the up-to-date screen),
+ * `beuve-peek-request`, `beuve-peek-close`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
@@ -235,32 +227,17 @@ export class BeuveDiffStream extends LitElement {
         color: var(--beuve-danger);
       }
 
-      .summary {
+      /*
+       * How the diff is shown (ADR 0157): above the first card, scrolling with the diff, since what
+       * the diff shows is in the title band and these are also in the View menu.
+       */
+      .view-controls {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: var(--beuve-space-3);
-        flex: none;
-        padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
-        background: var(--beuve-surface);
-      }
-
-      .scope {
-        font-weight: var(--beuve-font-weight-semibold);
-      }
-
-      .scope.interdiff {
-        color: var(--beuve-violet);
-      }
-
-      .range,
-      .counts {
-        font: var(--beuve-font-code);
-        color: var(--beuve-text-muted);
-      }
-
-      .spacer {
-        flex: 1;
+        justify-content: flex-end;
+        gap: var(--beuve-space-2);
+        margin-block-end: var(--beuve-space-2);
       }
 
       /* The body's own padding stands in for the screen's sides. */
@@ -275,11 +252,6 @@ export class BeuveDiffStream extends LitElement {
         gap: var(--beuve-space-2);
       }
 
-      .saved {
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
-      }
-
       .display {
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
@@ -290,13 +262,6 @@ export class BeuveDiffStream extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--beuve-space-3);
-      }
-
-      .progress {
-        font: var(--beuve-font-small);
-        font-variant-numeric: tabular-nums;
-        color: var(--beuve-text-muted);
-        white-space: nowrap;
       }
 
       .order {
@@ -432,10 +397,6 @@ export class BeuveDiffStream extends LitElement {
     this.dispatchEvent(
       new CustomEvent('beuve-remove-saved-progress', { bubbles: true, composed: true }),
     );
-  };
-
-  private readonly onMarkClick = (): void => {
-    this.dispatchEvent(new CustomEvent('beuve-mark-reviewed', { bubbles: true, composed: true }));
   };
 
   private readonly onComposeSubmit = (event: CustomEvent<UraDraft>): void => {
@@ -657,10 +618,6 @@ export class BeuveDiffStream extends LitElement {
   @property({ type: Boolean }) accessor loading = false;
   /** Names the session being opened, shown while `loading` and no review has arrived. */
   @property() accessor loadingLabel = '';
-  @property({ type: Boolean }) accessor marking = false;
-  /** The checkpoint Save Progress recorded in this window for this session, if any. */
-  @property({ attribute: false }) accessor savedProgress:
-    { readonly sha: string; readonly at: Temporal.Instant } | undefined;
   /** `process.platform`, for the shortcuts in tooltips. */
   @property() accessor platform = '';
   @property() accessor error = '';
@@ -740,17 +697,6 @@ export class BeuveDiffStream extends LitElement {
           ),
           whitespace: (): void => {
             this.changeDisplay({ ignoreWhitespace: !this.display.ignoreWhitespace });
-          },
-          'open-commit': ({ sha }): void => {
-            if (sha !== undefined) {
-              this.dispatchEvent(
-                new CustomEvent('beuve-open-commit', {
-                  detail: { sha },
-                  bubbles: true,
-                  composed: true,
-                }),
-              );
-            }
           },
         },
         dblclick: { card: forwardToCard },
@@ -1357,35 +1303,6 @@ export class BeuveDiffStream extends LitElement {
    * Save Progress records a checkpoint of the reviewed base and head (ADR 0009, 0068); once the
    * head is saved the button gives way to a quiet note of what was saved and when.
    */
-  private renderSaveProgress(review: ReviewView, isUpToDate: boolean): TemplateResult {
-    const saved = this.savedProgress;
-    let savedSha: string | undefined;
-    if (saved?.sha === review.headSha) {
-      savedSha = saved.sha;
-    } else if (isUpToDate) {
-      savedSha = review.session.lastReviewedSha;
-    }
-    if (savedSha !== undefined && !this.marking) {
-      let time: TemplateResult | typeof nothing = nothing;
-      if (saved?.sha === savedSha) {
-        time = html` ·
-          <beuve-time datetime=${saved.at.toString()} time-style="short"></beuve-time>`;
-      }
-      return html`<span class="saved" title="Next time, show only what changed since this point"
-        >Progress saved · <beuve-commit sha=${savedSha}></beuve-commit>${time}</span
-      >`;
-    }
-    return html`<button
-      class="button primary large"
-      type="button"
-      title=${`Save Progress (${this.shortcut('save-progress')}): next time, show only what changed since this point`}
-      ?disabled=${this.marking || this.loading}
-      @click=${this.onMarkClick}
-    >
-      ${this.marking ? 'Saving…' : 'Save Progress'}
-    </button>`;
-  }
-
   private shortcut(id: CommandId): string {
     return shortcutOf(id, keyPlatformOf(this.platform));
   }
@@ -1394,30 +1311,8 @@ export class BeuveDiffStream extends LitElement {
     this.refreshSlices();
     const { uraItemsByPath, insightsByPath, threadsByPath } = this.slices;
     const plan = this.plan();
-    const additions = review.files.reduce((sum, file) => {
-      return sum + file.additions;
-    }, 0);
-    const deletions = review.files.reduce((sum, file) => {
-      return sum + file.deletions;
-    }, 0);
     const isUpToDate = review.scope.kind === 'up-to-date';
     return html`
-      <div class="summary">
-        <span class="scope ${review.scope.kind}">${describeReviewScope(review.scope)}</span>
-        <beuve-review-range .range=${review.range}></beuve-review-range>
-        <span class="range" title=${rangeTitle(review)}>
-          ${this.renderCommit(rangeStartOf(review))}..${this.renderCommit(review.headSha)}
-        </span>
-        <span class="counts"
-          >${review.files.length} ${review.files.length === 1 ? 'file' : 'files'} +${additions}
-          −${deletions}</span
-        >
-        ${this.renderProgress()}
-        <span class="spacer"></span>
-        ${this.renderOrder()} ${this.renderDisplay()}
-        ${this.error === '' ? nothing : html`<span class="note error">${this.error}</span>`}
-        ${this.renderSaveProgress(review, isUpToDate)}
-      </div>
       ${
         this.isFindOpen
           ? html`<beuve-find-bar
@@ -1460,7 +1355,11 @@ export class BeuveDiffStream extends LitElement {
                   </div>
                 </div>
               </div>`
-            : html`${this.renderPairs(review)}
+            : html`<div class="view-controls">
+                  ${this.error === '' ? nothing : html`<span class="note error">${this.error}</span>`}
+                  ${this.renderOrder()} ${this.renderDisplay()}
+                </div>
+                ${this.renderPairs(review)}
                 <div class="cards">
                   ${repeat(
                     plan.files,
@@ -1496,26 +1395,6 @@ export class BeuveDiffStream extends LitElement {
         }
       </div>
     `;
-  }
-
-  /** A short sha that opens its commit on the remote (ADR 0108). */
-  private renderCommit(sha: string): TemplateResult {
-    return html`<beuve-commit
-      class="commit"
-      sha=${sha}
-      abbreviation="8"
-      hint="Click to open on GitHub"
-      data-action="open-commit"
-      data-sha=${sha}
-    ></beuve-commit>`;
-  }
-
-  private renderProgress(): TemplateResult | typeof nothing {
-    const line = describeReviewProgress(this.reviewProgress);
-    if (line === undefined) {
-      return nothing;
-    }
-    return html`<span class="progress" title=${line.title}>${line.text}</span>`;
   }
 
   /** A sort button whose menu lists Path / Imports / Calls (ADR 0065, 0107). */
@@ -1934,21 +1813,6 @@ async function waitForComposer(card: BeuveFileCard | undefined): Promise<HTMLEle
     });
   }
   return undefined;
-}
-
-/** The commits the diff spans: fork point to head, or last reviewed head to head. */
-function rangeStartOf(review: ReviewView): string {
-  if (review.scope.kind === 'interdiff') {
-    return review.scope.fromHeadSha;
-  }
-  return review.baseSha;
-}
-
-function rangeTitle(review: ReviewView): string {
-  if (review.scope.kind === 'interdiff') {
-    return `Changes since reviewed head ${review.scope.fromHeadSha}, now at ${review.headSha} (forked from ${review.baseSha})`;
-  }
-  return `${review.baseSha}..${review.headSha}`;
 }
 
 /** Runs a card's own action for an event the stream's delegated listener caught on it. */

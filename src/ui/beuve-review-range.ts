@@ -8,6 +8,7 @@ import { ActionDelegation } from './action-delegation.ts';
 import { displayIcon } from './display-icon.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
+import { rangeTriggerLabelFrom } from './range-trigger-label-from.ts';
 import { reviewRangeMenuFrom } from './review-range-menu-from.ts';
 import type { ReviewRangeOption } from './review-range-menu-from.ts';
 import { withPayload } from './with-payload.ts';
@@ -35,7 +36,14 @@ export class BeuveReviewRange extends LitElement {
       }
 
       .trigger {
-        border-color: var(--beuve-border);
+        max-inline-size: 100%;
+        font-weight: var(--beuve-font-weight-semibold);
+      }
+
+      .label {
+        min-inline-size: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       [role='menuitemradio'] .when {
@@ -48,6 +56,9 @@ export class BeuveReviewRange extends LitElement {
 
   /** The review's range and saved progress, from `ReviewView.range`. */
   @property({ attribute: false }) accessor range: ReviewRangeView | undefined;
+
+  /** What the diff shows (`describeReviewScope`), which the trigger names (ADR 0157). */
+  @property() accessor scopeText = '';
 
   constructor() {
     super();
@@ -112,9 +123,10 @@ export class BeuveReviewRange extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     const menu = reviewRangeMenuFrom(this.range);
-    if (menu === undefined) {
+    if (menu === undefined || this.range === undefined) {
       return nothing;
     }
+    const label = rangeTriggerLabelFrom(this.scopeText, this.range.choice);
     return html`<beuve-menu label="Review range">
       <button
         slot="trigger"
@@ -122,9 +134,9 @@ export class BeuveReviewRange extends LitElement {
         class="button quiet trigger"
         tabindex="-1"
         aria-label="Review range: ${menu.label}"
-        title=${menu.title}
+        title=${`${this.scopeText}. ${menu.title}`}
       >
-        <span>${menu.label}</span>${displayIcon('chevron')}
+        <span class="label">${label}</span>${displayIcon('chevron')}
       </button>
       ${menu.options.map((option) => this.renderOption(option))}
       ${

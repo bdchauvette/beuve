@@ -199,7 +199,7 @@ describe('GithubController', () => {
         'github:post-review': postedReply(),
       },
     });
-    await github.postReview({});
+    await expect(github.postReview({})).resolves.toBe(true);
     github.invalidatePost();
     expect(github.post.kind).toBe('posted');
   });
@@ -326,7 +326,7 @@ describe('GithubController', () => {
         }),
       },
     });
-    await github.postReview({ summary: 'Mine.' });
+    await expect(github.postReview({ summary: 'Mine.' })).resolves.toBe(false);
     expect(github.post).toStrictEqual({ kind: 'own-pull-request', message: 'your own' });
     github.invalidatePost();
     expect(github.post).toStrictEqual({ kind: 'head-moved' });
@@ -337,7 +337,7 @@ describe('GithubController', () => {
       review: reviewOf(),
       replies: { 'github:post-review': failed({ code: 'invalid-request', message: 'nope' }) },
     });
-    await github.postReview({});
+    await expect(github.postReview({})).resolves.toBe(false);
     expect(github.post.kind).toBe('failed');
     github.cancelPost();
     expect(github.post).toStrictEqual({ kind: 'idle' });

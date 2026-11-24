@@ -1,59 +1,46 @@
 import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { styleMap } from 'lit/directives/style-map.js';
 
 import type {
   AppInfo,
-  AttentionView,
-  CiCheckView,
-  CiStatusView,
+  FileReviewProgressView,
   GithubAuthStatusView,
   LspServerView,
   RemoteBranchView,
 } from '#contract/ipc-contract.ts';
 
 import { ActionDelegation } from './action-delegation.ts';
-import { describeAttention } from './describe-attention.ts';
-import { describeCiStatus } from './describe-ci-status.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { describeLspStatus } from './describe-lsp-status.ts';
 import { describeRemoteBranch } from './describe-remote-branch.ts';
+import { describeReviewProgress } from './describe-review-progress.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import './primitives/beuve-commit.ts';
+import './primitives/beuve-time.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
+import type { SaveState } from './save-state-from.ts';
 
 /** `beuve-status-open-url`: a link in a status popover, for the owner to open. */
 export interface StatusOpenUrlDetail {
   readonly url: string;
 }
 
-/** `beuve-status-popover`: which popover (`lsp` or `ci`) just opened. */
+/** `beuve-status-popover`: which popover (`lsp` or `save`) just opened. */
 export interface StatusPopoverDetail {
   readonly id: string;
 }
 
-/** Worst first, so a failing check is at the top of the list. */
-const bucketRank: Readonly<Record<CiCheckView['bucket'], number>> = {
-  failure: 0,
-  pending: 1,
-  success: 2,
-  neutral: 3,
-};
-
-const bucketTone: Readonly<Record<CiCheckView['bucket'], string>> = {
-  failure: 'danger',
-  pending: 'warn',
-  success: 'ok',
-  neutral: '',
-};
-
 /**
- * Bottom bar: the language servers (click for each one's state), a transient notice, whose turn
- * the open pull request is (ADR 0066, reasons on hover), its CI rollup (click for the checks, each
- * a link to its run), GitHub sign-in and app version. Its text is not selectable:
- * these are controls and readouts, not content.
+ * Bottom bar: the reviewer's progress through the open review, how many files are marked reviewed
+ * and whether the head is saved (ADR 0157; click for Save Progress and Remove Last Saved
+ * Progress), the language servers (click for each one's state), a transient notice, a followed
+ * branch's state, GitHub sign-in and app version. A pull request's CI and whose turn it is are in
+ * the title bar. Its text is not selectable: these are controls and readouts, not content.
  *
  * Emits `beuve-status-action` (a catalog command), `beuve-status-open-url` (a link in a popover)
  * and `beuve-status-popover` when a popover opens, so the owner can refresh what it shows.
@@ -190,13 +177,31 @@ export class BeuveStatusBar extends LitElement {
         color: var(--beuve-danger);
       }
 
-      .attention {
-        cursor: default;
+      .meter {
+        display: inline-block;
+        inline-size: calc(3 * var(--beuve-measure-em));
+        block-size: var(--beuve-border-width-heavy);
+        margin-inline-end: var(--beuve-space-1);
+        overflow: hidden;
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-border);
+        vertical-align: middle;
       }
 
-      .attention.yours {
+      .meter > span {
+        display: block;
+        block-size: 100%;
+        background: var(--beuve-accent);
+      }
+
+      .save.unsaved {
+        background: var(--beuve-accent-soft);
         color: var(--beuve-accent);
-        font-weight: var(--beuve-font-weight-semibold);
+      }
+
+      .save .check {
+        margin-inline-end: var(--beuve-space-1);
+        color: var(--beuve-ok);
       }
     `,
   ];
@@ -213,11 +218,11 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor lspServers: readonly LspServerView[] | undefined;
   @property({ attribute: false }) accessor notice: StatusNotice | undefined;
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
-  /** CI for the open pull request session's head; absent for local sessions. */
-  @property({ attribute: false }) accessor ci: CiStatusView | undefined;
+  /** How many of the shown files are marked reviewed (ADR 0064); absent without a review. */
+  @property({ attribute: false }) accessor progress: FileReviewProgressView | undefined;
+  /** Whether the open review's head is saved (ADR 0157); absent without a review. */
+  @property({ attribute: false }) accessor saveState: SaveState | undefined;
   @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
-  /** Whose turn the open pull request is; absent for local sessions and until it is known. */
-  @property({ attribute: false }) accessor attention: AttentionView | undefined;
   /** The open remote-branch session's branch (ADR 0112); absent for other sessions. */
   @property({ attribute: false }) accessor remoteBranch: RemoteBranchView | undefined;
 
@@ -235,6 +240,12 @@ export class BeuveStatusBar extends LitElement {
           },
           'restart-servers': (_data, _event, element): void => {
             this.emit('beuve-status-action', { command: 'restart-language-servers' });
+            closePopoverOf(element);
+          },
+          'save-action': ({ command }, _event, element): void => {
+            if (command !== undefined) {
+              this.emit('beuve-status-action', { command });
+            }
             closePopoverOf(element);
           },
           'notice-action': ({ command }): void => {
@@ -269,14 +280,87 @@ export class BeuveStatusBar extends LitElement {
       }`;
   }
 
-  private renderAttention(): TemplateResult | typeof nothing {
-    const chip = describeAttention(this.attention);
-    if (chip === undefined) {
+  private renderProgress(): TemplateResult | typeof nothing {
+    const { progress } = this;
+    const line = describeReviewProgress(progress);
+    if (progress === undefined || line === undefined) {
       return nothing;
     }
-    return html`<span class="attention ${chip.isYours ? 'yours' : ''}" title=${chip.title}
-      >${chip.text}</span
+    const share = `${String((100 * progress.reviewed) / progress.total)}%`;
+    return html`<span title=${line.title}
+      ><span class="meter" aria-hidden="true"
+        ><span style=${styleMap({ 'inline-size': share })}></span></span
+      >${progress.reviewed} of ${progress.total} files reviewed</span
     >`;
+  }
+
+  /** Saved or not, as a button whose popover offers Save Progress and Remove Last Saved Progress. */
+  private renderSave(state: SaveState): TemplateResult {
+    return html`<button
+        type="button"
+        class="button small quiet chip save ${state.kind}"
+        popovertarget="save"
+        title=${saveTitleOf(state)}
+        aria-haspopup="dialog"
+      >
+        ${this.renderSaveLabel(state)}
+      </button>
+      <div
+        id="save"
+        popover
+        class="start"
+        role="dialog"
+        aria-label="Saved progress"
+        @toggle=${this.onPopoverToggle}
+      >
+        <p class="popover-title">Saved progress</p>
+        <p class="popover-note">
+          Copying or posting the review saves it. Next time, only what changes after the last save
+          is shown.
+        </p>
+        <div class="popover-actions">
+          <button
+            class="button"
+            type="button"
+            data-action="save-action"
+            data-command="undo-save-progress"
+          >
+            Remove Last Saved Progress
+          </button>
+          <button
+            class="button primary"
+            type="button"
+            data-action="save-action"
+            data-command="save-progress"
+            ?disabled=${state.kind !== 'unsaved'}
+          >
+            Save Progress
+          </button>
+        </div>
+      </div>`;
+  }
+
+  private renderSaveLabel(state: SaveState): TemplateResult {
+    switch (state.kind) {
+      case 'saving': {
+        return html`Saving…`;
+      }
+      case 'saved': {
+        return html`<span class="check" aria-hidden="true">✓</span>Saved at
+          <beuve-commit sha=${state.sha}></beuve-commit>${
+            state.at === undefined
+              ? nothing
+              : html` · <beuve-time datetime=${state.at} time-style="short"></beuve-time>`
+          }`;
+      }
+      case 'unsaved': {
+        return html`<span class="status-dot" data-tone="accent"></span>${
+            state.since === undefined
+              ? 'Not saved yet'
+              : html`Unsaved since <beuve-commit sha=${state.since}></beuve-commit>`
+          }`;
+      }
+    }
   }
 
   private renderLsp(): TemplateResult {
@@ -333,66 +417,6 @@ export class BeuveStatusBar extends LitElement {
     </li>`;
   }
 
-  private renderCi(ci: CiStatusView): TemplateResult {
-    const line = describeCiStatus(ci);
-    const checks = ci.checks.toSorted((a, b) => {
-      return bucketRank[a.bucket] - bucketRank[b.bucket];
-    });
-    return html`<button
-        type="button"
-        class="button small quiet chip"
-        popovertarget="ci"
-        title=${line.title}
-        aria-haspopup="dialog"
-      >
-        <span class="status-dot" data-tone=${dotToneFrom(line.tone)}></span>${line.text}
-      </button>
-      <div
-        id="ci"
-        popover
-        class="end"
-        role="dialog"
-        aria-label="CI checks"
-        @toggle=${this.onPopoverToggle}
-      >
-        <p class="popover-title">Checks on ${ci.sha.slice(0, 7)}</p>
-        ${
-          checks.length === 0
-            ? html`<p class="popover-note">No checks have reported for this commit.</p>`
-            : html`<ul class="rows">
-                ${checks.map((check) => {
-                  return this.renderCheck(check);
-                })}
-              </ul>`
-        }
-        ${
-          ci.isTruncated
-            ? html`<p class="popover-note">More checks exist than were fetched.</p>`
-            : nothing
-        }
-      </div>`;
-  }
-
-  private renderCheck(check: CiCheckView): TemplateResult {
-    return html`<li class="row">
-      <span class="status-dot" data-tone=${bucketTone[check.bucket]}></span>
-      ${
-        check.url === undefined
-          ? html`<span class="grow" title=${check.name}>${check.name}</span>`
-          : html`<button
-              type="button"
-              class="button link grow"
-              title=${`Open ${check.name} on GitHub`}
-              data-action="open-url"
-              data-url=${check.url}
-            >
-              ${check.name}
-            </button>`
-      }
-      <span class="detail">${check.bucket}</span>
-    </li>`;
-  }
-
   /** The followed branch's state and, when its head commit names one, the agent session's link. */
   private renderRemoteBranch(branch: RemoteBranchView): TemplateResult {
     const line = describeRemoteBranch(branch);
@@ -423,13 +447,29 @@ export class BeuveStatusBar extends LitElement {
 
   override render(): TemplateResult {
     return html`
+      ${this.renderProgress()}
+      ${this.saveState === undefined ? nothing : this.renderSave(this.saveState)}
       ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
       ${this.remoteBranch === undefined ? nothing : this.renderRemoteBranch(this.remoteBranch)}
-      ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}
     `;
+  }
+}
+
+/** The save button's tooltip, with what Save Progress would do. */
+function saveTitleOf(state: SaveState): string {
+  switch (state.kind) {
+    case 'saving': {
+      return 'Saving progress at the head';
+    }
+    case 'saved': {
+      return `Progress saved at ${state.sha}: next time, only what changes after it is shown`;
+    }
+    case 'unsaved': {
+      return 'Not saved at the head: Save Progress, or copy or post the review, to save it';
+    }
   }
 }
 
