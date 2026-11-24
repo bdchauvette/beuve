@@ -11,7 +11,8 @@ import { statusDotStyles } from './primitives/status-dot-styles.ts';
  * what the reviewer needs all the time: the open review's name, which shows a pull request's
  * Overview tab (or, for another review, the Open dialog), ▾ for the Open dialog, an icon-only
  * Reload while a review is open (ADR 0146), marked with a dot while polling has found commits the
- * review does not show yet, then, at the end, what the owner slots in: how big the diff is.
+ * review does not show yet, then, at the end, what the owner slots in: how big the diff is and how
+ * it is shown (file order, split or inline).
  * Narrow, the slotted content gives way before the name; ambient facts are in the status bar. The band drags the window; its controls do not. On macOS it leaves room for the window
  * buttons unless `--beuve-titlebar-inset` says the sidebar beside it does. Emits
  * `beuve-titlebar-open`, `beuve-titlebar-overview` and `beuve-titlebar-reload`.
@@ -60,10 +61,13 @@ export class BeuveTitlebar extends LitElement {
         flex: none;
       }
 
+      .spacer {
+        flex: 1;
+      }
+
       ::slotted(*) {
         flex: 0 100 auto;
         min-inline-size: 0;
-        margin-inline-start: auto;
       }
 
       .reload {
@@ -187,6 +191,6 @@ export class BeuveTitlebar extends LitElement {
         </button>
       </span>
       ${this.canReload ? this.renderReload() : nothing}
-      <slot></slot>`;
+      <span class="spacer"></span><slot></slot>`;
   }
 }

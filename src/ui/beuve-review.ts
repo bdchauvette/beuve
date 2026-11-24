@@ -1387,7 +1387,6 @@ export class BeuveReview extends LitElement {
       .display=${this.settings.display}
       .suggestionJump=${this.suggestionJump}
       .deferrals=${this.reviewDeferrals().deferrals}
-      @beuve-display-change=${this.onDisplayChange}
       @beuve-status-notice=${this.onStatusNotice}
       @beuve-ura-update=${this.onUraUpdate}
       @beuve-peek-request=${this.onPeekRequest}
@@ -2076,6 +2075,7 @@ export class BeuveReview extends LitElement {
           class="main"
           slot="main"
           @beuve-open-commit=${this.onOpenCommit}
+          @beuve-display-change=${this.onDisplayChange}
           @beuve-review-range=${this.onReviewRange}
           @beuve-remove-saved-progress=${this.onRemoveSavedProgress}
           @beuve-titlebar-overview=${this.onTitlebarOverview}

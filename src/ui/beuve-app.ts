@@ -77,6 +77,8 @@ import { saveStateFrom } from './save-state-from.ts';
 import { branchesFrom } from './branches-from.ts';
 import { reviewSpanFrom } from './review-span-from.ts';
 import './beuve-review-diffstat.ts';
+import './beuve-view-controls.ts';
+import type { SplitNarrowDetail } from './beuve-diff-stream.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
 import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
@@ -406,6 +408,11 @@ export class BeuveApp extends LitElement {
     void this.session.setReviewRange(event.detail);
   };
 
+  /** The diff stream became too narrow for split diffs, or wide enough again. */
+  private readonly onSplitNarrow = (event: CustomEvent<SplitNarrowDetail>): void => {
+    this.isSplitNarrow = event.detail.isNarrow;
+  };
+
   /** The status bar's GitHub popover: copies the command that signs in. */
   private readonly onStatusCopy = (event: CustomEvent<StatusCopyDetail>): void => {
     void this.copyText(event.detail.text);
@@ -482,6 +489,8 @@ export class BeuveApp extends LitElement {
     );
   };
   @state() accessor overlayOpen = false;
+  /** The diff stream is too narrow for split diffs, so a split choice shows inline. */
+  @state() accessor isSplitNarrow = false;
   @state() accessor statusNotice: StatusNotice | undefined;
   @state() accessor appInfo: AppInfo | undefined;
   /** The open session's URA items, every status, placed on its current head. */
@@ -1049,6 +1058,16 @@ export class BeuveApp extends LitElement {
       @beuve-titlebar-reload=${this.onTitlebarReload}
     >
       <beuve-review-diffstat .review=${this.review}></beuve-review-diffstat>
+      ${
+        this.review === undefined
+          ? nothing
+          : html`<beuve-view-controls
+              .display=${this.settings.display}
+              .order=${this.reviewData.order}
+              headSha=${this.review.headSha}
+              ?isNarrow=${this.isSplitNarrow}
+            ></beuve-view-controls>`
+      }
     </beuve-titlebar>`;
   }
 
@@ -1098,6 +1117,7 @@ export class BeuveApp extends LitElement {
         ?isModalOpen=${this.paletteText !== undefined || this.openDialog || this.queueOpen}
         .revision=${this.revision}
         @beuve-ura-toggle-closed=${this.onToggleClosed}
+        @beuve-split-narrow=${this.onSplitNarrow}
       >
         ${this.renderTitlebar()} ${this.showsEmptyPanel() ? this.renderQueue('queue') : nothing}
         ${this.showsEmptyPanel() ? this.renderOpenPanel(false, 'empty') : nothing}
