@@ -79,6 +79,7 @@
     "@e18e/eslint-plugin": "0.8.1",
     "@eslint/css": "2.0.1",
     "@eslint/js": "10.0.1",
+    "@prettier/plugin-yuku": "0.0.3",
     "@storybook/web-components-vite": "10.6.7",
     "@types/markdown-it-emoji": "3.0.1",
     "@types/node": "24.19.2",
