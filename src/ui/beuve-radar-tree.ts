@@ -196,8 +196,9 @@ export class BeuveRadarTree extends LitElement {
   private shownPath(path: string): string {
     const revealed = revealFormatControls(path);
     if (this.layout === 'flat') {
-      // U+2215 stands in for `/`: the library nests a path at every real one.
-      return revealed.replaceAll('/', '\u{2215}');
+      // U+29F8 stands in for `/`: the library nests a path at every real one. It is drawn like a
+      // slash; U+2215 and U+2044 have side bearings that crowd the neighboring letters.
+      return revealed.replaceAll('/', '\u{29F8}');
     }
     return revealed;
   }
