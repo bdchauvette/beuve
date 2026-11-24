@@ -392,6 +392,11 @@
   --beuve-diff-selection-bg: var(--beuve-scale-purple-a4);
   --beuve-diff-selection-number-bg: var(--beuve-scale-purple-a6);
   --beuve-diff-hunk-text: var(--beuve-accent);
+  /* The editor's find matches (ADR 0158): orange, a hue apart from the blue, yellow and purple above. */
+  --beuve-diff-search-match-bg: var(--beuve-scale-orange-a5);
+  --beuve-diff-search-match-text: var(--beuve-code-text);
+  --beuve-diff-search-current-bg: var(--beuve-scale-orange-9);
+  --beuve-diff-search-current-text: #000000;
 }
 
 html,

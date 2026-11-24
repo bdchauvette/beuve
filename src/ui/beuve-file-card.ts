@@ -427,6 +427,10 @@ export class BeuveFileCard extends LitElement {
         --diffs-bg-selection-number-override: var(--beuve-diff-selection-number-bg);
         --diffs-selection-color-override: var(--beuve-accent);
         --diffs-bg-hover-override: var(--beuve-surface-sunken);
+        --diffs-bg-search-match-override: var(--beuve-diff-search-match-bg);
+        --diffs-fg-search-match-override: var(--beuve-diff-search-match-text);
+        --diffs-bg-search-match-current-override: var(--beuve-diff-search-current-bg);
+        --diffs-fg-search-match-current-override: var(--beuve-diff-search-current-text);
       }
 
       .insight-badge {
