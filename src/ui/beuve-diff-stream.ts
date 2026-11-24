@@ -74,6 +74,7 @@ import type { ReviewStops } from './step-review-position-skipping.ts';
 import { cardIndexAtLine } from './card-index-at-line.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
 import './primitives/beuve-commit.ts';
@@ -188,6 +189,7 @@ export interface OpenCommitDetail {
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
   static override styles = [
+    emptyStateStyles,
     menuItemStyles,
     segmentedStyles,
     buttonStyles,
@@ -261,16 +263,16 @@ export class BeuveDiffStream extends LitElement {
         flex: 1;
       }
 
+      /* The body's own padding stands in for the screen's sides. */
       .up-to-date {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--beuve-space-3);
+        padding-inline: 0;
+        background: none;
       }
 
-      .up-to-date p {
-        margin: 0;
-        color: var(--beuve-text-muted);
+      .up-to-date .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--beuve-space-2);
       }
 
       .saved {
@@ -422,6 +424,13 @@ export class BeuveDiffStream extends LitElement {
         bubbles: true,
         composed: true,
       }),
+    );
+  };
+
+  /** Up to date: forget the latest save, so the review shows what it showed before it (ADR 0156). */
+  private readonly onRemoveSavedClick = (): void => {
+    this.dispatchEvent(
+      new CustomEvent('beuve-remove-saved-progress', { bubbles: true, composed: true }),
     );
   };
 
@@ -1434,11 +1443,22 @@ export class BeuveDiffStream extends LitElement {
       >
         ${
           isUpToDate
-            ? html`<div class="up-to-date">
-                <p>Everything up to the head has been reviewed.</p>
-                <button type="button" class="button" @click=${this.onShowWholeClick}>
-                  Show the Whole Change
-                </button>
+            ? html`<div class="empty-screen up-to-date">
+                <div>
+                  <h1>Nothing new to review</h1>
+                  <p>
+                    Everything up to the head has been reviewed. New commits show here when they
+                    arrive.
+                  </p>
+                  <div class="actions">
+                    <button type="button" class="button" @click=${this.onShowWholeClick}>
+                      Show the Whole Change
+                    </button>
+                    <button type="button" class="button quiet" @click=${this.onRemoveSavedClick}>
+                      Remove Last Saved Progress
+                    </button>
+                  </div>
+                </div>
               </div>`
             : html`${this.renderPairs(review)}
                 <div class="cards">

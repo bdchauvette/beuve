@@ -654,7 +654,7 @@ const entries = Object.freeze([
   },
   {
     id: 'undo-save-progress',
-    title: 'Undo Save Progress',
+    title: 'Remove Last Saved Progress',
     menu: { menu: 'review', group: 0 },
     when: ['session'],
     windows: ['main'],

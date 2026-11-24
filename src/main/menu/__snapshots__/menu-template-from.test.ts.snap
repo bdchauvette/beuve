@@ -529,13 +529,13 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "id": "undo-save-progress",
-        "label": "&Undo Save Progress",
+        "label": "&Remove Last Saved Progress",
       },
       {
         "type": "separator",
       },
       {
-        "label": "&Review Range",
+        "label": "R&eview Range",
         "submenu": [
           {
             "id": "range-since-saved",
@@ -562,7 +562,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Add Suggestion…",
       },
       {
-        "label": "Review &Edits",
+        "label": "Re&view Edits",
         "submenu": [
           {
             "id": "open-review-edits",
@@ -1468,7 +1468,7 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       },
       {
         "id": "undo-save-progress",
-        "label": "Undo Save Progress",
+        "label": "Remove Last Saved Progress",
       },
       {
         "type": "separator",

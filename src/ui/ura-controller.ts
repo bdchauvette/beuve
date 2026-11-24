@@ -386,13 +386,13 @@ export class UraController implements ReactiveController {
 
   /**
    * Compiles the review in main and copies it with main's clipboard (ADR 0027), with the review
-   * summary the reviewer typed for posting, if any.
+   * summary the reviewer typed for posting, if any. Answers whether it was copied.
    */
-  async export({ target, summary }: UraExportChoice): Promise<void> {
+  async export({ target, summary }: UraExportChoice): Promise<boolean> {
     const bridge = this.environment.bridge();
     const review = this.environment.review();
     if (bridge === undefined || review === undefined || this.snapshot.isExporting) {
-      return;
+      return false;
     }
     this.patch({ isExporting: true });
     const compiled = await bridge.invoke('ura:export', {
@@ -405,7 +405,7 @@ export class UraController implements ReactiveController {
         isExporting: false,
         notice: { tone: 'error', text: compiled.error.message },
       });
-      return;
+      return false;
     }
     const copied = await bridge.invoke('clipboard:write-text', { text: compiled.value.text });
     const { itemCount, outdatedCount } = compiled.value;
@@ -414,7 +414,7 @@ export class UraController implements ReactiveController {
         isExporting: false,
         notice: { tone: 'error', text: `Could not copy: ${copied.error.message}` },
       });
-      return;
+      return false;
     }
     const counts = [countNoun(itemCount, 'item')];
     if (outdatedCount > 0) {
@@ -425,6 +425,7 @@ export class UraController implements ReactiveController {
       isExporting: false,
       notice: { tone: 'info', text: `Copied ${exportLabels[target]}: ${counts.join(', ')}.` },
     });
+    return true;
   }
 }
 
