@@ -2,8 +2,8 @@ import type { SessionSummary } from '#contract/ipc-contract.ts';
 
 /**
  * The titlebar's name for the open session: `owner/repo#n Title` for a pull request,
- * `owner/repo:branch` for a followed branch (with `(gone)` once deleted), `folder · head against
- * base` for a local branch, or `Open a review…` with none open. It prefers the
+ * `owner/repo:branch` for a followed branch (with `(gone)` once deleted), `folder · head` for a
+ * local branch (the status bar names the base, ADR 0157), or `Open a review…` with none open. It prefers the
  * listed summary, which carries the pull request title, and falls back to the review's own
  * session, so a session opened before the list caught up is still named.
  */
@@ -35,5 +35,9 @@ export function describeSessionLabel(
     return name;
   }
   const folder = source.repoPath.split('/').findLast((part) => part !== '') ?? source.repoPath;
-  return `${folder} · ${source.headRef} against ${source.baseRef}`;
+  let head = source.headRef;
+  if (head.startsWith('refs/heads/')) {
+    head = head.slice('refs/heads/'.length);
+  }
+  return `${folder} · ${head}`;
 }

@@ -59,7 +59,7 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import type { PaletteAction } from './plan-palette.ts';
 import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
-import type { OpenCommitDetail } from './beuve-review-diffstat.ts';
+import type { OpenCommitDetail } from './beuve-status-bar.ts';
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import type { ChatController } from './chat-controller.ts';
 import type { GithubController } from './github-controller.ts';
@@ -2024,6 +2024,11 @@ export class BeuveReview extends LitElement {
     if (isCopied) {
       await this.finishRound('Progress saved with the export');
     }
+  }
+
+  /** Opens `sha` on the review's remote, for a commit shown outside the review (ADR 0108). */
+  async openCommitOnRemote(sha: string): Promise<void> {
+    await this.openCommit(sha);
   }
 
   /** The review summary typed in the notes list for posting, which the exports carry too; blank is none. */
