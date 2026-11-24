@@ -13,11 +13,13 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import { ActionDelegation } from './action-delegation.ts';
+import type { ReviewBranches } from './branches-from.ts';
 import { countNoun } from './count-noun.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { describeLspStatus } from './describe-lsp-status.ts';
 import { describeRemoteBranch } from './describe-remote-branch.ts';
+import { displayIcon } from './display-icon.ts';
 import { describeReviewProgress } from './describe-review-progress.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
@@ -41,8 +43,8 @@ export interface StatusPopoverDetail {
 /**
  * Bottom bar: the reviewer's progress through the open review, how many files are marked reviewed,
  * what the diff shows (the range menu, ADR 0142) and whether the head is saved (ADR 0157; click for Save Progress and Remove Last Saved
- * Progress), the language servers (click for each one's state), a transient notice, a followed
- * branch's state, GitHub sign-in and app version. A pull request's CI and whose turn it is are in
+ * Progress), the language servers (click for each one's state), a transient notice, the branches
+ * the review compares, a followed branch's state, GitHub sign-in and app version. A pull request's CI and whose turn it is are in
  * the title bar. Its text is not selectable: these are controls and readouts, not content.
  *
  * Emits `beuve-status-action` (a catalog command), what `beuve-review-range` emits, `beuve-status-open-url` (a link in a popover)
@@ -180,6 +182,24 @@ export class BeuveStatusBar extends LitElement {
         color: var(--beuve-danger);
       }
 
+      .branches {
+        display: inline-flex;
+        flex: 0 1 auto;
+        align-items: center;
+        gap: var(--beuve-space-1);
+        min-inline-size: 0;
+        font: var(--beuve-font-code);
+      }
+
+      .branches > svg {
+        flex: none;
+      }
+
+      .branch-names {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
       .meter {
         display: inline-block;
         inline-size: calc(3 * var(--beuve-measure-em));
@@ -227,6 +247,8 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor range: ReviewRangeView | undefined;
   /** What the diff shows (`describeReviewScope`); empty without a review. */
   @property() accessor scopeText = '';
+  /** The branches the open review compares, when known (ADR 0157 amendment). */
+  @property({ attribute: false }) accessor branches: ReviewBranches | undefined;
   /** Whether the open review's head is saved (ADR 0157); absent without a review. */
   @property({ attribute: false }) accessor saveState: SaveState | undefined;
   @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
@@ -441,6 +463,19 @@ export class BeuveStatusBar extends LitElement {
     </li>`;
   }
 
+  /** The head branch and the base it is reviewed against, ellipsized when the bar is tight. */
+  private renderBranches(branches: ReviewBranches): TemplateResult {
+    let title = `Reviewing ${branches.head}`;
+    let text = branches.head;
+    if (branches.base !== undefined) {
+      title = `Reviewing ${branches.head} against ${branches.base}`;
+      text = `${branches.head} → ${branches.base}`;
+    }
+    return html`<span class="branches" title=${title}
+      >${displayIcon('branch')}<span class="branch-names">${text}</span></span
+    >`;
+  }
+
   /** The followed branch's state and, when its head commit names one, the agent session's link. */
   private renderRemoteBranch(branch: RemoteBranchView): TemplateResult {
     const line = describeRemoteBranch(branch);
@@ -475,6 +510,7 @@ export class BeuveStatusBar extends LitElement {
       ${this.saveState === undefined ? nothing : this.renderSave(this.saveState)}
       ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
+      ${this.branches === undefined ? nothing : this.renderBranches(this.branches)}
       ${this.remoteBranch === undefined ? nothing : this.renderRemoteBranch(this.remoteBranch)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}

@@ -69,6 +69,7 @@ import type { ReviewRef } from './review-ref.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import { saveStateFrom } from './save-state-from.ts';
+import { branchesFrom } from './branches-from.ts';
 import './beuve-review-diffstat.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
@@ -1072,6 +1073,10 @@ export class BeuveApp extends LitElement {
         .notice=${this.statusNotice}
         .progress=${this.reviewData.progress}
         .range=${this.review?.range}
+        .branches=${branchesFrom({
+          session: this.review?.session,
+          pullRequest: this.github.pullRequest?.pullRequest,
+        })}
         .scopeText=${this.review === undefined ? '' : describeReviewScope(this.review.scope)}
         @beuve-review-range=${this.onStatusRange}
         @beuve-remove-saved-progress=${this.onStatusRemoveSaved}
