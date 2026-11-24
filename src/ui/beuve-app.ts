@@ -379,10 +379,6 @@ export class BeuveApp extends LitElement {
     this.closeQueue();
   };
 
-  private readonly onTitlebarOpen = (): void => {
-    this.showOpenDialog();
-  };
-
   private readonly onTitlebarReload = (): void => {
     this.runAppCommand('reload-review');
   };
@@ -1048,16 +1044,18 @@ export class BeuveApp extends LitElement {
       slot="titlebar"
       .heading=${sessionHeadingFrom(this.session.sessions, this.session.selectedId, this.review?.session)}
       ?isPullRequest=${this.github.pullRequest !== undefined}
-      .openTitle=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
       .reloadTitle=${`Reload Review (${this.shortcut('reload-review')})`}
       ?canReload=${this.review !== undefined}
       ?reloading=${this.isReloading()}
       ?hasNewCommits=${this.github.hasNewCommits}
       .platform=${this.appInfo?.platform ?? ''}
-      @beuve-titlebar-open=${this.onTitlebarOpen}
       @beuve-titlebar-reload=${this.onTitlebarReload}
     >
-      <beuve-review-diffstat .review=${this.review}></beuve-review-diffstat>
+      ${
+        (this.review?.files.length ?? 0) === 0
+          ? nothing
+          : html`<beuve-review-diffstat .review=${this.review}></beuve-review-diffstat>`
+      }
       ${
         this.review === undefined
           ? nothing

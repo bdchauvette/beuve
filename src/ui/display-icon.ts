@@ -16,7 +16,7 @@ export type DisplayIconName =
   | 'check'
   | 'dash'
   | 'blocking'
-  | 'sheet'
+  | 'pop-out'
   | 'refresh'
   | 'branch'
   | 'braces'
@@ -45,7 +45,7 @@ const shapes: Readonly<Record<DisplayIconName, TemplateResult>> = {
   chevron: svg`<path d="M4.5 6.5 8 10l3.5-3.5" />`,
   check: svg`<path d="m3.5 8.5 3 3 6-7" />`,
   dash: svg`<path d="M4 8h8" />`,
-  sheet: svg`<path d="M9.5 2.5h-5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-7Z" /><path d="M9.5 2.5v3a1 1 0 0 0 1 1h2M6 9h4M6 11.5h4" />`,
+  'pop-out': svg`<path d="M9.5 2.5h4v4M13.5 2.5 8 8" /><path d="M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3" />`,
   braces: svg`<path d="M5.5 2.5c-1.3 0-2 .6-2 1.8v1.9c0 .9-.5 1.5-1.5 1.8 1 .3 1.5.9 1.5 1.8v1.9c0 1.2.7 1.8 2 1.8M10.5 2.5c1.3 0 2 .6 2 1.8v1.9c0 .9.5 1.5 1.5 1.8-1 .3-1.5.9-1.5 1.8v1.9c0 1.2-.7 1.8-2 1.8" />`,
   account: svg`<circle cx="8" cy="5.5" r="2.5" /><path d="M3 13.5c.8-2.4 2.7-3.5 5-3.5s4.2 1.1 5 3.5" />`,
   branch: svg`<circle cx="5" cy="3.5" r="1.5" /><circle cx="5" cy="12.5" r="1.5" /><circle cx="11" cy="4.5" r="1.5" /><path d="M5 5v6M11 6v.5A3 3 0 0 1 8 9.5H5" />`,

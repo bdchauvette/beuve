@@ -547,9 +547,17 @@ export class BeuveDiffStream extends LitElement {
   /** Whether the reviewer scrolled the stream since it last settled, rather than a reveal. */
   private isReaderScrolling = false;
 
-  /** Wheel, touch and scrollbar input: the scroll that follows is the reviewer's own. */
+  /**
+   * Wheel, touch and scrollbar input: the scroll that follows is the reviewer's own. A wheel that
+   * cannot move the stream (sideways, over a code block's own scroll, or past either end) is not:
+   * no scroll would follow it to clear the flag, and the next reveal's scroll would then read as
+   * the reviewer's and move the cursor to whatever card sits at the top.
+   */
   private readonly scrollIntent = {
-    handleEvent: (): void => {
+    handleEvent: (event: Event): void => {
+      if (event instanceof WheelEvent && !this.isStreamWheel(event)) {
+        return;
+      }
       this.isReaderScrolling = true;
     },
     passive: true,
@@ -862,6 +870,7 @@ export class BeuveDiffStream extends LitElement {
 
   /** Scrolls to the active hunk, or the active card's header. */
   private async revealPosition(): Promise<void> {
+    this.isReaderScrolling = false;
     await this.updateComplete;
     const card = this.cards()[this.activeIndex];
     if (card === undefined) {
@@ -876,6 +885,18 @@ export class BeuveDiffStream extends LitElement {
   }
 
   /** A click on a card makes it active, at its header unless it already was. */
+  /** Whether `event` scrolls the stream's body: mostly vertical, and toward room left to scroll. */
+  private isStreamWheel(event: WheelEvent): boolean {
+    const body = event.currentTarget;
+    if (!(body instanceof HTMLElement) || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+      return false;
+    }
+    if (event.deltaY < 0) {
+      return body.scrollTop > 0;
+    }
+    return body.scrollTop + body.clientHeight < body.scrollHeight;
+  }
+
   private activate(index: number): void {
     if (index === this.activeIndex) {
       return;
@@ -900,10 +921,12 @@ export class BeuveDiffStream extends LitElement {
       void this.revealRange(index, { start: line, end: jump.endLine, side: jump.side ?? 'head' });
       return;
     }
+    this.isReaderScrolling = false;
     void this.loadedCard(index).then(async (card) => card?.focusLine(line));
   }
 
   private async revealRange(index: number, lines: SideLines): Promise<void> {
+    this.isReaderScrolling = false;
     const card = await this.loadedCard(index);
     await card?.revealRange(lines);
   }

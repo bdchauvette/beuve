@@ -9,14 +9,15 @@ import { statusDotStyles } from './primitives/status-dot-styles.ts';
 
 /**
  * The title band over the review's main column (ADR 0157), beside the full-height sidebar, for
- * what the reviewer needs all the time: the open review's name, which shows a pull request's
- * Overview tab (or, for another review, the Open dialog), ▾ for the Open dialog, an icon-only
- * Reload while a review is open (ADR 0146), marked with a dot while polling has found commits the
- * review does not show yet, then, at the end, what the owner slots in: how big the diff is and how
- * it is shown (file order, split or inline).
- * Narrow, the slotted content gives way before the name; ambient facts are in the status bar. The band drags the window; its controls do not. On macOS it leaves room for the window
- * buttons unless `--beuve-titlebar-inset` says the sidebar beside it does. Emits
- * `beuve-titlebar-open`, `beuve-titlebar-overview` and `beuve-titlebar-reload`.
+ * what the reviewer needs all the time: the open review's name (a pull request's shows its
+ * Overview tab; another review's is plain text: File › Open opens another), an icon-only Reload
+ * while a review is open (ADR 0146), marked with a dot while polling has found commits the review
+ * does not show yet, then, at the end, what the owner slots in (how big the diff is, how it is
+ * shown), each section parted from the one before by a full-height line. Only the name gives way
+ * when the band is narrow; ambient facts are in the status bar. The band drags the window; its
+ * controls do not. On macOS it leaves room for the window buttons unless
+ * `--beuve-titlebar-inset` says the sidebar beside it does. Emits `beuve-titlebar-overview` and
+ * `beuve-titlebar-reload`.
  */
 @customElement('beuve-titlebar')
 export class BeuveTitlebar extends LitElement {
@@ -57,10 +58,16 @@ export class BeuveTitlebar extends LitElement {
        * is and the number stay whole and muted; what it is ellipsizes.
        */
       .title {
+        display: flex;
+        align-items: center;
         min-inline-size: 0;
         overflow: hidden;
         gap: var(--beuve-space-1-5);
         white-space: nowrap;
+      }
+
+      span.title {
+        padding-inline: var(--beuve-space-2);
       }
 
       .context {
@@ -87,16 +94,18 @@ export class BeuveTitlebar extends LitElement {
         font-weight: var(--beuve-font-weight-semibold);
       }
 
-      .open {
-        flex: none;
-      }
-
       .spacer {
         flex: 1;
       }
 
+      /* Each slotted section is parted from what comes before it by a full-height line. */
       ::slotted(*) {
+        display: flex;
         flex: none;
+        align-self: stretch;
+        align-items: center;
+        padding-inline-start: var(--beuve-space-3);
+        border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .reload {
@@ -128,33 +137,18 @@ export class BeuveTitlebar extends LitElement {
     `,
   ];
 
-  private readonly open = (): void => {
-    this.dispatchEvent(new CustomEvent('beuve-titlebar-open', { bubbles: true, composed: true }));
-  };
-
   private readonly overview = (): void => {
     this.dispatchEvent(
       new CustomEvent('beuve-titlebar-overview', { bubbles: true, composed: true }),
     );
   };
 
-  private readonly onTitleClick = (): void => {
-    if (this.isPullRequest) {
-      this.overview();
-      return;
-    }
-    this.open();
-  };
-
   private readonly reload = (): void => {
     this.dispatchEvent(new CustomEvent('beuve-titlebar-reload', { bubbles: true, composed: true }));
   };
 
-  /** The open review's name in its parts; `undefined` shows the placeholder. */
+  /** The open review's name in its parts; `undefined` with none open. */
   @property({ attribute: false }) accessor heading: SessionHeading | undefined;
-
-  /** The tooltip of the name button, with its shortcut. */
-  @property() accessor openTitle = '';
 
   /** The tooltip of the reload button, with its shortcut. */
   @property() accessor reloadTitle = '';
@@ -195,11 +189,7 @@ export class BeuveTitlebar extends LitElement {
     </button>`;
   }
 
-  private renderHeading(): TemplateResult {
-    const { heading } = this;
-    if (heading === undefined) {
-      return html`<span class="label">Open a review…</span>`;
-    }
+  private renderHeading(heading: SessionHeading): TemplateResult {
     return html`<span class="context">${heading.context}</span>${
         heading.number === undefined ? nothing : html`<span class="number">${heading.number}</span>`
       }${
@@ -209,30 +199,25 @@ export class BeuveTitlebar extends LitElement {
       }`;
   }
 
-  protected override render(): TemplateResult {
-    let titleHint = this.openTitle;
-    if (this.isPullRequest) {
-      titleHint = 'Show the pull request’s Overview';
+  /** A pull request's name shows its Overview tab; another review's is plain text. */
+  private renderName(heading: SessionHeading): TemplateResult {
+    if (!this.isPullRequest) {
+      return html`<span class="title">${this.renderHeading(heading)}</span>`;
     }
-    return html`<span class="name">
-        <button
-          class="button quiet title"
-          type="button"
-          title=${titleHint}
-          @click=${this.onTitleClick}
-        >
-          ${this.renderHeading()}
-        </button>
-        <button
-          class="button icon quiet open"
-          type="button"
-          aria-label="Open another review"
-          title=${this.openTitle}
-          @click=${this.open}
-        >
-          ${displayIcon('chevron')}
-        </button>
-      </span>
+    return html`<button
+      class="button quiet title"
+      type="button"
+      title="Show the pull request’s Overview"
+      @click=${this.overview}
+    >
+      ${this.renderHeading(heading)}
+    </button>`;
+  }
+
+  protected override render(): TemplateResult {
+    return html`<span class="name"
+        >${this.heading === undefined ? nothing : this.renderName(this.heading)}</span
+      >
       ${this.canReload ? this.renderReload() : nothing}
       <span class="spacer"></span><slot></slot>`;
   }

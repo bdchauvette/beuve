@@ -1725,7 +1725,7 @@ export class BeuveFileCard extends LitElement {
       title="Open in Sheet"
       data-action="open-sheet"
     >
-      ${displayIcon('sheet')}
+      ${displayIcon('pop-out')}
     </button>`;
   }
 
@@ -2390,12 +2390,12 @@ ${splitPatch(file.patch).map((line) => {
             }${pathText(file.path)}
           </span>
           ${this.renderChangedSince()} ${this.renderTag()} ${this.renderInsightBadge()}
-          ${this.renderDiagnosticsNote()} ${this.renderViewToggle(file)}
+          ${this.renderDiagnosticsNote()}
           <span class="counts"
             ><span class="additions">+${file.additions}</span>
             <span class="deletions">−${file.deletions}</span></span
           >
-          ${this.renderSheetButton(file)}
+          ${this.renderViewToggle(file)} ${this.renderSheetButton(file)}
         </div>
         ${this.renderEditBar()}
       </div>
