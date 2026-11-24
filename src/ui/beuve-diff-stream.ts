@@ -8,7 +8,6 @@ import type {
   DiffFileView,
   FileReviewProgressView,
   FileReviewStateView,
-  ReviewOrderMode,
   ReviewOrderView,
   ReviewThreadView,
   ReviewView,
@@ -40,14 +39,10 @@ import type { UraDraft } from './beuve-ura-composer.ts';
 import { noteEditFrom } from './note-edit-from.ts';
 import type { NoteEdit } from './note-edit-from.ts';
 import { ActionDelegation } from './action-delegation.ts';
-import { withPayload } from './with-payload.ts';
 import type { MentionTarget } from './chat-draft.ts';
-import { describeDiffDisplay } from './describe-diff-display.ts';
 import { SelectionMatches } from './selection-matches.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
-import { describeOrderFallback } from './describe-order-fallback.ts';
-import { displayIcon } from './display-icon.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { anchorFromTarget } from './anchor-from-target.ts';
 import { lineFromTarget } from './line-from-target.ts';
@@ -137,15 +132,6 @@ const findLimit = 5000;
 const noDeferrals: ReadonlyMap<string, DiffDeferral> = new Map();
 const noMarks: ReadonlyMap<string, FileReviewStateView> = new Map();
 const emptyPlan: ReviewStreamPlan = { files: [], groupLabels: new Map() };
-const layouts: readonly DiffDisplayView['layout'][] = ['split', 'unified'];
-
-const orderModes: readonly { readonly mode: ReviewOrderMode; readonly label: string }[] = [
-  { mode: 'path', label: 'Path' },
-  { mode: 'imports', label: 'Imports' },
-  { mode: 'calls', label: 'Calls' },
-  { mode: 'size', label: 'Size' },
-];
-
 /** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */
 // eslint-disable-next-line local/css-design-tokens -- IntersectionObserver rootMargin takes no var(); a virtualization distance (ADR 0025), not a design value.
 const mountMargin = '1200px 0px';
@@ -153,14 +139,19 @@ const mountMargin = '1200px 0px';
 // eslint-disable-next-line local/css-design-tokens -- IntersectionObserver rootMargin takes no var(); a virtualization distance (ADR 0025), not a design value.
 const unmountMargin = '6000px 0px';
 
+/** `beuve-split-narrow`: whether the stream is too narrow for split diffs. */
+export interface SplitNarrowDetail {
+  readonly isNarrow: boolean;
+}
+
 /** What the card's gutter button asks for: a note composer on `anchor`. */
 interface NoteAddDetail {
   readonly anchor: UraAnchorView;
 }
 
 /**
- * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards, under
- * the order and display controls (what the diff shows is in the title band, ADR 0157). Cards
+ * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards (the
+ * order and display controls are in the title band, ADR 0157). Cards
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, Next/Previous Change step
  * through every hunk of every file, Show Callers toggles the active card's call-stack peek (Escape closes
  * it), and Add Note opens a composer
@@ -173,7 +164,8 @@ interface NoteAddDetail {
  * and Next/Previous Change can skip them. Files show in the order main computed (ADR 0065), with a divider
  * above the config and mechanical group, and an interdiff's commit pairs can narrow the stream
  * to what one commit produced (ADR 0054).
- * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`,
+ * Emits `beuve-split-narrow` when it becomes too narrow for split diffs or wide enough again,
+ * `beuve-ura-update`, `beuve-status-notice`,
  * `beuve-review-range` and `beuve-remove-saved-progress` (ADR 0142, 0156, from the up-to-date screen),
  * `beuve-peek-request`, `beuve-peek-close`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
@@ -227,19 +219,6 @@ export class BeuveDiffStream extends LitElement {
         color: var(--beuve-danger);
       }
 
-      /*
-       * How the diff is shown (ADR 0157): above the first card, scrolling with the diff, since what
-       * the diff shows is in the title band and these are also in the View menu.
-       */
-      .view-controls {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: flex-end;
-        gap: var(--beuve-space-2);
-        margin-block-end: var(--beuve-space-2);
-      }
-
       /* The body's own padding stands in for the screen's sides. */
       .up-to-date {
         padding-inline: 0;
@@ -252,47 +231,10 @@ export class BeuveDiffStream extends LitElement {
         gap: var(--beuve-space-2);
       }
 
-      .display {
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
-        white-space: nowrap;
-      }
-
       .cards {
         display: flex;
         flex-direction: column;
         gap: var(--beuve-space-3);
-      }
-
-      .order {
-        display: inline-flex;
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
-        white-space: nowrap;
-      }
-
-      .order-button {
-        border-color: var(--beuve-border);
-      }
-
-      .order.fell-back .order-button::after {
-        content: '';
-        inline-size: var(--beuve-size-dot-small);
-        block-size: var(--beuve-size-dot-small);
-        border-radius: 50%;
-        background: var(--beuve-warn-solid);
-      }
-
-      .tools {
-        display: inline-flex;
-        align-items: center;
-        font: var(--beuve-font-small);
-        gap: var(--beuve-space-3);
-      }
-
-      .segmented > button.effective {
-        outline: var(--beuve-border-width) dashed var(--beuve-text-muted);
-        outline-offset: calc(-1 * var(--beuve-border-width-heavy));
       }
 
       .group {
@@ -538,6 +480,9 @@ export class BeuveDiffStream extends LitElement {
     }
   };
 
+  /** What `beuve-split-narrow` last said, so it is said only when it changes. */
+  private isNarrowReported = false;
+
   private readonly resizeObserver = new ResizeObserver((entries) => {
     const width = entries.at(-1)?.contentRect.width;
     if (width !== undefined && width > 0) {
@@ -679,25 +624,6 @@ export class BeuveDiffStream extends LitElement {
       new ActionDelegation(this, {
         click: {
           card: forwardToCard,
-          order: withPayload(
-            ({ mode }) => {
-              return orderModes.find((entry) => entry.mode === mode)?.mode;
-            },
-            (mode): void => {
-              this.chooseOrder(mode);
-            },
-          ),
-          layout: withPayload(
-            ({ layout }) => {
-              return layouts.find((entry) => entry === layout);
-            },
-            (layout): void => {
-              this.changeDisplay({ layout });
-            },
-          ),
-          whitespace: (): void => {
-            this.changeDisplay({ ignoreWhitespace: !this.display.ignoreWhitespace });
-          },
         },
         dblclick: { card: forwardToCard },
         keydown: { card: forwardToCard },
@@ -1256,6 +1182,22 @@ export class BeuveDiffStream extends LitElement {
     this.focus();
   }
 
+  /**
+   * Says when the stream becomes too narrow for split diffs, or wide enough again, so the title
+   * band's layout control can show that split is chosen but inline is shown (ADR 0157 amendment).
+   */
+  private reportNarrow(): void {
+    const isNarrow = this.streamWidth !== undefined && this.streamWidth < minimumSplitWidth;
+    if (isNarrow === this.isNarrowReported) {
+      return;
+    }
+    this.isNarrowReported = isNarrow;
+    const detail: SplitNarrowDetail = { isNarrow };
+    this.dispatchEvent(
+      new CustomEvent('beuve-split-narrow', { detail, bubbles: true, composed: true }),
+    );
+  }
+
   private renderWelcome(): TemplateResult {
     if (this.loading && this.error === '') {
       return html`
@@ -1355,10 +1297,7 @@ export class BeuveDiffStream extends LitElement {
                   </div>
                 </div>
               </div>`
-            : html`<div class="view-controls">
-                  ${this.error === '' ? nothing : html`<span class="note error">${this.error}</span>`}
-                  ${this.renderOrder()} ${this.renderDisplay()}
-                </div>
+            : html`${this.error === '' ? nothing : html`<p class="note error">${this.error}</p>`}
                 ${this.renderPairs(review)}
                 <div class="cards">
                   ${repeat(
@@ -1398,59 +1337,6 @@ export class BeuveDiffStream extends LitElement {
   }
 
   /** A sort button whose menu lists Path / Imports / Calls (ADR 0065, 0107). */
-  private renderOrder(): TemplateResult {
-    const requested = this.display.reviewOrder ?? 'path';
-    let order = this.order;
-    if (order?.headSha !== this.review?.headSha) {
-      order = undefined;
-    }
-    const fallback = describeOrderFallback(order);
-    const help = 'The order files are listed in; config and mechanical files go last';
-    const current = orderModes.find(({ mode }) => mode === requested)?.label ?? 'Path';
-    return html`<span class="order ${fallback === undefined ? '' : 'fell-back'}"
-      ><beuve-menu label="File order">
-        <button
-          slot="trigger"
-          type="button"
-          class="button quiet order-button"
-          tabindex="-1"
-          aria-label="File order: ${current}"
-          title=${fallback === undefined ? help : `${fallback}. ${help}`}
-        >
-          ${displayIcon('sort')}<span>${current}</span>${displayIcon('chevron')}
-        </button>
-        ${orderModes.map(({ mode, label }) => {
-          return html`<button
-            type="button"
-            role="menuitemradio"
-            tabindex="-1"
-            aria-checked=${mode === requested ? 'true' : 'false'}
-            data-action="order"
-            data-mode=${mode}
-          >
-            ${displayIcon('check')}${label}
-          </button>`;
-        })}
-      </beuve-menu></span
-    >`;
-  }
-
-  private chooseOrder(mode: ReviewOrderMode): void {
-    if (mode !== (this.display.reviewOrder ?? 'path')) {
-      this.changeDisplay({ reviewOrder: mode });
-    }
-  }
-
-  private changeDisplay(change: Partial<DiffDisplayView>): void {
-    this.dispatchEvent(
-      new CustomEvent('beuve-display-change', {
-        detail: change,
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
   private renderGroupLabel(plan: ReviewStreamPlan, index: number): TemplateResult | typeof nothing {
     const label = plan.groupLabels.get(index);
     if (label === undefined) {
@@ -1493,52 +1379,6 @@ export class BeuveDiffStream extends LitElement {
         @beuve-commit-pair-filter=${this.onPairFilter}
       ></beuve-commit-pairing>
     </details>`;
-  }
-
-  private renderDisplay(): TemplateResult {
-    const isNarrow = this.streamWidth !== undefined && this.streamWidth < minimumSplitWidth;
-    const label = describeDiffDisplay(this.display, isNarrow);
-    const { layout, ignoreWhitespace } = this.display;
-    return html`<span class="tools" role="group" aria-label="Diff display" title=${label.title}>
-      <span class="segmented" role="radiogroup" aria-label="Diff layout">
-        <button
-          type="button"
-          role="radio"
-          tabindex="-1"
-          aria-label="Split"
-          title="Split"
-          aria-checked=${layout === 'split' ? 'true' : 'false'}
-          data-action="layout"
-          data-layout="split"
-        >
-          ${displayIcon('split')}
-        </button>
-        <button
-          class=${isNarrow && layout === 'split' ? 'effective' : ''}
-          type="button"
-          role="radio"
-          tabindex="-1"
-          aria-label="Inline"
-          title="Inline"
-          aria-checked=${layout === 'split' ? 'false' : 'true'}
-          data-action="layout"
-          data-layout="unified"
-        >
-          ${displayIcon('inline')}
-        </button>
-      </span>
-      <button
-        class="button quiet"
-        type="button"
-        tabindex="-1"
-        aria-label="Hide whitespace changes"
-        aria-pressed=${ignoreWhitespace ? 'true' : 'false'}
-        title=${ignoreWhitespace ? 'Whitespace-only changes are hidden' : 'Hide whitespace-only changes'}
-        data-action="whitespace"
-      >
-        ${displayIcon('whitespace')}
-      </button>
-    </span>`;
   }
 
   /**
@@ -1741,6 +1581,9 @@ export class BeuveDiffStream extends LitElement {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
+    if (changed.has('streamWidth')) {
+      this.reportNarrow();
+    }
     if (changed.has('review') || changed.has('order') || changed.has('pairFilter')) {
       void this.observeCards();
     }
