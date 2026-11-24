@@ -4,7 +4,6 @@ import { customElement, property } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 import type {
-  AppInfo,
   AttentionView,
   CiStatusView,
   FileReviewProgressView,
@@ -45,23 +44,31 @@ export interface OpenCommitDetail {
   readonly sha: string;
 }
 
+/** `beuve-status-copy`: text for the owner to copy, such as the command that signs in. */
+export interface StatusCopyDetail {
+  readonly text: string;
+}
+
 /** `beuve-status-popover`: which popover (`lsp` or `save`) just opened. */
 export interface StatusPopoverDetail {
   readonly id: string;
 }
 
 /**
- * Bottom bar: the reviewer's progress through the open review, how many files are marked reviewed,
- * what the diff shows (the range menu, ADR 0142) and the commits it spans, and whether the head is
- * saved (ADR 0157; click for Save Progress and Remove Last Saved
- * Progress), the language servers (click for each one's state), a transient notice, the branches
- * the review compares, whose turn a pull request is and its CI (click for the checks in the
- * Overview tab), a followed branch's state, GitHub sign-in and app version: ambient facts worth a
- * glance, where the title bar holds what the reviewer needs all the time. Its text is not selectable: these are controls and readouts, not content.
+ * Bottom bar, from broad to narrow on the left: the branches the review compares, what the diff
+ * shows (the range menu, ADR 0142) and the commits it spans, how many files are marked reviewed,
+ * and whether the head is saved (ADR 0157; click for Save Progress and Remove Last Saved
+ * Progress), then a transient notice. On the right, ambient facts worth a glance: whose turn a
+ * pull request is and its CI (click for the checks in the Overview tab), a followed branch's
+ * state, and the language servers and GitHub sign-in as icons, each with a dot only when
+ * something needs a look, its details in the tooltip and its actions in a popover. The title bar
+ * holds what the reviewer needs all the time. Its text is not selectable: these are controls and
+ * readouts, not content.
  *
  * Emits `beuve-status-action` (a catalog command), what `beuve-review-range` emits,
- * `beuve-open-commit`, `beuve-status-open-url` (a link in a popover)
- * and `beuve-status-popover` when a popover opens, so the owner can refresh what it shows.
+ * `beuve-open-commit`, `beuve-status-copy`, `beuve-status-github-check`, `beuve-status-open-url`
+ * (a link in a popover) and `beuve-status-popover` when a popover opens, so the owner can refresh
+ * what it shows.
  */
 /** Server states and describer tones that are not dot tones themselves. */
 const dotTones: Readonly<Record<string, string>> = {
@@ -173,6 +180,7 @@ export class BeuveStatusBar extends LitElement {
       .popover-actions {
         display: flex;
         justify-content: flex-end;
+        gap: var(--beuve-space-2);
         margin-block-start: var(--beuve-space-2);
       }
 
@@ -193,6 +201,18 @@ export class BeuveStatusBar extends LitElement {
 
       .notice.error {
         color: var(--beuve-danger);
+      }
+
+      /* An icon whose dot, at its corner, says something needs a look (ADR 0157 amendment). */
+      .indicator {
+        position: relative;
+      }
+
+      .indicator > .status-dot {
+        position: absolute;
+        inset-block-start: var(--beuve-space-0-5);
+        inset-inline-end: var(--beuve-space-0-5);
+        margin: 0;
       }
 
       .span {
@@ -269,7 +289,6 @@ export class BeuveStatusBar extends LitElement {
   /** The language servers beuve has started; absent until the first answer. */
   @property({ attribute: false }) accessor lspServers: readonly LspServerView[] | undefined;
   @property({ attribute: false }) accessor notice: StatusNotice | undefined;
-  @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
   /** How many of the shown files are marked reviewed (ADR 0064); absent without a review. */
   @property({ attribute: false }) accessor progress: FileReviewProgressView | undefined;
   /** The open review's range and saved progress, for the range menu (ADR 0142, 0157). */
@@ -319,6 +338,17 @@ export class BeuveStatusBar extends LitElement {
 
             const detail: OpenCommitDetail = { sha };
             this.emit('beuve-open-commit', detail);
+          },
+          'github-copy': ({ remedy }, _event, element): void => {
+            if (remedy !== undefined) {
+              const detail: StatusCopyDetail = { text: remedy };
+              this.emit('beuve-status-copy', detail);
+            }
+            closePopoverOf(element);
+          },
+          'github-check': (_data, _event, element): void => {
+            this.emit('beuve-status-github-check', undefined);
+            closePopoverOf(element);
           },
           'show-checks': (): void => {
             this.emit('beuve-status-action', { command: 'sidebar-overview' });
@@ -460,17 +490,18 @@ export class BeuveStatusBar extends LitElement {
     const line = describeLspStatus(servers);
     return html`<button
         type="button"
-        class="button small quiet chip"
+        class="button icon quiet chip indicator"
         popovertarget="lsp"
-        title=${line.title}
+        aria-label=${line.text}
+        title=${`${line.text}\n${line.title}`}
         aria-haspopup="dialog"
       >
-        <span class="status-dot" data-tone=${dotToneFrom(line.tone)}></span>${line.text}
+        ${displayIcon('braces')}${issueDot(dotToneFrom(line.tone), ['warn', 'danger'])}
       </button>
       <div
         id="lsp"
         popover
-        class="start"
+        class="end"
         role="dialog"
         aria-label="Language servers"
         @toggle=${this.onPopoverToggle}
@@ -582,27 +613,76 @@ export class BeuveStatusBar extends LitElement {
       }`;
   }
 
+  /**
+   * GitHub sign-in as an icon (ADR 0157 amendment): a dot only when something is wrong, who and
+   * how in the tooltip, and a popover with what can be done: check again, or copy the command
+   * that signs in.
+   */
   private renderGithub(auth: GithubAuthStatusView): TemplateResult {
     const line = describeGithubAuth(auth);
-    return html`<span title=${line.title}
-      ><span class="status-dot" data-tone=${dotToneFrom(line.tone)}></span>${line.text}</span
-    >`;
+    const { remedy } = line;
+    return html`<button
+        type="button"
+        class="button icon quiet chip indicator"
+        popovertarget="github"
+        aria-label=${line.text}
+        title=${`${line.text}\n${line.title}`}
+        aria-haspopup="dialog"
+      >
+        ${displayIcon('account')}${issueDot(line.tone, ['warn', 'muted'])}
+      </button>
+      <div
+        id="github"
+        popover
+        class="end"
+        role="dialog"
+        aria-label="GitHub"
+        @toggle=${this.onPopoverToggle}
+      >
+        <p class="popover-title">GitHub</p>
+        <p class="popover-note">${line.text}</p>
+        <p class="popover-note">${line.title}</p>
+        <div class="popover-actions">
+          ${
+            remedy === undefined
+              ? nothing
+              : html`<button
+                  class="button"
+                  type="button"
+                  data-action="github-copy"
+                  data-remedy=${remedy}
+                  title=${remedy}
+                >
+                  Copy Sign-In Command
+                </button>`
+          }
+          <button class="button" type="button" data-action="github-check">Check Again</button>
+        </div>
+      </div>`;
   }
 
   override render(): TemplateResult {
     return html`
-      ${this.renderProgress()} ${this.renderScope()}
-      ${this.span === undefined ? nothing : this.renderSpan(this.span)}
-      ${this.saveState === undefined ? nothing : this.renderSave(this.saveState)}
-      ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
-      <span class="spacer"></span>
       ${this.branches === undefined ? nothing : this.renderBranches(this.branches)}
+      ${this.renderScope()} ${this.span === undefined ? nothing : this.renderSpan(this.span)}
+      ${this.renderProgress()}
+      ${this.saveState === undefined ? nothing : this.renderSave(this.saveState)}
+      ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
+      <span class="spacer"></span>
       ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.remoteBranch === undefined ? nothing : this.renderRemoteBranch(this.remoteBranch)}
+      ${this.renderLsp()}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
-      ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}
     `;
   }
+}
+
+/** A status dot for an indicator icon, only when `tone` is one of the `issues`. */
+function issueDot(tone: string, issues: readonly string[]): TemplateResult | typeof nothing {
+  if (!issues.includes(tone)) {
+    return nothing;
+  }
+  return html`<span class="status-dot" data-tone=${tone}></span>`;
 }
 
 /** The save button's tooltip, with what Save Progress would do. */

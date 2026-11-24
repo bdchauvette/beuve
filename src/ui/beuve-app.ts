@@ -31,6 +31,7 @@ import './beuve-titlebar.ts';
 import './beuve-workspace.ts';
 import type {
   OpenCommitDetail,
+  StatusCopyDetail,
   StatusOpenUrlDetail,
   StatusPopoverDetail,
 } from './beuve-status-bar.ts';
@@ -405,6 +406,16 @@ export class BeuveApp extends LitElement {
     void this.session.setReviewRange(event.detail);
   };
 
+  /** The status bar's GitHub popover: copies the command that signs in. */
+  private readonly onStatusCopy = (event: CustomEvent<StatusCopyDetail>): void => {
+    void this.copyText(event.detail.text);
+  };
+
+  /** The status bar's GitHub popover: asks gh again, for the open pull request's host. */
+  private readonly onStatusGithubCheck = (): void => {
+    void this.github.loadAuth(this.github.pullRequest?.pullRequest.host);
+  };
+
   /** A commit of the status bar's span: the review opens it on its remote (ADR 0108). */
   private readonly onStatusOpenCommit = (event: CustomEvent<OpenCommitDetail>): void => {
     void this.reviewElement()?.openCommitOnRemote(event.detail.sha);
@@ -645,6 +656,22 @@ export class BeuveApp extends LitElement {
   /** Whether the open review is being fetched or read again, for the titlebar's Reload. */
   private isReloading(): boolean {
     return this.github.isReloading || (this.session.isLoading && this.review !== undefined);
+  }
+
+  /** Copies `text` with main's clipboard and says so. */
+  private async copyText(text: string): Promise<void> {
+    const copied = await beuveBridge()?.invoke('clipboard:write-text', { text });
+    if (copied === undefined) {
+      return;
+    }
+    if (!copied.ok) {
+      this.showNotice({ tone: 'error', text: `Could not copy: ${copied.error.message}` });
+      return;
+    }
+    this.showNotice({
+      tone: 'info',
+      text: `Copied ${text}. Run it in a terminal, then Check Again.`,
+    });
   }
 
   /** Main opens GitHub links in the browser and refuses anything else (ADR 0040). */
@@ -1077,7 +1104,6 @@ export class BeuveApp extends LitElement {
       </beuve-review>
       <beuve-status-bar
         .lspServers=${this.lspServers}
-        .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
         .progress=${this.reviewData.progress}
         .range=${this.review?.range}
@@ -1085,6 +1111,8 @@ export class BeuveApp extends LitElement {
         .ci=${this.github.ci}
         .attention=${this.github.pullRequest?.attention}
         @beuve-open-commit=${this.onStatusOpenCommit}
+        @beuve-status-copy=${this.onStatusCopy}
+        @beuve-status-github-check=${this.onStatusGithubCheck}
         .branches=${branchesFrom({
           session: this.review?.session,
           pullRequest: this.github.pullRequest?.pullRequest,
