@@ -67,6 +67,8 @@ import { UraController } from './ura-controller.ts';
 import type { ReviewRef } from './review-ref.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
+import { saveStateFrom } from './save-state-from.ts';
+import './beuve-review-scope.ts';
 import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
 import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
 import { describeGenerated } from './describe-generated.ts';
@@ -90,9 +92,14 @@ export class BeuveApp extends LitElement {
       :host {
         display: grid;
         block-size: 100%;
-        grid-template-rows: var(--beuve-titlebar-height) minmax(0, 1fr) var(
-            --beuve-statusbar-height
-          );
+        grid-template-rows: minmax(0, 1fr) var(--beuve-statusbar-height);
+      }
+
+      /* ADR 0157: slotted into the review's main column, beside the full-height sidebar. */
+      beuve-titlebar {
+        flex: none;
+        block-size: var(--beuve-titlebar-height);
+        box-sizing: border-box;
       }
 
       .main {
@@ -979,7 +986,11 @@ export class BeuveApp extends LitElement {
 
   private renderTitlebar(): TemplateResult {
     return html`<beuve-titlebar
+      slot="titlebar"
       .label=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
+      ?isPullRequest=${this.github.pullRequest !== undefined}
+      .ci=${this.github.ci}
+      .attention=${this.github.pullRequest?.attention}
       .openTitle=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
       .reloadTitle=${`Reload Review (${this.shortcut('reload-review')})`}
       ?canReload=${this.review !== undefined}
@@ -988,7 +999,9 @@ export class BeuveApp extends LitElement {
       .platform=${this.appInfo?.platform ?? ''}
       @beuve-titlebar-open=${this.onTitlebarOpen}
       @beuve-titlebar-reload=${this.onTitlebarReload}
-    ></beuve-titlebar>`;
+    >
+      <beuve-review-scope .review=${this.review}></beuve-review-scope>
+    </beuve-titlebar>`;
   }
 
   private shortcut(id: CommandId): string {
@@ -1030,7 +1043,6 @@ export class BeuveApp extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      ${this.renderTitlebar()}
       <beuve-review
         .model=${this.model}
         .actions=${this.actions}
@@ -1039,15 +1051,19 @@ export class BeuveApp extends LitElement {
         .revision=${this.revision}
         @beuve-ura-toggle-closed=${this.onToggleClosed}
       >
-        ${this.showsEmptyPanel() ? this.renderQueue('queue') : nothing}
+        ${this.renderTitlebar()} ${this.showsEmptyPanel() ? this.renderQueue('queue') : nothing}
         ${this.showsEmptyPanel() ? this.renderOpenPanel(false, 'empty') : nothing}
       </beuve-review>
       <beuve-status-bar
         .lspServers=${this.lspServers}
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
-        .ci=${this.github.ci}
-        .attention=${this.github.pullRequest?.attention}
+        .progress=${this.reviewData.progress}
+        .saveState=${saveStateFrom({
+          review: this.review,
+          savedProgress: this.session.savedProgress,
+          isMarking: this.session.isMarking,
+        })}
         .remoteBranch=${this.github.branch}
         .githubAuth=${this.github.auth}
         @beuve-status-action=${this.onStatusAction}

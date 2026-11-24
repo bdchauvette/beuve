@@ -58,12 +58,8 @@ import type { CommandId } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import type { PaletteAction } from './plan-palette.ts';
-import type {
-  FileJump,
-  OpenCommitDetail,
-  SuggestionJump,
-  UraCreateRequest,
-} from './beuve-diff-stream.ts';
+import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
+import type { OpenCommitDetail } from './beuve-review-scope.ts';
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import type { ChatController } from './chat-controller.ts';
 import type { GithubController } from './github-controller.ts';
@@ -166,6 +162,19 @@ export class BeuveReview extends LitElement {
         display: grid;
         min-block-size: 0;
         grid-template-rows: minmax(0, 1fr);
+      }
+
+      /*
+       * ADR 0157: the title band runs over the main column, beside the full-height sidebar. With the
+       * sidebar on the left, the sidebar's tabs take the window buttons' room on macOS, and the
+       * title bar needs none.
+       */
+      :host([sidebar-left]) {
+        --beuve-titlebar-inset: var(--beuve-space-4);
+      }
+
+      :host([platform='darwin'][sidebar-left]) {
+        --beuve-sidebar-tabs-inset: var(--beuve-titlebar-traffic-lights);
       }
 
       .main {
@@ -303,7 +312,7 @@ export class BeuveReview extends LitElement {
   };
 
   private readonly onGithubPost = (event: CustomEvent<GithubPostDetail>): void => {
-    void this.github.postReview(event.detail);
+    void this.postReview(event.detail);
   };
 
   private readonly onGithubCancel = (): void => {
@@ -342,8 +351,9 @@ export class BeuveReview extends LitElement {
     void this.openCommit(event.detail.sha);
   };
 
-  private readonly onMarkReviewed = (): void => {
-    void this.saveProgress();
+  /** The title bar's name or CI dot: the pull request's Overview tab (ADR 0157). */
+  private readonly onTitlebarOverview = (): void => {
+    this.focusSidebar('overview');
   };
 
   /** The range menu's and the up-to-date screen's Remove Last Saved Progress (ADR 0156). */
@@ -755,7 +765,7 @@ export class BeuveReview extends LitElement {
   @property({ attribute: false }) accessor actions: AppActions | undefined = undefined;
 
   /** `process.platform`, for keys and layout. */
-  @property() accessor platform = '';
+  @property({ reflect: true }) accessor platform = '';
 
   /** Whether the palette or the Open dialog has the window; the zones then leave the focus alone. */
   @property({ type: Boolean }) accessor isModalOpen = false;
@@ -965,6 +975,30 @@ export class BeuveReview extends LitElement {
     this.lastDeletion = undefined;
     const isRestored = await this.ura.restore(deletion.deletionId);
     this.showNotice(describeNoteRestore({ isRestored, count: deletion.count }));
+  }
+
+  /** Posts the review to GitHub, then finishes the round, as an export does (ADR 0157). */
+  private async postReview(detail: GithubPostDetail): Promise<void> {
+    const isPosted = await this.github.postReview(detail);
+    if (isPosted) {
+      await this.finishRound('Progress saved with the post');
+    }
+  }
+
+  /**
+   * A finishing action ended the round (ADR 0156, 0157): saves progress at the head, keeping the
+   * review as shown until it next loads, and says so with Undo while a checkpoint was recorded.
+   */
+  private async finishRound(lead: string): Promise<void> {
+    const saved = await this.session.markReviewed({ keepShown: true });
+    if (saved?.checkpointId === undefined) {
+      return;
+    }
+    this.showNotice({
+      tone: 'info',
+      text: `${lead}: next time, only what changes after this is shown.`,
+      action: { label: 'Undo', command: 'undo-save-progress' },
+    });
   }
 
   /** Save Progress, and say so with an Undo while the save recorded a checkpoint (ADR 0142). */
@@ -1339,12 +1373,6 @@ export class BeuveReview extends LitElement {
       .order=${this.reviewData.order}
       ?loading=${this.session.isLoading}
       .loadingLabel=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
-      ?marking=${this.session.isMarking}
-      .savedProgress=${
-        this.session.savedProgress?.sessionId === this.review?.session.id
-          ? this.session.savedProgress
-          : undefined
-      }
       .platform=${this.platform}
       .error=${this.session.error}
       .peek=${this.navigation.peek}
@@ -1362,10 +1390,6 @@ export class BeuveReview extends LitElement {
       @beuve-display-change=${this.onDisplayChange}
       @beuve-status-notice=${this.onStatusNotice}
       @beuve-ura-update=${this.onUraUpdate}
-      @beuve-open-commit=${this.onOpenCommit}
-      @beuve-mark-reviewed=${this.onMarkReviewed}
-      @beuve-review-range=${this.onReviewRange}
-      @beuve-remove-saved-progress=${this.onRemoveSavedProgress}
       @beuve-peek-request=${this.onPeekRequest}
       @beuve-peek-expand=${this.onPeekExpand}
       @beuve-peek-close=${this.onPeekClose}
@@ -1992,24 +2016,14 @@ export class BeuveReview extends LitElement {
   }
 
   /**
-   * Copies the review, then saves progress at the head (ADR 0156): the export is what the reviewer
-   * hands off, so the next look shows what changed after it. The review stays as shown until it
-   * next loads, and the status bar offers Undo.
+   * Copies the review, then finishes the round (ADR 0156): the export is what the reviewer hands
+   * off, so the next look shows what changed after it.
    */
   async exportReview(target: UraExportTarget): Promise<void> {
     const isCopied = await this.ura.export({ target, summary: this.reviewSummary() });
-    if (!isCopied) {
-      return;
+    if (isCopied) {
+      await this.finishRound('Progress saved with the export');
     }
-    const saved = await this.session.markReviewed({ keepShown: true });
-    if (saved?.checkpointId === undefined) {
-      return;
-    }
-    this.showNotice({
-      tone: 'info',
-      text: 'Progress saved with the export: next time, only what changes after this is shown.',
-      action: { label: 'Undo', command: 'undo-save-progress' },
-    });
   }
 
   /** The review summary typed in the notes list for posting, which the exports carry too; blank is none. */
@@ -2053,7 +2067,16 @@ export class BeuveReview extends LitElement {
         ?hasSidebar=${hasSidebar}
         .sidebarWidth=${this.sidebarWidth}
       >
-        <div class="main" slot="main">${this.renderStage()}${this.renderTerminal()}</div>
+        <div
+          class="main"
+          slot="main"
+          @beuve-open-commit=${this.onOpenCommit}
+          @beuve-review-range=${this.onReviewRange}
+          @beuve-remove-saved-progress=${this.onRemoveSavedProgress}
+          @beuve-titlebar-overview=${this.onTitlebarOverview}
+        >
+          <slot name="titlebar"></slot>${this.renderStage()}${this.renderTerminal()}
+        </div>
         ${hasSidebar ? this.renderSidebar() : nothing}
       </beuve-workspace>
       ${
@@ -2106,6 +2129,10 @@ export class BeuveReview extends LitElement {
 
   protected override updated(changed: PropertyValues<this>): void {
     this.scheduleMenuSync();
+    this.toggleAttribute(
+      'sidebar-left',
+      this.review !== undefined && !this.sidebarHidden && this.sidebarSide === 'left',
+    );
     const opening = this.shownOpening();
     if (opening !== this.focusedOpening) {
       this.focusedOpening = opening;

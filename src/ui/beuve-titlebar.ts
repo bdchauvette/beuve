@@ -2,15 +2,24 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import type { AttentionView, CiStatusView } from '#contract/ipc-contract.ts';
+
+import { describeAttention } from './describe-attention.ts';
+import { describeCiStatus } from './describe-ci-status.ts';
 import { displayIcon } from './display-icon.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
 
 /**
- * The window's top bar: the name of the open review, which opens the Open dialog, an icon-only
- * Reload beside it while a review is open (ADR 0146), marked with a dot while polling has found
- * commits the review does not show yet. The bar drags the window; its buttons do not. Emits
- * `beuve-titlebar-open` and `beuve-titlebar-reload`.
+ * The title band over the review's main column (ADR 0157), beside the full-height sidebar: the
+ * open review's name, which shows a pull request's Overview tab (or, for another review, the Open
+ * dialog), ▾ for the Open dialog, the pull request's CI as a dot (which shows the Overview tab too)
+ * and whose turn it is, an icon-only Reload while a review is open (ADR 0146), marked with a dot
+ * while polling has found commits the review does not show yet, then what the owner slots in:
+ * what the diff shows. Narrow, whose turn gives way first, then the slotted content, then the
+ * name. The band drags the window; its controls do not. On macOS it leaves room for the window
+ * buttons unless `--beuve-titlebar-inset` says the sidebar beside it does. Emits
+ * `beuve-titlebar-open`, `beuve-titlebar-overview` and `beuve-titlebar-reload`.
  */
 @customElement('beuve-titlebar')
 export class BeuveTitlebar extends LitElement {
@@ -30,18 +39,61 @@ export class BeuveTitlebar extends LitElement {
       }
 
       :host([platform='darwin']) {
-        padding-inline-start: var(--beuve-titlebar-traffic-lights);
+        padding-inline-start: var(--beuve-titlebar-inset, var(--beuve-titlebar-traffic-lights));
       }
 
-      .brand {
+      button,
+      ::slotted(*) {
+        -webkit-app-region: no-drag;
+      }
+
+      .name {
+        display: flex;
+        flex: 0 1 auto;
+        align-items: center;
+        min-inline-size: 0;
+      }
+
+      .title {
+        min-inline-size: 0;
+        overflow: hidden;
+        font-weight: var(--beuve-font-weight-semibold);
+        text-overflow: ellipsis;
+      }
+
+      .open {
+        flex: none;
+      }
+
+      .ci {
+        flex: none;
+      }
+
+      .attention {
+        flex: 0 10000 auto;
+        min-inline-size: 0;
+        overflow: hidden;
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+        cursor: default;
+      }
+
+      .attention.yours {
+        color: var(--beuve-accent);
         font-weight: var(--beuve-font-weight-semibold);
       }
 
-      button {
+      .separator {
+        flex: none;
+        align-self: stretch;
+        margin-block: var(--beuve-space-2);
+        border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
+      }
+
+      ::slotted(*) {
+        flex: 0 100 auto;
         min-inline-size: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        -webkit-app-region: no-drag;
       }
 
       .reload {
@@ -77,6 +129,20 @@ export class BeuveTitlebar extends LitElement {
     this.dispatchEvent(new CustomEvent('beuve-titlebar-open', { bubbles: true, composed: true }));
   };
 
+  private readonly overview = (): void => {
+    this.dispatchEvent(
+      new CustomEvent('beuve-titlebar-overview', { bubbles: true, composed: true }),
+    );
+  };
+
+  private readonly onTitleClick = (): void => {
+    if (this.isPullRequest) {
+      this.overview();
+      return;
+    }
+    this.open();
+  };
+
   private readonly reload = (): void => {
     this.dispatchEvent(new CustomEvent('beuve-titlebar-reload', { bubbles: true, composed: true }));
   };
@@ -98,6 +164,15 @@ export class BeuveTitlebar extends LitElement {
 
   /** Whether the review is reloading: Reload spins its glyph and waits. */
   @property({ type: Boolean }) accessor reloading = false;
+
+  /** Whether the open review is a pull request, whose name shows its Overview tab. */
+  @property({ type: Boolean }) accessor isPullRequest = false;
+
+  /** CI for the open pull request's head; absent for other reviews. */
+  @property({ attribute: false }) accessor ci: CiStatusView | undefined;
+
+  /** Whose turn the open pull request is; absent for other reviews and until it is known. */
+  @property({ attribute: false }) accessor attention: AttentionView | undefined;
 
   /** `process.platform`; on macOS the bar leaves room for the window buttons. */
   @property({ reflect: true }) accessor platform = '';
@@ -123,11 +198,56 @@ export class BeuveTitlebar extends LitElement {
     </button>`;
   }
 
+  private renderCi(ci: CiStatusView): TemplateResult {
+    const line = describeCiStatus(ci);
+    return html`<button
+      type="button"
+      class="button icon quiet ci"
+      aria-label=${line.text}
+      title=${`${line.title}\nShow the checks in Overview`}
+      @click=${this.overview}
+    >
+      <span class="status-dot" data-tone=${line.tone}></span>
+    </button>`;
+  }
+
+  private renderAttention(): TemplateResult | typeof nothing {
+    const chip = describeAttention(this.attention);
+    if (chip === undefined) {
+      return nothing;
+    }
+    return html`<span class="attention ${chip.isYours ? 'yours' : ''}" title=${chip.title}
+      >${chip.text}</span
+    >`;
+  }
+
   protected override render(): TemplateResult {
-    return html`<span class="brand">beuve</span>
-      <button class="button quiet" type="button" title=${this.openTitle} @click=${this.open}>
-        ${this.label}
-      </button>
-      ${this.canReload ? this.renderReload() : nothing} `;
+    let titleHint = this.openTitle;
+    if (this.isPullRequest) {
+      titleHint = 'Show the pull request’s Overview';
+    }
+    return html`<span class="name">
+        <button
+          class="button quiet title"
+          type="button"
+          title=${titleHint}
+          @click=${this.onTitleClick}
+        >
+          ${this.label}
+        </button>
+        <button
+          class="button icon quiet open"
+          type="button"
+          aria-label="Open another review"
+          title=${this.openTitle}
+          @click=${this.open}
+        >
+          ${displayIcon('chevron')}
+        </button>
+      </span>
+      ${this.ci === undefined ? nothing : this.renderCi(this.ci)} ${this.renderAttention()}
+      ${this.canReload ? this.renderReload() : nothing}
+      ${this.canReload ? html`<span class="separator" aria-hidden="true"></span>` : nothing}
+      <slot></slot>`;
   }
 }

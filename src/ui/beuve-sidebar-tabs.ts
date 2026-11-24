@@ -30,15 +30,24 @@ export class BeuveSidebarTabs extends LitElement {
         flex: none;
       }
 
+      /*
+       * The sidebar's part of the title band (ADR 0157): as tall as the title bar beside it, on
+       * its background, and it drags the window. On the window's left edge under macOS the owner
+       * sets --beuve-sidebar-tabs-inset to leave room for the window buttons.
+       */
       beuve-tab-list {
         display: flex;
         gap: var(--beuve-space-4);
-        block-size: var(--beuve-size-row);
-        padding: 0 var(--beuve-space-3);
+        block-size: var(--beuve-titlebar-height);
+        padding-inline: var(--beuve-sidebar-tabs-inset, var(--beuve-space-3)) var(--beuve-space-3);
         border-block-end: var(--beuve-border-width) solid var(--beuve-border);
+        background: var(--beuve-surface-sunken);
+        -webkit-app-region: drag;
+        user-select: none;
       }
 
       button {
+        -webkit-app-region: no-drag;
         padding: 0;
         border: none;
         background: none;
