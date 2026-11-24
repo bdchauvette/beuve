@@ -11,7 +11,7 @@ import { test } from '../testing/test.ts';
 describe('checkClaudeCodeVersion', () => {
   test.for([
     [`${pinnedClaudeCodeVersion} (Claude Code)`, true],
-    ['2.1.314 (Claude Code)', true],
+    ['2.1.330 (Claude Code)', true],
     ['3.0.0 (Claude Code)', true],
     ['2.1.200 (Claude Code)', false],
     ['1.9.999', false],
