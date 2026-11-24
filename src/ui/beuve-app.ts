@@ -850,7 +850,7 @@ export class BeuveApp extends LitElement {
       case 'export-agent-xml':
       case 'export-agent-json':
       case 'export-github': {
-        void this.reviewElement()?.exportReview(exportActions[id]);
+        this.reviewElement()?.showExport(exportActions[id]);
         return;
       }
       default: {
