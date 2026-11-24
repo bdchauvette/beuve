@@ -9,6 +9,8 @@ export interface OrderableFile {
 }
 
 export interface OrderOptions {
+  /** Which files use which, to put users before what they use. */
+  readonly edges?: readonly DependencyEdge[];
   /** Orders the ordinary changes largest first, in one group, instead of by `edges` (ADR 0065). */
   readonly bySize?: boolean;
 }
@@ -48,9 +50,9 @@ const reasonRank: Readonly<Record<MechanicalReason, number>> = {
  */
 export function orderReviewFiles(
   files: readonly OrderableFile[],
-  edges: readonly DependencyEdge[] = [],
   options: OrderOptions = {},
 ): readonly OrderedGroup[] {
+  const { edges = [] } = options;
   type MechanicalFile = OrderableFile & { readonly mechanical: MechanicalReason };
   if (options.bySize === true) {
     return orderBySize(files);

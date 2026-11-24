@@ -86,3 +86,7 @@ markdown-it 14 was checked against a sample document in a scratch install. Every
 ## Open question
 
 - Should sheets ever stage notes? That would amend ADR 0067's channel list. This ADR keeps them read-only.
+
+## Amendment 2026-11-24: markdown-it 15
+
+markdown-it 15.0.3 replaces 14. It ships its own types, so `@types/markdown-it` is gone, and `types/dom/markdown-it-footnote.d.ts` types the footnote plugin against them. The runtime dependencies add `argparse` and move `entities`, `linkify-it`, `mdurl` and `uc.micro` up a major each; there is still no install script. The parser's options, rules and token shapes this ADR relies on are unchanged, and the Markdown tests pass without edits to their expectations.

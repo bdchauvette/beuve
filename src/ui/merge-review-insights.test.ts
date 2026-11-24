@@ -13,7 +13,10 @@ describe('mergeReviewInsights', () => {
   test('lists the findings of completed review answers at the head, in order', ({ expect }) => {
     const first = createFindingView({ title: 'First' });
     const second = createFindingView({ path: 'src/b.ts', title: 'Second' });
-    const insights = mergeReviewInsights([createReviewMessageView([first, second])], head());
+    const insights = mergeReviewInsights(
+      [createReviewMessageView({ findings: [first, second] })],
+      head(),
+    );
     expect(insights).toStrictEqual([
       { key: 'm1:0', messageId: 'm1', index: 0, finding: first, sources: ['m1:0'] },
       { key: 'm1:1', messageId: 'm1', index: 1, finding: second, sources: ['m1:1'] },
@@ -22,10 +25,10 @@ describe('mergeReviewInsights', () => {
 
   test('ignores other heads, other kinds and answers that did not complete', ({ expect }) => {
     const messages = [
-      createReviewMessageView(undefined, { id: 'old', headSha: 'b'.repeat(40) }),
-      createReviewMessageView(undefined, { id: 'running', status: 'streaming' }),
-      createReviewMessageView(undefined, { id: 'answer', answerKind: 'answer' }),
-      createReviewMessageView(undefined, { id: 'question', role: 'user' }),
+      createReviewMessageView({ id: 'old', headSha: 'b'.repeat(40) }),
+      createReviewMessageView({ id: 'running', status: 'streaming' }),
+      createReviewMessageView({ id: 'answer', answerKind: 'answer' }),
+      createReviewMessageView({ id: 'question', role: 'user' }),
     ];
     expect(mergeReviewInsights(messages, head())).toStrictEqual([]);
   });
@@ -35,8 +38,16 @@ describe('mergeReviewInsights', () => {
     const b = createFindingView({ path: 'src/b.ts' });
     const insights = mergeReviewInsights(
       [
-        createReviewMessageView([a], { id: 'scoped-a', createdAt: '2026-10-30T10:00:00.000Z' }),
-        createReviewMessageView([b], { id: 'scoped-b', createdAt: '2026-10-30T10:05:00.000Z' }),
+        createReviewMessageView({
+          findings: [a],
+          id: 'scoped-a',
+          createdAt: '2026-10-30T10:00:00.000Z',
+        }),
+        createReviewMessageView({
+          findings: [b],
+          id: 'scoped-b',
+          createdAt: '2026-10-30T10:05:00.000Z',
+        }),
       ],
       head(),
     );
@@ -59,8 +70,16 @@ describe('mergeReviewInsights', () => {
     });
     const insights = mergeReviewInsights(
       [
-        createReviewMessageView([older], { id: 'older', createdAt: '2026-10-30T10:00:00.000Z' }),
-        createReviewMessageView([newer], { id: 'newer', createdAt: '2026-10-30T11:00:00.000Z' }),
+        createReviewMessageView({
+          findings: [older],
+          id: 'older',
+          createdAt: '2026-10-30T10:00:00.000Z',
+        }),
+        createReviewMessageView({
+          findings: [newer],
+          id: 'newer',
+          createdAt: '2026-10-30T11:00:00.000Z',
+        }),
       ],
       head(),
     );
@@ -84,8 +103,16 @@ describe('mergeReviewInsights', () => {
     ];
     const insights = mergeReviewInsights(
       [
-        createReviewMessageView([base], { id: 'one', createdAt: '2026-10-30T10:00:00.000Z' }),
-        createReviewMessageView(others, { id: 'two', createdAt: '2026-10-30T11:00:00.000Z' }),
+        createReviewMessageView({
+          findings: [base],
+          id: 'one',
+          createdAt: '2026-10-30T10:00:00.000Z',
+        }),
+        createReviewMessageView({
+          findings: others,
+          id: 'two',
+          createdAt: '2026-10-30T11:00:00.000Z',
+        }),
       ],
       head(),
     );
@@ -97,8 +124,16 @@ describe('mergeReviewInsights', () => {
     const overflow = createFindingView({ category: 'edge-case', title: 'Index can overflow' });
     const insights = mergeReviewInsights(
       [
-        createReviewMessageView([empty], { id: 'one', createdAt: '2026-10-30T10:00:00.000Z' }),
-        createReviewMessageView([overflow], { id: 'two', createdAt: '2026-10-30T11:00:00.000Z' }),
+        createReviewMessageView({
+          findings: [empty],
+          id: 'one',
+          createdAt: '2026-10-30T10:00:00.000Z',
+        }),
+        createReviewMessageView({
+          findings: [overflow],
+          id: 'two',
+          createdAt: '2026-10-30T11:00:00.000Z',
+        }),
       ],
       head(),
     );
@@ -107,7 +142,10 @@ describe('mergeReviewInsights', () => {
 
   test('does not merge findings within one answer', ({ expect }) => {
     const twin = createFindingView({ title: 'Same lines, same category' });
-    const insights = mergeReviewInsights([createReviewMessageView([twin, twin])], head());
+    const insights = mergeReviewInsights(
+      [createReviewMessageView({ findings: [twin, twin] })],
+      head(),
+    );
     expect(insights.map(({ key }) => key)).toStrictEqual(['m1:0', 'm1:1']);
   });
 });

@@ -24,7 +24,7 @@ function insightsOf(
   ...findings: Parameters<typeof createFindingView>[0][]
 ): ReturnType<typeof mergeReviewInsights> {
   return mergeReviewInsights(
-    [createReviewMessageView(findings.map((finding) => createFindingView(finding)))],
+    [createReviewMessageView({ findings: findings.map((finding) => createFindingView(finding)) })],
     'a'.repeat(40),
   );
 }

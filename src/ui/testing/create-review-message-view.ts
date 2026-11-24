@@ -2,11 +2,14 @@ import type { ChatFindingView, ChatMessageView } from '#contract/ipc-contract.ts
 
 import { createFindingView } from './create-finding-view.ts';
 
-/** A completed `/review` answer at head `aaaa…` holding `findings`, with any field overridden. */
-export function createReviewMessageView(
-  findings: readonly ChatFindingView[] = [createFindingView()],
-  overrides: Partial<ChatMessageView> = {},
-): ChatMessageView {
+/** What {@link createReviewMessageView} overrides: the findings, or any message field. */
+export interface ReviewMessageViewOverrides extends Partial<ChatMessageView> {
+  readonly findings?: readonly ChatFindingView[];
+}
+
+/** A completed `/review` answer at head `aaaa…` holding one finding, with any field overridden. */
+export function createReviewMessageView(options: ReviewMessageViewOverrides = {}): ChatMessageView {
+  const { findings = [createFindingView()], ...overrides } = options;
   return {
     id: 'm1',
     sessionId: 's1',

@@ -10,17 +10,19 @@ describe('withoutStagedInsights', () => {
   test('drops the insights whose finding is staged, from any run that made them', ({ expect }) => {
     const insights = mergeReviewInsights(
       [
-        createReviewMessageView([createFindingView({ title: 'Repeated' })], {
+        createReviewMessageView({
+          findings: [createFindingView({ title: 'Repeated' })],
           id: 'older',
           createdAt: '2026-10-30T10:00:00.000Z',
         }),
-        createReviewMessageView(
-          [
+        createReviewMessageView({
+          findings: [
             createFindingView({ title: 'Repeated' }),
             createFindingView({ path: 'src/b.ts', title: 'Other' }),
           ],
-          { id: 'newer', createdAt: '2026-10-30T11:00:00.000Z' },
-        ),
+          id: 'newer',
+          createdAt: '2026-10-30T11:00:00.000Z',
+        }),
       ],
       'a'.repeat(40),
     );

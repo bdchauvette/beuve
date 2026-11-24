@@ -1,4 +1,4 @@
-import type MarkdownIt from 'markdown-it';
+import type { MarkdownIt } from 'markdown-it';
 
 import { headingSlugsFrom } from '../heading-slugs-from.ts';
 import { imageSourceFrom } from '../image-source-from.ts';

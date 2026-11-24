@@ -133,6 +133,7 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
   };
 
   const build = (): Menu => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
     return Menu.buildFromTemplate(withClicks(template, { dispatch, iconOf }));
   };
 
@@ -238,7 +239,9 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
         }),
       );
       const states = statesOf(contentsId, kind);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
       applyStates(menu, states);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
       applyCheckedLabels(menu, { items, states });
       menu.popup({
         window,
@@ -255,6 +258,7 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
       }
       options.runMain(
         command.id as CommandId,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
         BrowserWindow.fromWebContents(contents) ?? undefined,
       );
       return true;
@@ -312,6 +316,7 @@ function windowOfContents(contentsId: number): BrowserWindow | undefined {
   if (contents === undefined) {
     return undefined;
   }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
   return BrowserWindow.fromWebContents(contents) ?? undefined;
 }
 
@@ -335,6 +340,7 @@ function applyStates(menu: Menu, states: ReadonlyMap<string, MenuItemState>): vo
         continue;
       }
       item.enabled = state.enabled;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
       if (index === 0 && (command?.toggle !== undefined || isToggleItem(item))) {
         item.checked = state.checked;
       }
