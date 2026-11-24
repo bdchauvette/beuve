@@ -9,9 +9,11 @@ import type {
   GithubAuthStatusView,
   LspServerView,
   RemoteBranchView,
+  ReviewRangeView,
 } from '#contract/ipc-contract.ts';
 
 import { ActionDelegation } from './action-delegation.ts';
+import { countNoun } from './count-noun.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { describeLspStatus } from './describe-lsp-status.ts';
@@ -20,6 +22,7 @@ import { describeReviewProgress } from './describe-review-progress.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import './beuve-review-range.ts';
 import './primitives/beuve-commit.ts';
 import './primitives/beuve-time.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
@@ -36,13 +39,13 @@ export interface StatusPopoverDetail {
 }
 
 /**
- * Bottom bar: the reviewer's progress through the open review, how many files are marked reviewed
- * and whether the head is saved (ADR 0157; click for Save Progress and Remove Last Saved
+ * Bottom bar: the reviewer's progress through the open review, how many files are marked reviewed,
+ * what the diff shows (the range menu, ADR 0142) and whether the head is saved (ADR 0157; click for Save Progress and Remove Last Saved
  * Progress), the language servers (click for each one's state), a transient notice, a followed
  * branch's state, GitHub sign-in and app version. A pull request's CI and whose turn it is are in
  * the title bar. Its text is not selectable: these are controls and readouts, not content.
  *
- * Emits `beuve-status-action` (a catalog command), `beuve-status-open-url` (a link in a popover)
+ * Emits `beuve-status-action` (a catalog command), what `beuve-review-range` emits, `beuve-status-open-url` (a link in a popover)
  * and `beuve-status-popover` when a popover opens, so the owner can refresh what it shows.
  */
 /** Server states and describer tones that are not dot tones themselves. */
@@ -220,6 +223,10 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
   /** How many of the shown files are marked reviewed (ADR 0064); absent without a review. */
   @property({ attribute: false }) accessor progress: FileReviewProgressView | undefined;
+  /** The open review's range and saved progress, for the range menu (ADR 0142, 0157). */
+  @property({ attribute: false }) accessor range: ReviewRangeView | undefined;
+  /** What the diff shows (`describeReviewScope`); empty without a review. */
+  @property() accessor scopeText = '';
   /** Whether the open review's head is saved (ADR 0157); absent without a review. */
   @property({ attribute: false }) accessor saveState: SaveState | undefined;
   @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
@@ -290,8 +297,25 @@ export class BeuveStatusBar extends LitElement {
     return html`<span title=${line.title}
       ><span class="meter" aria-hidden="true"
         ><span style=${styleMap({ 'inline-size': share })}></span></span
-      >${progress.reviewed} of ${progress.total} files reviewed</span
+      >${progress.reviewed} of ${countNoun(progress.total, 'file')} reviewed</span
     >`;
+  }
+
+  /**
+   * What the diff shows (ADR 0157): the range menu, named by the scope, once progress was saved;
+   * before that, the scope as plain text.
+   */
+  private renderScope(): TemplateResult | typeof nothing {
+    if (this.scopeText === '') {
+      return nothing;
+    }
+    if ((this.range?.checkpoints.length ?? 0) === 0) {
+      return html`<span class="scope" title="What the diff shows">${this.scopeText}</span>`;
+    }
+    return html`<beuve-review-range
+      .range=${this.range}
+      scopeText=${this.scopeText}
+    ></beuve-review-range>`;
   }
 
   /** Saved or not, as a button whose popover offers Save Progress and Remove Last Saved Progress. */
@@ -447,7 +471,7 @@ export class BeuveStatusBar extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      ${this.renderProgress()}
+      ${this.renderProgress()} ${this.renderScope()}
       ${this.saveState === undefined ? nothing : this.renderSave(this.saveState)}
       ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>

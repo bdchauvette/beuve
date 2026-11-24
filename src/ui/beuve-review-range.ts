@@ -37,7 +37,6 @@ export class BeuveReviewRange extends LitElement {
 
       .trigger {
         max-inline-size: 100%;
-        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .label {

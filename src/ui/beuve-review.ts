@@ -59,7 +59,7 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import type { PaletteAction } from './plan-palette.ts';
 import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
-import type { OpenCommitDetail } from './beuve-review-scope.ts';
+import type { OpenCommitDetail } from './beuve-review-diffstat.ts';
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import type { ChatController } from './chat-controller.ts';
 import type { GithubController } from './github-controller.ts';
