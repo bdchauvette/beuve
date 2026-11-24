@@ -3,6 +3,7 @@ import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { displayIcon } from './display-icon.ts';
+import type { SessionHeading } from './session-heading-from.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
 
@@ -50,11 +51,40 @@ export class BeuveTitlebar extends LitElement {
         min-inline-size: 0;
       }
 
+      /*
+       * The name is the one thing in the band that gives way (ADR 0157 amendment): its parts sit in
+       * spans because the button lays out as a flex box, where bare text cannot ellipsize. Where it
+       * is and the number stay whole and muted; what it is ellipsizes.
+       */
       .title {
         min-inline-size: 0;
         overflow: hidden;
+        gap: var(--beuve-space-1-5);
+        white-space: nowrap;
+      }
+
+      .context {
+        flex: none;
+        color: var(--beuve-text-muted);
+      }
+
+      .number {
+        flex: none;
+        font: var(--beuve-font-code);
+        color: var(--beuve-text-muted);
+      }
+
+      .label {
+        min-inline-size: 0;
+        overflow: hidden;
+        color: var(--beuve-text);
         font-weight: var(--beuve-font-weight-semibold);
         text-overflow: ellipsis;
+      }
+
+      .label.branch {
+        font: var(--beuve-font-code);
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .open {
@@ -66,8 +96,7 @@ export class BeuveTitlebar extends LitElement {
       }
 
       ::slotted(*) {
-        flex: 0 100 auto;
-        min-inline-size: 0;
+        flex: none;
       }
 
       .reload {
@@ -121,8 +150,8 @@ export class BeuveTitlebar extends LitElement {
     this.dispatchEvent(new CustomEvent('beuve-titlebar-reload', { bubbles: true, composed: true }));
   };
 
-  /** The open review's name, or the placeholder when none is open. */
-  @property() accessor label = '';
+  /** The open review's name in its parts; `undefined` shows the placeholder. */
+  @property({ attribute: false }) accessor heading: SessionHeading | undefined;
 
   /** The tooltip of the name button, with its shortcut. */
   @property() accessor openTitle = '';
@@ -166,6 +195,20 @@ export class BeuveTitlebar extends LitElement {
     </button>`;
   }
 
+  private renderHeading(): TemplateResult {
+    const { heading } = this;
+    if (heading === undefined) {
+      return html`<span class="label">Open a review…</span>`;
+    }
+    return html`<span class="context">${heading.context}</span>${
+        heading.number === undefined ? nothing : html`<span class="number">${heading.number}</span>`
+      }${
+        heading.name === ''
+          ? nothing
+          : html`<span class="label ${heading.isBranch ? 'branch' : ''}">${heading.name}</span>`
+      }`;
+  }
+
   protected override render(): TemplateResult {
     let titleHint = this.openTitle;
     if (this.isPullRequest) {
@@ -178,7 +221,7 @@ export class BeuveTitlebar extends LitElement {
           title=${titleHint}
           @click=${this.onTitleClick}
         >
-          ${this.label}
+          ${this.renderHeading()}
         </button>
         <button
           class="button icon quiet open"

@@ -72,7 +72,7 @@ import type { DisplayTransition } from './settings-controller.ts';
 import { UraController } from './ura-controller.ts';
 import type { ReviewRef } from './review-ref.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
-import { describeSessionLabel } from './describe-session-label.ts';
+import { sessionHeadingFrom } from './session-heading-from.ts';
 import { saveStateFrom } from './save-state-from.ts';
 import { branchesFrom } from './branches-from.ts';
 import { reviewSpanFrom } from './review-span-from.ts';
@@ -1046,7 +1046,7 @@ export class BeuveApp extends LitElement {
   private renderTitlebar(): TemplateResult {
     return html`<beuve-titlebar
       slot="titlebar"
-      .label=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
+      .heading=${sessionHeadingFrom(this.session.sessions, this.session.selectedId, this.review?.session)}
       ?isPullRequest=${this.github.pullRequest !== undefined}
       .openTitle=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
       .reloadTitle=${`Reload Review (${this.shortcut('reload-review')})`}
