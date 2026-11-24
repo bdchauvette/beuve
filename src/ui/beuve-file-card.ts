@@ -1300,6 +1300,7 @@ export class BeuveFileCard extends LitElement {
         disableFileHeader: true,
         hunkSeparators: 'line-info',
         lineDiffType: 'word-alt',
+        parseDiffOptions: { preferredDiffLib: '@pierre/patches' },
         overflow: 'scroll',
         enableLineSelection: true,
         onLineSelected: this.onLineSelected,
@@ -2494,6 +2495,7 @@ function startWorkerPool(workers: typeof DiffsWorker): WorkerPoolManager {
       theme: diffsThemeNames,
       preferredHighlighter: 'shiki-js',
       lineDiffType: 'word-alt',
+      preferredDiffLib: '@pierre/patches',
       // Spans then carry their column, which Go to Definition needs from a click.
       useTokenTransformer: true,
       langs: [],

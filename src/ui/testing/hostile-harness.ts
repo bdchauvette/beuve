@@ -156,6 +156,7 @@ export class HostileHarness {
       diffStyle: options.diffStyle,
       hunkSeparators: options.hunkSeparators,
       lineDiffType: 'word-alt',
+      parseDiffOptions: { preferredDiffLib: '@pierre/patches' },
       overflow: 'scroll',
     });
     this.views.push(diff);
