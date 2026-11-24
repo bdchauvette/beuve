@@ -5,7 +5,6 @@ import { styleMap } from 'lit/directives/style-map.js';
 
 import type {
   AttentionView,
-  CiStatusView,
   FileReviewProgressView,
   GithubAuthStatusView,
   LspServerView,
@@ -17,7 +16,6 @@ import { ActionDelegation } from './action-delegation.ts';
 import type { ReviewBranches } from './branches-from.ts';
 import { countNoun } from './count-noun.ts';
 import { describeAttention } from './describe-attention.ts';
-import { describeCiStatus } from './describe-ci-status.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { describeLspStatus } from './describe-lsp-status.ts';
@@ -59,11 +57,11 @@ export interface StatusPopoverDetail {
  * shows (the range menu, ADR 0142) and the commits it spans, how many files are marked reviewed,
  * and whether the head is saved (ADR 0157; click for Save Progress and Remove Last Saved
  * Progress), then a transient notice. On the right, ambient facts worth a glance: whose turn a
- * pull request is and its CI (click for the checks in the Overview tab), a followed branch's
- * state, and the language servers and GitHub sign-in as icons, each with a dot only when
- * something needs a look, its details in the tooltip and its actions in a popover. The title bar
- * holds what the reviewer needs all the time. Its text is not selectable: these are controls and
- * readouts, not content.
+ * pull request is, a followed branch's state, and the language servers and GitHub sign-in as
+ * icons, each with a dot only when something needs a look, its details in the tooltip and its
+ * actions in a popover. A pull request's CI is in the Overview tab only. The title bar holds what
+ * the reviewer needs all the time. Its text is not selectable: these are controls and readouts,
+ * not content.
  *
  * Emits `beuve-status-action` (a catalog command), what `beuve-review-range` emits,
  * `beuve-open-commit`, `beuve-status-copy`, `beuve-status-github-check`, `beuve-status-open-url`
@@ -297,8 +295,6 @@ export class BeuveStatusBar extends LitElement {
   @property() accessor scopeText = '';
   /** The commits the open review's diff spans. */
   @property({ attribute: false }) accessor span: ReviewSpan | undefined;
-  /** CI for the open pull request's head; absent for other reviews. */
-  @property({ attribute: false }) accessor ci: CiStatusView | undefined;
   /** Whose turn the open pull request is; absent for other reviews and until it is known. */
   @property({ attribute: false }) accessor attention: AttentionView | undefined;
   /** The branches the open review compares, when known (ADR 0157 amendment). */
@@ -349,9 +345,6 @@ export class BeuveStatusBar extends LitElement {
           'github-check': (_data, _event, element): void => {
             this.emit('beuve-status-github-check', undefined);
             closePopoverOf(element);
-          },
-          'show-checks': (): void => {
-            this.emit('beuve-status-action', { command: 'sidebar-overview' });
           },
           'notice-action': ({ command }): void => {
             if (command !== undefined) {
@@ -556,19 +549,6 @@ export class BeuveStatusBar extends LitElement {
     ></beuve-commit>`;
   }
 
-  /** The pull request's CI rollup; a click shows the checks in the Overview tab. */
-  private renderCi(ci: CiStatusView): TemplateResult {
-    const line = describeCiStatus(ci);
-    return html`<button
-      type="button"
-      class="button small quiet chip"
-      data-action="show-checks"
-      title=${`${line.title}\nShow the checks in Overview`}
-    >
-      <span class="status-dot" data-tone=${line.tone}></span>${line.text}
-    </button>`;
-  }
-
   private renderAttention(): TemplateResult | typeof nothing {
     const chip = describeAttention(this.attention);
     if (chip === undefined) {
@@ -669,7 +649,7 @@ export class BeuveStatusBar extends LitElement {
       ${this.saveState === undefined ? nothing : this.renderSave(this.saveState)}
       ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
-      ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
+      ${this.renderAttention()}
       ${this.remoteBranch === undefined ? nothing : this.renderRemoteBranch(this.remoteBranch)}
       ${this.renderLsp()}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
