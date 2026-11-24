@@ -674,7 +674,7 @@ function probesFor(lineText: string, request: DefinitionRequest): readonly Probe
       return [specifier];
     }
   }
-  return planDefinitionProbes(lineText, character, { link: request.link === true });
+  return planDefinitionProbes(lineText, { character, link: request.link === true });
 }
 
 function tokenView(line: number, token: ProbeToken): NonNullable<DefinitionView['token']> {

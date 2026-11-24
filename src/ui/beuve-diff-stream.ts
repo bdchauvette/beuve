@@ -20,7 +20,7 @@ import type { CommandId } from '#contract/command-catalog.ts';
 
 import './beuve-commit-pairing.ts';
 import type { CommitPairFilterDetail } from './beuve-commit-pairing.ts';
-import './beuve-file-card.ts';
+import { BeuveFileCard } from './beuve-file-card.ts';
 import './beuve-find-bar.ts';
 import './beuve-opening.ts';
 import type { FileDiagnostics } from './file-diagnostics.ts';
@@ -29,7 +29,6 @@ import type { ImageLoader } from './rich-view/beuve-rich-view.ts';
 import type { BeuveFindBar, FindQueryDetail, FindStepDetail } from './beuve-find-bar.ts';
 import type { DiffToggleDetail, SideLines, SuggestionCancelDetail } from './beuve-file-card.ts';
 import type {
-  BeuveFileCard,
   ComposerState,
   FilePairLoader,
   NoteEditDetail,
@@ -103,6 +102,7 @@ export interface UraCreateRequest {
 
 /** What a composer opens with besides its lines: a new note's suggestion, or the note it edits. */
 interface ComposerOptions {
+  readonly anchor?: UraAnchorView;
   readonly suggestedPatch?: string;
   readonly edit?: NoteEdit;
 }
@@ -375,7 +375,7 @@ export class BeuveDiffStream extends LitElement {
   /** The gutter button: a composer on the lines it was clicked for. */
   private readonly onNoteAdd = (event: CustomEvent<NoteAddDetail>): void => {
     event.stopPropagation();
-    this.openComposer(event.detail.anchor);
+    this.openComposer({ anchor: event.detail.anchor });
   };
 
   /** A staged note's marker, double-clicked or its Edit button: the composer edits it there. */
@@ -392,10 +392,15 @@ export class BeuveDiffStream extends LitElement {
   private readonly onSuggestionSave = (event: CustomEvent<SuggestionSaveDetail>): void => {
     const { target, patch } = event.detail;
     if (target.itemId === undefined) {
-      this.openComposer(
-        { kind: 'lines', path: target.path, startLine: target.startLine, endLine: target.endLine },
-        { suggestedPatch: patch },
-      );
+      this.openComposer({
+        anchor: {
+          kind: 'lines',
+          path: target.path,
+          startLine: target.startLine,
+          endLine: target.endLine,
+        },
+        suggestedPatch: patch,
+      });
       return;
     }
     this.dispatchEvent(
@@ -492,16 +497,16 @@ export class BeuveDiffStream extends LitElement {
 
   private readonly onNearViewport = (entries: IntersectionObserverEntry[]): void => {
     for (const entry of entries) {
-      if (entry.isIntersecting) {
-        (entry.target as BeuveFileCard).mounted = true;
+      if (entry.isIntersecting && entry.target instanceof BeuveFileCard) {
+        entry.target.mounted = true;
       }
     }
   };
 
   private readonly onFarFromViewport = (entries: IntersectionObserverEntry[]): void => {
     for (const entry of entries) {
-      if (!entry.isIntersecting) {
-        (entry.target as BeuveFileCard).mounted = false;
+      if (!entry.isIntersecting && entry.target instanceof BeuveFileCard) {
+        entry.target.mounted = false;
       }
     }
   };
@@ -637,7 +642,9 @@ export class BeuveDiffStream extends LitElement {
         keydown: { card: forwardToCard },
         pointermove: {
           card: (_data, _event, card): void => {
-            (card as BeuveFileCard).notePointerMove();
+            if (card instanceof BeuveFileCard) {
+              card.notePointerMove();
+            }
           },
         },
       }),
@@ -1024,8 +1031,8 @@ export class BeuveDiffStream extends LitElement {
    * Add Note: a composer on the active card, staging the target's head lines (ADR 0063), or `anchor`
    * with the suggestion an Add Suggestion edit produced, or the staged note it edits.
    */
-  private openComposer(given?: UraAnchorView, options: ComposerOptions = {}): void {
-    const { suggestedPatch, edit } = options;
+  private openComposer(options: ComposerOptions = {}): void {
+    const { anchor: given, suggestedPatch, edit } = options;
     const { review } = this;
     const files = this.shownFiles();
     if (given !== undefined && given.kind !== 'change') {
@@ -1076,7 +1083,8 @@ export class BeuveDiffStream extends LitElement {
     if (edit === undefined) {
       return;
     }
-    this.openComposer(edit.anchor, {
+    this.openComposer({
+      anchor: edit.anchor,
       edit,
       ...(edit.suggestedPatch !== undefined && { suggestedPatch: edit.suggestedPatch }),
     });
@@ -1441,7 +1449,7 @@ export class BeuveDiffStream extends LitElement {
 
   /** Makes `card` the active one, for a context menu opened on it. */
   activateCard(card: HTMLElement): void {
-    const index = [...this.cards()].indexOf(card as BeuveFileCard);
+    const index = [...this.cards()].findIndex((candidate) => candidate === card);
     if (index === -1 || index === this.activeIndex) {
       return;
     }
@@ -1683,7 +1691,9 @@ async function waitForComposer(card: BeuveFileCard | undefined): Promise<HTMLEle
 
 /** Runs a card's own action for an event the stream's delegated listener caught on it. */
 function forwardToCard(_data: unknown, event: Event, card: HTMLElement): void {
-  (card as BeuveFileCard).runAction(event);
+  if (card instanceof BeuveFileCard) {
+    card.runAction(event);
+  }
 }
 
 declare global {

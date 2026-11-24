@@ -111,20 +111,22 @@ export interface ProbePlanOptions {
    * isn't a keyword: nothing else on the line is probed (ADR 0105). Needs `character`.
    */
   readonly link?: boolean;
+  /** The pointer's column in the line, when known. */
+  readonly character?: number | undefined;
 }
 
 /**
  * Which tokens of a line to ask the language server about, best first (ADR 0067). With a known
- * `character`, the identifier under it (or just before it) alone. Otherwise the line's
+ * `options.character`, the identifier under it (or just before it) alone. Otherwise the line's
  * identifiers outside strings and comments, keywords left out: calls first (a name followed by
  * `(` or `<`), then the rest left to right, and names the line itself declares last, since their
  * definition is the line itself. At most six. Pure.
  */
 export function planDefinitionProbes(
   text: string,
-  character?: number,
   options: ProbePlanOptions = {},
 ): readonly ProbeToken[] {
+  const { character } = options;
   const tokens = identifiersOf(text);
   if (options.link === true) {
     return tokens.filter((token) => {

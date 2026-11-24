@@ -1,12 +1,18 @@
 import MarkdownIt from 'markdown-it';
-import type { StateBlock, StateCore, Token } from 'markdown-it';
+import type {
+  Env,
+  MarkdownIt as MarkdownItInstance,
+  StateBlock,
+  StateCore,
+  Token,
+} from 'markdown-it';
 import { full as emoji } from 'markdown-it-emoji';
 import footnote from 'markdown-it-footnote';
 
 import { withoutHandlers } from './without-handlers.ts';
 
 /** What `render(text, env)` may be given: a nonce that marks the source lines beuve wrote. */
-export interface MarkdownEnv {
+export interface MarkdownEnv extends Env {
   readonly sourceNonce?: string;
 }
 
@@ -42,7 +48,7 @@ const taskStates: Readonly<Record<string, string>> = { ' ': 'open', x: 'done', X
  * `sourceNonce` in the render environment, both values are `<nonce>:a-b`, so a document's own
  * raw HTML can't pass for them.
  */
-export function createMarkdownIt(): MarkdownIt {
+export function createMarkdownIt(): MarkdownItInstance {
   const md = new MarkdownIt({ html: true, linkify: true, typographer: false, breaks: false });
   md.use(footnote);
   md.use(emoji, { shortcuts: {} });
@@ -51,10 +57,10 @@ export function createMarkdownIt(): MarkdownIt {
   });
   md.core.ruler.before('inline', 'beuve_markers', markers);
   md.core.ruler.push('beuve_source_lines', sourceLines);
-  md.renderer.rules.html_block = (tokens, index, ...[, env]: unknown[]): string => {
+  md.renderer.rules['html_block'] = (tokens, index, ...[, env]: unknown[]): string => {
     return htmlBlockFrom({ token: tokens[index], env });
   };
-  md.renderer.rules.html_inline = (tokens, index): string => {
+  md.renderer.rules['html_inline'] = (tokens, index): string => {
     return withoutHandlers(tokens[index]?.content ?? '');
   };
   return md;
@@ -157,7 +163,7 @@ function sourceLines(state: StateCore): void {
 /** A table cell's alignment as `align`, which the sanitizer keeps, instead of a `style`. */
 function alignFromStyle(token: Token): void {
   const style = token.attrGet('style');
-  if (style === null) {
+  if (typeof style !== 'string') {
     return;
   }
   // eslint-disable-next-line unicorn/no-null -- markdown-it's tokens have `null` for no attributes.

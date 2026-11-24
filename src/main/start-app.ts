@@ -248,6 +248,7 @@ export function startApp(app: App, options: StartAppOptions): void {
 
   const showInMainWindow = (target: GithubLinkTarget): void => {
     const window =
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
       BrowserWindow.getAllWindows().find((candidate) => isMainWindow(candidate, options)) ??
       openWindow();
     if (window.isMinimized()) {
@@ -282,6 +283,7 @@ export function startApp(app: App, options: StartAppOptions): void {
     });
   });
   app.on('activate', () => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
     if (BrowserWindow.getAllWindows().every((window) => !isMainWindow(window, options))) {
       openWindow();
     }

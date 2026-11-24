@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
-import type { ChildProcessByStdio } from 'node:child_process';
+import type { ChildProcess, ChildProcessByStdio } from 'node:child_process';
 import { statSync } from 'node:fs';
-import type { Socket } from 'node:net';
+import { Socket } from 'node:net';
 import type { Readable, Writable } from 'node:stream';
 
 import type { Logger } from '#x/log/create-logger.ts';
@@ -688,7 +688,12 @@ function aborted(): GitError {
 
 /** A busy process keeps the event loop alive; an idle one must not keep the app from quitting. */
 function setReferenced(child: CatFile, isReferenced: boolean): void {
-  const handles = [child, child.stdin as Socket, child.stdout as Socket, child.stderr as Socket];
+  const handles: (ChildProcess | Socket)[] = [child];
+  for (const stream of [child.stdin, child.stdout, child.stderr]) {
+    if (stream instanceof Socket) {
+      handles.push(stream);
+    }
+  }
   for (const handle of handles) {
     if (isReferenced) {
       handle.ref();

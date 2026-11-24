@@ -5,7 +5,7 @@ import { test } from '#testing/test.ts';
 import { planDefinitionProbes } from './plan-definition-probes.ts';
 
 function textsOf(text: string, character?: number): readonly string[] {
-  return planDefinitionProbes(text, character).map((token) => token.text);
+  return planDefinitionProbes(text, { character }).map((token) => token.text);
 }
 
 describe('planDefinitionProbes', () => {
@@ -33,7 +33,7 @@ describe('planDefinitionProbes', () => {
 
   test('takes the identifier under a known column, with UTF-16 columns', ({ expect }) => {
     const line = "const label = '😀'; wide(label);";
-    expect(planDefinitionProbes(line, line.indexOf('wide') + 2)).toStrictEqual([
+    expect(planDefinitionProbes(line, { character: line.indexOf('wide') + 2 })).toStrictEqual([
       { start: line.indexOf('wide'), end: line.indexOf('wide') + 4, text: 'wide' },
     ]);
     expect(textsOf(line, line.indexOf('label);') + 5)).toStrictEqual(['label']);
@@ -50,13 +50,13 @@ describe('planDefinitionProbes', () => {
   }) => {
     const line = '  return validate(token) ? 200 : 401;';
     const linkTexts = (character: number): string[] => {
-      return planDefinitionProbes(line, character, { link: true }).map((token) => token.text);
+      return planDefinitionProbes(line, { character, link: true }).map((token) => token.text);
     };
     expect(linkTexts(9)).toStrictEqual(['validate']);
     expect(linkTexts(16)).toStrictEqual(['validate']);
     expect(linkTexts(17)).toStrictEqual([]);
     expect(linkTexts(4)).toStrictEqual([]);
     expect(linkTexts(0)).toStrictEqual([]);
-    expect(planDefinitionProbes(line, undefined, { link: true })).toStrictEqual([]);
+    expect(planDefinitionProbes(line, { link: true })).toStrictEqual([]);
   });
 });

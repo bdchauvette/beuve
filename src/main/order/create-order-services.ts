@@ -181,7 +181,10 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
         review: diff.value,
         primary,
       });
-      const groups = orderReviewFiles(classified, plan.edges, { bySize: plan.mode === 'size' });
+      const groups = orderReviewFiles(classified, {
+        edges: plan.edges,
+        bySize: plan.mode === 'size',
+      });
       return ok({
         sessionId: request.sessionId,
         headSha: diff.value.refreshed.session.headSha,

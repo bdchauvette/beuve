@@ -39,7 +39,6 @@ describe('orderReviewFiles', () => {
         { path: 'pnpm-lock.yaml', mechanical: 'lockfile', size: 9000 },
         { path: 'src/none.ts' },
       ],
-      [],
       { bySize: true },
     );
     expect(groups).toStrictEqual([
@@ -77,12 +76,14 @@ describe('orderReviewFiles', () => {
   test('puts the files that use others before the files they use', ({ expect }) => {
     const [changes] = orderReviewFiles(
       [file('app.ts'), file('lib/a.ts'), file('lib/b.ts'), file('z-util.ts'), file('other.ts')],
-      [
-        { dependent: 'app.ts', dependency: 'lib/a.ts' },
-        { dependent: 'lib/a.ts', dependency: 'z-util.ts' },
-        { dependent: 'app.ts', dependency: 'lib/b.ts' },
-        { dependent: 'lib/b.ts', dependency: 'z-util.ts' },
-      ],
+      {
+        edges: [
+          { dependent: 'app.ts', dependency: 'lib/a.ts' },
+          { dependent: 'lib/a.ts', dependency: 'z-util.ts' },
+          { dependent: 'app.ts', dependency: 'lib/b.ts' },
+          { dependent: 'lib/b.ts', dependency: 'z-util.ts' },
+        ],
+      },
     );
     expect(changes?.label).toBe('Changes, importers first');
     expect(changes?.paths).toStrictEqual([
@@ -101,8 +102,8 @@ describe('orderReviewFiles', () => {
       { dependent: 'c.ts', dependency: 'a.ts' },
     ];
     const files = [file('c.ts'), file('a.ts'), file('b.ts')];
-    const first = orderReviewFiles(files, edges)[0]?.paths;
-    const shuffled = orderReviewFiles(files.toReversed(), edges.toReversed())[0]?.paths;
+    const first = orderReviewFiles(files, { edges })[0]?.paths;
+    const shuffled = orderReviewFiles(files.toReversed(), { edges: edges.toReversed() })[0]?.paths;
     expect(first).toStrictEqual(['c.ts', 'a.ts', 'b.ts']);
     expect(shuffled).toStrictEqual(first);
   });
@@ -110,14 +111,16 @@ describe('orderReviewFiles', () => {
   test('ignores self edges, duplicate edges and edges outside the ordinary files', ({ expect }) => {
     const [changes] = orderReviewFiles(
       [file('a.ts'), file('b.ts'), file('package.json', 'config')],
-      [
-        { dependent: 'a.ts', dependency: 'a.ts' },
-        { dependent: 'a.ts', dependency: 'b.ts' },
-        { dependent: 'a.ts', dependency: 'b.ts' },
-        { dependent: 'a.ts', dependency: 'package.json' },
-        { dependent: 'a.ts', dependency: 'unchanged.ts' },
-        { dependent: 'unchanged.ts', dependency: 'a.ts' },
-      ],
+      {
+        edges: [
+          { dependent: 'a.ts', dependency: 'a.ts' },
+          { dependent: 'a.ts', dependency: 'b.ts' },
+          { dependent: 'a.ts', dependency: 'b.ts' },
+          { dependent: 'a.ts', dependency: 'package.json' },
+          { dependent: 'a.ts', dependency: 'unchanged.ts' },
+          { dependent: 'unchanged.ts', dependency: 'a.ts' },
+        ],
+      },
     );
     expect(changes?.paths).toStrictEqual(['a.ts', 'b.ts']);
   });
@@ -138,7 +141,7 @@ describe('orderReviewFiles', () => {
     });
     const [changes] = orderReviewFiles(
       names.map((name) => file(name)),
-      chain,
+      { edges: chain },
     );
     expect(changes?.paths[0]).toBe('f00000.ts');
     expect(changes?.paths).toHaveLength(20_000);
