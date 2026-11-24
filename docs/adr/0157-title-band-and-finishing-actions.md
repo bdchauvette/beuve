@@ -29,3 +29,7 @@ What the window says falls into levels: which review is open, its state (CI, who
 - The range menu (named by the scope: "Full review", "Interdiff · exact", "Up to date") moves from the title band to the status bar, between the progress and the save state, so everything about where the reviewer is in the review sits together. It opens upward there; its choices reach the session from `beuve-app`.
 - The title band ends, right-aligned, with what the diff spans: `abc1234..def5678 · 3 files · +5 −1` (`beuve-review-diffstat`, formerly `beuve-review-scope`), middle dots between the parts and the line counts in the diff's added and removed colors. The separator after Reload is gone.
 - `beuve-commit` no longer renders a space after its hash: the hash and its card are joined with no whitespace, which also removes the gap in `abc1234 ..def5678` everywhere a hash sits in running text.
+
+## Amendment 2026-11-24: The status bar names the branches
+
+The title bar is for what the reviewer needs all the time; the status bar is for ambient facts worth a glance. The branches a review compares are the latter: the status bar shows them on its right, with a branch glyph (`displayIcon('branch')`), as `head → base` in the code font, ellipsized when the bar is tight, with "Reviewing head against base" on hover (`branchesFrom`). A local review names its refs (without `refs/heads/`), a pull request its branches on GitHub once it is loaded, and a followed branch the branch and, once known, the remote's default branch.
