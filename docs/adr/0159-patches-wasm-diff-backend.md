@@ -32,3 +32,7 @@ The renderer's CSP has `script-src 'self'` with no `'wasm-unsafe-eval'` (ADR 001
 - The highlighting worker loads from `file://` and has no policy of its own beyond the library's fallback; if a later change gives workers a CSP, it needs the same keyword.
 - A diff the library cannot compute through the wasm module gives the same output as jsdiff (the library's tests cover both), so a card's content does not depend on which backend ran.
 - `@pierre/patches` is 0.0.1. Bumps of `@pierre/diffs` should be checked against the hostile render check (`scripts/check-hostile-render.ts`).
+
+## Amendment 2026-11-24: search match colors
+
+`@pierre/diffs` 1.7 styles the editor's find matches with `--diffs-bg-search-match-override`, `--diffs-fg-search-match-override` and their `-current-` pairs, replacing the removed `--diffs-editor-match-*` variables beuve never set. Without them the matches are the library's yellow `#ffff54` and blue `#0067b1`, with black text that fails on dark. `index.css` adds `--beuve-diff-search-*` tokens (orange, so matches stay a hue apart from the blue and yellow of changes and the purple of selection) and `beuve-file-card.ts` maps them onto the overrides. Sheets do not edit, so `beuve-sheet-code.ts` does not.
