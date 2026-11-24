@@ -1126,7 +1126,6 @@ export class BeuveApp extends LitElement {
         .progress=${this.reviewData.progress}
         .range=${this.review?.range}
         .span=${reviewSpanFrom(this.review)}
-        .ci=${this.github.ci}
         .attention=${this.github.pullRequest?.attention}
         @beuve-open-commit=${this.onStatusOpenCommit}
         @beuve-status-copy=${this.onStatusCopy}

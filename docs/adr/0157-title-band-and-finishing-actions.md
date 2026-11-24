@@ -60,6 +60,10 @@ The title bar's name is built from parts that look different (`sessionHeadingFro
 
 The ▾ that opened the Open dialog is gone from the title band, and so is a non-pull-request name's click that opened it: File › Open and its key open another review. A pull request's name still shows its Overview tab; another review's name is plain text, and with no review open the band shows no name. Each section the band's owner slots in (the diff's size, then how it is shown) is parted from what comes before it by a full-height line, as the sidebar's edge is; the size is left out for an empty diff, so no line stands alone.
 
+## Amendment 2026-11-24: No CI in the status bar
+
+A pull request's CI chip leaves the status bar, which the amendment "Ambient facts leave the title bar" had put there. It does not help a reviewer get their bearings, and the Overview tab already lists the checks and the rollup. Whose turn it is stays.
+
 ## Amendment 2026-11-24: The chosen tab is open onto its panel
 
 The sidebar's tabs carry the title band's full-height lines: each tab fills the band's height with its own padding, and only the chosen one shows lines on both sides, the panel's background, accent text, and an accent bar. Every tab reaches over the band's bottom border, so the chosen tab's bar lies on the band's very bottom edge and runs straight into the focused panel's own accent line (`zoneStyles`) with no border between them. The first tab's start line lies over the sidebar's edge rather than beside it.
