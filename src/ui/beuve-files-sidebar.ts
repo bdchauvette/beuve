@@ -10,6 +10,7 @@ import type {
 
 import './beuve-radar-tree.ts';
 import type { RadarTreeLayout, RadarTreeMode } from './plan-radar-tree.ts';
+import { displayIcon } from './display-icon.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { fieldStyles } from './primitives/field-styles.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
@@ -175,12 +176,13 @@ export class BeuveFilesSidebar extends LitElement {
     return html`<button
       type="button"
       title=${title}
+      aria-label=${label}
       aria-pressed=${this.layout === layout ? 'true' : 'false'}
       @click=${(): void => {
         this.layout = layout;
       }}
     >
-      ${label}
+      ${displayIcon(layout)}
     </button>`;
   }
 
