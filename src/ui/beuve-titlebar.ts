@@ -2,22 +2,17 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { AttentionView, CiStatusView } from '#contract/ipc-contract.ts';
-
-import { describeAttention } from './describe-attention.ts';
-import { describeCiStatus } from './describe-ci-status.ts';
 import { displayIcon } from './display-icon.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
 
 /**
- * The title band over the review's main column (ADR 0157), beside the full-height sidebar: the
- * open review's name, which shows a pull request's Overview tab (or, for another review, the Open
- * dialog), ▾ for the Open dialog, the pull request's CI as a dot (which shows the Overview tab too)
- * and whose turn it is, an icon-only Reload while a review is open (ADR 0146), marked with a dot
- * while polling has found commits the review does not show yet, then, at the end, what the owner
- * slots in: what the diff spans. Narrow, whose turn gives way first, then the slotted content, then the
- * name. The band drags the window; its controls do not. On macOS it leaves room for the window
+ * The title band over the review's main column (ADR 0157), beside the full-height sidebar, for
+ * what the reviewer needs all the time: the open review's name, which shows a pull request's
+ * Overview tab (or, for another review, the Open dialog), ▾ for the Open dialog, an icon-only
+ * Reload while a review is open (ADR 0146), marked with a dot while polling has found commits the
+ * review does not show yet, then, at the end, what the owner slots in: how big the diff is.
+ * Narrow, the slotted content gives way before the name; ambient facts are in the status bar. The band drags the window; its controls do not. On macOS it leaves room for the window
  * buttons unless `--beuve-titlebar-inset` says the sidebar beside it does. Emits
  * `beuve-titlebar-open`, `beuve-titlebar-overview` and `beuve-titlebar-reload`.
  */
@@ -63,25 +58,6 @@ export class BeuveTitlebar extends LitElement {
 
       .open {
         flex: none;
-      }
-
-      .ci {
-        flex: none;
-      }
-
-      .attention {
-        flex: 0 10000 auto;
-        min-inline-size: 0;
-        overflow: hidden;
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
-        white-space: nowrap;
-        cursor: default;
-      }
-
-      .attention.yours {
-        color: var(--beuve-accent);
-        font-weight: var(--beuve-font-weight-semibold);
       }
 
       ::slotted(*) {
@@ -162,12 +138,6 @@ export class BeuveTitlebar extends LitElement {
   /** Whether the open review is a pull request, whose name shows its Overview tab. */
   @property({ type: Boolean }) accessor isPullRequest = false;
 
-  /** CI for the open pull request's head; absent for other reviews. */
-  @property({ attribute: false }) accessor ci: CiStatusView | undefined;
-
-  /** Whose turn the open pull request is; absent for other reviews and until it is known. */
-  @property({ attribute: false }) accessor attention: AttentionView | undefined;
-
   /** `process.platform`; on macOS the bar leaves room for the window buttons. */
   @property({ reflect: true }) accessor platform = '';
 
@@ -190,29 +160,6 @@ export class BeuveTitlebar extends LitElement {
       ${displayIcon('refresh')}
       ${this.hasNewCommits ? html`<span class="status-dot" data-tone="accent"></span>` : nothing}
     </button>`;
-  }
-
-  private renderCi(ci: CiStatusView): TemplateResult {
-    const line = describeCiStatus(ci);
-    return html`<button
-      type="button"
-      class="button icon quiet ci"
-      aria-label=${line.text}
-      title=${`${line.title}\nShow the checks in Overview`}
-      @click=${this.overview}
-    >
-      <span class="status-dot" data-tone=${line.tone}></span>
-    </button>`;
-  }
-
-  private renderAttention(): TemplateResult | typeof nothing {
-    const chip = describeAttention(this.attention);
-    if (chip === undefined) {
-      return nothing;
-    }
-    return html`<span class="attention ${chip.isYours ? 'yours' : ''}" title=${chip.title}
-      >${chip.text}</span
-    >`;
   }
 
   protected override render(): TemplateResult {
@@ -239,7 +186,6 @@ export class BeuveTitlebar extends LitElement {
           ${displayIcon('chevron')}
         </button>
       </span>
-      ${this.ci === undefined ? nothing : this.renderCi(this.ci)} ${this.renderAttention()}
       ${this.canReload ? this.renderReload() : nothing}
       <slot></slot>`;
   }

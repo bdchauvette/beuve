@@ -29,7 +29,11 @@ import './beuve-sidebar.ts';
 import './beuve-status-bar.ts';
 import './beuve-titlebar.ts';
 import './beuve-workspace.ts';
-import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
+import type {
+  OpenCommitDetail,
+  StatusOpenUrlDetail,
+  StatusPopoverDetail,
+} from './beuve-status-bar.ts';
 import './beuve-note-list.ts';
 import { beuveBridge } from './beuve-bridge.ts';
 import type { BeuveCommandPalette } from './beuve-command-palette.ts';
@@ -70,6 +74,7 @@ import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import { saveStateFrom } from './save-state-from.ts';
 import { branchesFrom } from './branches-from.ts';
+import { reviewSpanFrom } from './review-span-from.ts';
 import './beuve-review-diffstat.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
@@ -398,6 +403,11 @@ export class BeuveApp extends LitElement {
   /** The status bar's range menu (ADR 0142, 0157): stores the choice and reloads the review. */
   private readonly onStatusRange = (event: CustomEvent<ReviewRangeChoiceView>): void => {
     void this.session.setReviewRange(event.detail);
+  };
+
+  /** A commit of the status bar's span: the review opens it on its remote (ADR 0108). */
+  private readonly onStatusOpenCommit = (event: CustomEvent<OpenCommitDetail>): void => {
+    void this.reviewElement()?.openCommitOnRemote(event.detail.sha);
   };
 
   /** The range menu's Remove Last Saved Progress, in the status bar (ADR 0156, 0157). */
@@ -1002,8 +1012,6 @@ export class BeuveApp extends LitElement {
       slot="titlebar"
       .label=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
       ?isPullRequest=${this.github.pullRequest !== undefined}
-      .ci=${this.github.ci}
-      .attention=${this.github.pullRequest?.attention}
       .openTitle=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
       .reloadTitle=${`Reload Review (${this.shortcut('reload-review')})`}
       ?canReload=${this.review !== undefined}
@@ -1073,6 +1081,10 @@ export class BeuveApp extends LitElement {
         .notice=${this.statusNotice}
         .progress=${this.reviewData.progress}
         .range=${this.review?.range}
+        .span=${reviewSpanFrom(this.review)}
+        .ci=${this.github.ci}
+        .attention=${this.github.pullRequest?.attention}
+        @beuve-open-commit=${this.onStatusOpenCommit}
         .branches=${branchesFrom({
           session: this.review?.session,
           pullRequest: this.github.pullRequest?.pullRequest,

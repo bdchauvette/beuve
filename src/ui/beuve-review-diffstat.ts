@@ -4,20 +4,12 @@ import { customElement, property } from 'lit/decorators.js';
 
 import type { ReviewView } from '#contract/ipc-contract.ts';
 
-import { ActionDelegation } from './action-delegation.ts';
 import { countNoun } from './count-noun.ts';
-import './primitives/beuve-commit.ts';
-
-/** `beuve-open-commit`: a commit hash of the title band, to open on the remote (ADR 0108). */
-export interface OpenCommitDetail {
-  readonly sha: string;
-}
 
 /**
- * What the open review's diff spans, at the end of the title band (ADR 0157): its commits
- * (`abc1234..def5678`), how many files and its line counts, parted by middle dots. The commits
- * give way first when the band is narrow; what the diff shows (the range menu) is in the status
- * bar. Emits `beuve-open-commit { sha }` for a commit.
+ * How big the open review's diff is, at the end of the title band (ADR 0157): how many files and
+ * its line counts, parted by a middle dot. The commits it spans and what it shows (the range
+ * menu) are in the status bar.
  */
 @customElement('beuve-review-diffstat')
 export class BeuveReviewDiffstat extends LitElement {
@@ -30,12 +22,6 @@ export class BeuveReviewDiffstat extends LitElement {
       font: var(--beuve-font-code);
       color: var(--beuve-text-muted);
       white-space: nowrap;
-    }
-
-    .range {
-      min-inline-size: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     .separator,
@@ -60,36 +46,6 @@ export class BeuveReviewDiffstat extends LitElement {
   /** The open review. */
   @property({ attribute: false }) accessor review: ReviewView | undefined;
 
-  constructor() {
-    super();
-    this.addController(
-      new ActionDelegation(this, {
-        click: {
-          'open-commit': ({ sha }): void => {
-            if (sha === undefined) {
-              return;
-            }
-            const detail: OpenCommitDetail = { sha };
-            this.dispatchEvent(
-              new CustomEvent('beuve-open-commit', { detail, bubbles: true, composed: true }),
-            );
-          },
-        },
-      }),
-    );
-  }
-
-  /** A short sha that opens its commit on the remote (ADR 0108). */
-  private renderCommit(sha: string): TemplateResult {
-    return html`<beuve-commit
-      sha=${sha}
-      abbreviation="8"
-      hint="Click to open on GitHub"
-      data-action="open-commit"
-      data-sha=${sha}
-    ></beuve-commit>`;
-  }
-
   override render(): TemplateResult | typeof nothing {
     const { review } = this;
     if (review === undefined) {
@@ -101,34 +57,15 @@ export class BeuveReviewDiffstat extends LitElement {
       additions += file.additions;
       deletions += file.deletions;
     }
-    const range = html`<span class="range" title=${rangeTitle(review)}
-      >${this.renderCommit(rangeStartOf(review))}..${this.renderCommit(review.headSha)}</span
-    >`;
     if (review.files.length === 0) {
-      return range;
+      return nothing;
     }
-    return html`${range}<span class="separator" aria-hidden="true">·</span
-      ><span class="files">${countNoun(review.files.length, 'file')}</span
+    return html`<span class="files">${countNoun(review.files.length, 'file')}</span
       ><span class="separator" aria-hidden="true">·</span
       ><span class="lines" title="Lines added and deleted"
         ><span class="added">+${additions}</span> <span class="deleted">−${deletions}</span></span
       >`;
   }
-}
-
-/** The commits the diff spans: fork point to head, or last reviewed head to head. */
-function rangeStartOf(review: ReviewView): string {
-  if (review.scope.kind === 'interdiff') {
-    return review.scope.fromHeadSha;
-  }
-  return review.baseSha;
-}
-
-function rangeTitle(review: ReviewView): string {
-  if (review.scope.kind === 'interdiff') {
-    return `Changes since reviewed head ${review.scope.fromHeadSha}, now at ${review.headSha} (forked from ${review.baseSha})`;
-  }
-  return `${review.baseSha}..${review.headSha}`;
 }
 
 declare global {

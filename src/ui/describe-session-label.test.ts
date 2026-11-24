@@ -40,7 +40,7 @@ describe('describeSessionLabel', () => {
   });
 
   test('names a local session by folder, head and base', ({ expect }) => {
-    expect(describeSessionLabel([local()], 's1', undefined)).toBe('notes · feature against main');
+    expect(describeSessionLabel([local()], 's1', undefined)).toBe('notes · feature');
   });
 
   test('prefers the listed summary, which carries the pull request title', ({ expect }) => {

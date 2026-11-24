@@ -5,6 +5,8 @@ import { styleMap } from 'lit/directives/style-map.js';
 
 import type {
   AppInfo,
+  AttentionView,
+  CiStatusView,
   FileReviewProgressView,
   GithubAuthStatusView,
   LspServerView,
@@ -15,6 +17,8 @@ import type {
 import { ActionDelegation } from './action-delegation.ts';
 import type { ReviewBranches } from './branches-from.ts';
 import { countNoun } from './count-noun.ts';
+import { describeAttention } from './describe-attention.ts';
+import { describeCiStatus } from './describe-ci-status.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { describeLspStatus } from './describe-lsp-status.ts';
@@ -28,11 +32,17 @@ import './beuve-review-range.ts';
 import './primitives/beuve-commit.ts';
 import './primitives/beuve-time.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
+import type { ReviewSpan } from './review-span-from.ts';
 import type { SaveState } from './save-state-from.ts';
 
 /** `beuve-status-open-url`: a link in a status popover, for the owner to open. */
 export interface StatusOpenUrlDetail {
   readonly url: string;
+}
+
+/** `beuve-open-commit`: a commit hash of the status bar, to open on the remote (ADR 0108). */
+export interface OpenCommitDetail {
+  readonly sha: string;
 }
 
 /** `beuve-status-popover`: which popover (`lsp` or `save`) just opened. */
@@ -42,12 +52,15 @@ export interface StatusPopoverDetail {
 
 /**
  * Bottom bar: the reviewer's progress through the open review, how many files are marked reviewed,
- * what the diff shows (the range menu, ADR 0142) and whether the head is saved (ADR 0157; click for Save Progress and Remove Last Saved
+ * what the diff shows (the range menu, ADR 0142) and the commits it spans, and whether the head is
+ * saved (ADR 0157; click for Save Progress and Remove Last Saved
  * Progress), the language servers (click for each one's state), a transient notice, the branches
- * the review compares, a followed branch's state, GitHub sign-in and app version. A pull request's CI and whose turn it is are in
- * the title bar. Its text is not selectable: these are controls and readouts, not content.
+ * the review compares, whose turn a pull request is and its CI (click for the checks in the
+ * Overview tab), a followed branch's state, GitHub sign-in and app version: ambient facts worth a
+ * glance, where the title bar holds what the reviewer needs all the time. Its text is not selectable: these are controls and readouts, not content.
  *
- * Emits `beuve-status-action` (a catalog command), what `beuve-review-range` emits, `beuve-status-open-url` (a link in a popover)
+ * Emits `beuve-status-action` (a catalog command), what `beuve-review-range` emits,
+ * `beuve-open-commit`, `beuve-status-open-url` (a link in a popover)
  * and `beuve-status-popover` when a popover opens, so the owner can refresh what it shows.
  */
 /** Server states and describer tones that are not dot tones themselves. */
@@ -182,6 +195,22 @@ export class BeuveStatusBar extends LitElement {
         color: var(--beuve-danger);
       }
 
+      .span {
+        flex: 0 100 auto;
+        min-inline-size: 0;
+        overflow: hidden;
+        font: var(--beuve-font-code);
+      }
+
+      .attention {
+        cursor: default;
+      }
+
+      .attention.yours {
+        color: var(--beuve-accent);
+        font-weight: var(--beuve-font-weight-semibold);
+      }
+
       .branches {
         display: inline-flex;
         flex: 0 1 auto;
@@ -247,6 +276,12 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor range: ReviewRangeView | undefined;
   /** What the diff shows (`describeReviewScope`); empty without a review. */
   @property() accessor scopeText = '';
+  /** The commits the open review's diff spans. */
+  @property({ attribute: false }) accessor span: ReviewSpan | undefined;
+  /** CI for the open pull request's head; absent for other reviews. */
+  @property({ attribute: false }) accessor ci: CiStatusView | undefined;
+  /** Whose turn the open pull request is; absent for other reviews and until it is known. */
+  @property({ attribute: false }) accessor attention: AttentionView | undefined;
   /** The branches the open review compares, when known (ADR 0157 amendment). */
   @property({ attribute: false }) accessor branches: ReviewBranches | undefined;
   /** Whether the open review's head is saved (ADR 0157); absent without a review. */
@@ -276,6 +311,17 @@ export class BeuveStatusBar extends LitElement {
               this.emit('beuve-status-action', { command });
             }
             closePopoverOf(element);
+          },
+          'open-commit': ({ sha }): void => {
+            if (sha === undefined) {
+              return;
+            }
+
+            const detail: OpenCommitDetail = { sha };
+            this.emit('beuve-open-commit', detail);
+          },
+          'show-checks': (): void => {
+            this.emit('beuve-status-action', { command: 'sidebar-overview' });
           },
           'notice-action': ({ command }): void => {
             if (command !== undefined) {
@@ -463,6 +509,45 @@ export class BeuveStatusBar extends LitElement {
     </li>`;
   }
 
+  /** The commits the diff spans, each opening on the remote (ADR 0108). */
+  private renderSpan(span: ReviewSpan): TemplateResult {
+    return html`<span class="span" title=${span.title}
+      >${this.renderCommit(span.from)}..${this.renderCommit(span.to)}</span
+    >`;
+  }
+
+  private renderCommit(sha: string): TemplateResult {
+    return html`<beuve-commit
+      sha=${sha}
+      hint="Click to open on GitHub"
+      data-action="open-commit"
+      data-sha=${sha}
+    ></beuve-commit>`;
+  }
+
+  /** The pull request's CI rollup; a click shows the checks in the Overview tab. */
+  private renderCi(ci: CiStatusView): TemplateResult {
+    const line = describeCiStatus(ci);
+    return html`<button
+      type="button"
+      class="button small quiet chip"
+      data-action="show-checks"
+      title=${`${line.title}\nShow the checks in Overview`}
+    >
+      <span class="status-dot" data-tone=${line.tone}></span>${line.text}
+    </button>`;
+  }
+
+  private renderAttention(): TemplateResult | typeof nothing {
+    const chip = describeAttention(this.attention);
+    if (chip === undefined) {
+      return nothing;
+    }
+    return html`<span class="attention ${chip.isYours ? 'yours' : ''}" title=${chip.title}
+      >${chip.text}</span
+    >`;
+  }
+
   /** The head branch and the base it is reviewed against, ellipsized when the bar is tight. */
   private renderBranches(branches: ReviewBranches): TemplateResult {
     let title = `Reviewing ${branches.head}`;
@@ -507,10 +592,12 @@ export class BeuveStatusBar extends LitElement {
   override render(): TemplateResult {
     return html`
       ${this.renderProgress()} ${this.renderScope()}
+      ${this.span === undefined ? nothing : this.renderSpan(this.span)}
       ${this.saveState === undefined ? nothing : this.renderSave(this.saveState)}
       ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
       ${this.branches === undefined ? nothing : this.renderBranches(this.branches)}
+      ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.remoteBranch === undefined ? nothing : this.renderRemoteBranch(this.remoteBranch)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}

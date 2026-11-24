@@ -33,3 +33,7 @@ What the window says falls into levels: which review is open, its state (CI, who
 ## Amendment 2026-11-24: The status bar names the branches
 
 The title bar is for what the reviewer needs all the time; the status bar is for ambient facts worth a glance. The branches a review compares are the latter: the status bar shows them on its right, with a branch glyph (`displayIcon('branch')`), as `head → base` in the code font, ellipsized when the bar is tight, with "Reviewing head against base" on hover (`branchesFrom`). A local review names its refs (without `refs/heads/`), a pull request its branches on GitHub once it is loaded, and a followed branch the branch and, once known, the remote's default branch.
+
+## Amendment 2026-11-24: Ambient facts leave the title bar
+
+By the same rule, three more things move. A pull request's CI (a chip whose click runs `sidebar-overview`) and whose turn it is go back to the status bar's right side, after the branches. The commits the diff spans (`reviewSpanFrom`) move to the status bar after the range menu, each still opening on the remote; the title band ends with how big the diff is, `3 files · +5 −1` (`beuve-review-diffstat`). A local review's name drops its base (`folder · head`), which the status bar's branches give. The title bar now holds the review's name, the switcher, Reload and the diff's size.
