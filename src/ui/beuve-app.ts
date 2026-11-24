@@ -317,7 +317,7 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onOpenPullRequest = (event: CustomEvent<OpenPullRequestRequest>): void => {
-    void this.github.open(event.detail);
+    void this.openFromPanel(event.detail);
   };
 
   /** Edits happen in the editor, outside beuve: coming back to the window counts them again. */
@@ -546,7 +546,32 @@ export class BeuveApp extends LitElement {
    */
   private async openQueueItem({ ref, label }: QueueOpenDetail): Promise<void> {
     this.queueOpen = false;
-    await this.github.open({ ref }, { label });
+    await this.openShown({ ref }, label);
+  }
+
+  /**
+   * A pull request picked in the Open panel (ADR 0146 amendment): the dialog closes and the open
+   * shows over the review, as a queue pick does; a failure brings the dialog back on its pull
+   * request step. The home screen's panel stays where it is, under the cover, and shows a
+   * failure in place.
+   */
+  private async openFromPanel(request: OpenPullRequestRequest): Promise<void> {
+    if (!this.openDialog) {
+      await this.github.open(request, { label: request.ref });
+      return;
+    }
+    this.openDialog = false;
+    await this.openShown(request, request.ref);
+  }
+
+  /**
+   * Opens `request` shown over the review from the moment it is picked (ADR 0146); one that fails
+   * shows the Open dialog's pull request step for it, with the failure. Cancelled, the keyboard
+   * goes back where it was.
+   */
+  private async openShown(request: OpenPullRequestRequest, label: string): Promise<void> {
+    const { ref } = request;
+    await this.github.open(request, { label });
     if (this.github.failure === undefined) {
       await this.updateComplete;
       if (this.showsEmptyPanel()) {
@@ -759,10 +784,7 @@ export class BeuveApp extends LitElement {
       case 'export-agent-xml':
       case 'export-agent-json':
       case 'export-github': {
-        void this.ura.export({
-          target: exportActions[id],
-          summary: this.reviewElement()?.reviewSummary(),
-        });
+        void this.reviewElement()?.exportReview(exportActions[id]);
         return;
       }
       default: {

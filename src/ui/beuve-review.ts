@@ -17,6 +17,7 @@ import type {
   ReviewView,
   SetDiffDisplayRequest,
   SidebarSideView,
+  UraExportTarget,
   UraItemView,
 } from '#contract/ipc-contract.ts';
 
@@ -345,6 +346,11 @@ export class BeuveReview extends LitElement {
     void this.saveProgress();
   };
 
+  /** The range menu's and the up-to-date screen's Remove Last Saved Progress (ADR 0156). */
+  private readonly onRemoveSavedProgress = (): void => {
+    void this.undoSaveProgress();
+  };
+
   private readonly onReviewRange = (event: CustomEvent<ReviewRangeChoiceView>): void => {
     void this.session.setReviewRange(event.detail);
   };
@@ -627,7 +633,7 @@ export class BeuveReview extends LitElement {
   };
 
   private readonly onUraExport = (event: CustomEvent<UraExportDetail>): void => {
-    void this.ura.export({ target: event.detail.target, summary: this.reviewSummary() });
+    void this.exportReview(event.detail.target);
   };
 
   private readonly onUraSetVerdict = (event: CustomEvent<UraVerdictDetail>): void => {
@@ -1359,6 +1365,7 @@ export class BeuveReview extends LitElement {
       @beuve-open-commit=${this.onOpenCommit}
       @beuve-mark-reviewed=${this.onMarkReviewed}
       @beuve-review-range=${this.onReviewRange}
+      @beuve-remove-saved-progress=${this.onRemoveSavedProgress}
       @beuve-peek-request=${this.onPeekRequest}
       @beuve-peek-expand=${this.onPeekExpand}
       @beuve-peek-close=${this.onPeekClose}
@@ -1984,12 +1991,33 @@ export class BeuveReview extends LitElement {
     return noteListCheckedCommands(noteListItemOf(notes ?? []));
   }
 
-  /** What the review adds to the menu state: the focus, the cursor's file, the panels. */
+  /**
+   * Copies the review, then saves progress at the head (ADR 0156): the export is what the reviewer
+   * hands off, so the next look shows what changed after it. The review stays as shown until it
+   * next loads, and the status bar offers Undo.
+   */
+  async exportReview(target: UraExportTarget): Promise<void> {
+    const isCopied = await this.ura.export({ target, summary: this.reviewSummary() });
+    if (!isCopied) {
+      return;
+    }
+    const saved = await this.session.markReviewed({ keepShown: true });
+    if (saved?.checkpointId === undefined) {
+      return;
+    }
+    this.showNotice({
+      tone: 'info',
+      text: 'Progress saved with the export: next time, only what changes after this is shown.',
+      action: { label: 'Undo', command: 'undo-save-progress' },
+    });
+  }
+
   /** The review summary typed in the notes list for posting, which the exports carry too; blank is none. */
   reviewSummary(): string | undefined {
     return this.renderRoot.querySelector<BeuveNoteList>('beuve-note-list')?.writtenSummary();
   }
 
+  /** What the review adds to the menu state: the focus, the cursor's file, the panels. */
   menuFacts(): ReviewMenuFacts {
     let noteList: readonly UraItemView[] = [];
     if (this.focusedZone === 'ura') {

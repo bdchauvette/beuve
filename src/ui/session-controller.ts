@@ -28,6 +28,12 @@ export interface SavedProgress {
   readonly checkpointId?: string;
 }
 
+/** How Save Progress leaves the review. */
+export interface MarkReviewedOptions {
+  /** Keep the review as shown until it next loads, rather than reloading it now. */
+  readonly keepShown?: boolean;
+}
+
 /** What Undo Save Progress did: nothing to undo here, the save is undone, or why it can't be. */
 export type UndoSaveOutcome =
   | { readonly kind: 'nothing' }
@@ -108,6 +114,21 @@ export class SessionController implements ReactiveController {
     } else {
       this.patch({ note: `Sessions unavailable: ${sessions.error.message}` });
     }
+  }
+
+  /**
+   * The open session's latest checkpoint: this window's last save on it, which a save that kept
+   * the review shown has not reloaded yet, else the one the review was loaded with.
+   */
+  private latestCheckpointId(): string | undefined {
+    const { review, savedProgress } = this.snapshot;
+    if (
+      savedProgress?.sessionId === review?.session.id &&
+      savedProgress?.checkpointId !== undefined
+    ) {
+      return savedProgress.checkpointId;
+    }
+    return review?.session.lastCheckpointId;
   }
 
   hostConnected(): void {
@@ -250,10 +271,13 @@ export class SessionController implements ReactiveController {
   }
 
   /**
-   * Save Progress: records the head as reviewed, then shows what changed since. Answers the save
-   * once main has it, with the checkpoint it recorded if it recorded one.
+   * Save Progress: records the head as reviewed, then shows what changed since, unless
+   * `keepShown` leaves the review as it is until it next loads (a save after an export). Answers
+   * the save once main has it, with the checkpoint it recorded if it recorded one.
    */
-  async markReviewed(): Promise<SavedProgress | undefined> {
+  async markReviewed({ keepShown = false }: MarkReviewedOptions = {}): Promise<
+    SavedProgress | undefined
+  > {
     const bridge = this.environment.bridge();
     const { review } = this.snapshot;
     if (bridge === undefined || review === undefined || this.snapshot.isMarking) {
@@ -279,25 +303,22 @@ export class SessionController implements ReactiveController {
     };
     this.patch({ savedProgress });
     await this.refresh();
-    await this.select(review.session.id);
+    if (!keepShown) {
+      await this.select(review.session.id);
+    }
     return savedProgress;
   }
 
   /**
-   * Undo Save Progress (ADR 0142): removes the checkpoint this window's latest save recorded on
-   * the open session, while it is still the session's latest, then reloads the review, which shows
-   * again what it showed before the save. One save is undone once.
+   * Undo Save Progress (ADR 0142 amendment): removes the open session's latest saved progress,
+   * whichever window or run saved it, then reloads the review, which shows what it showed before
+   * that save. Run again, it removes the save before that, down to none.
    */
   async undoSaveProgress(): Promise<UndoSaveOutcome> {
     const bridge = this.environment.bridge();
-    const { review, savedProgress } = this.snapshot;
-    const checkpointId = savedProgress?.checkpointId;
-    if (
-      bridge === undefined ||
-      review === undefined ||
-      checkpointId === undefined ||
-      savedProgress?.sessionId !== review.session.id
-    ) {
+    const { review } = this.snapshot;
+    const checkpointId = this.latestCheckpointId();
+    if (bridge === undefined || review === undefined || checkpointId === undefined) {
       return { kind: 'nothing' };
     }
     this.patch({ savedProgress: undefined });

@@ -17,8 +17,9 @@ import './primitives/beuve-time.ts';
 
 /**
  * Which changes the review shows (ADR 0142), as a menu in its header: since the last saved
- * progress, the whole change, or since an earlier save. Nothing renders until progress was saved.
- * Emits `beuve-review-range` (bubbling, composed) with the {@link ReviewRangeChoiceView} chosen.
+ * progress, the whole change, or since an earlier save, then Remove Last Saved Progress (ADR 0156).
+ * Nothing renders until progress was saved. Emits `beuve-review-range` (bubbling, composed) with
+ * the {@link ReviewRangeChoiceView} chosen, and `beuve-remove-saved-progress` for the last item.
  */
 @customElement('beuve-review-range')
 export class BeuveReviewRange extends LitElement {
@@ -67,6 +68,11 @@ export class BeuveReviewRange extends LitElement {
               );
             },
           ),
+          'remove-last': (): void => {
+            this.dispatchEvent(
+              new CustomEvent('beuve-remove-saved-progress', { bubbles: true, composed: true }),
+            );
+          },
         },
       }),
     );
@@ -127,6 +133,16 @@ export class BeuveReviewRange extends LitElement {
           : html`<p class="menu-heading">Earlier saves</p>
               ${menu.earlier.map((option) => this.renderOption(option))}`
       }
+      <hr class="menu-separator" />
+      <button
+        type="button"
+        role="menuitem"
+        tabindex="-1"
+        data-action="remove-last"
+        title="Forget the latest save: the review shows what it showed before it"
+      >
+        Remove Last Saved Progress
+      </button>
     </beuve-menu>`;
   }
 }

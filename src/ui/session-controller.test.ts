@@ -213,20 +213,61 @@ describe('SessionController', () => {
     expect(session.savedProgress).toBeUndefined();
   });
 
-  test('records no checkpoint to undo when the head was already saved', async ({ expect }) => {
+  test('records no checkpoint when the head was already saved, and undo removes that save', async ({
+    expect,
+  }) => {
     const review = createReviewView({ sessionId: 's1' });
     const { session, invoked } = createSessionHarness({
       replies: {
         'session:get-review': ok({ ...review, session: { id: 's1', lastCheckpointId: 'c1' } }),
         'session:list': listed('s1'),
         'session:mark-reviewed': ok({ id: 's1', lastCheckpointId: 'c1' }),
+        'session:undo-mark-reviewed': ok({ id: 's1' }),
       },
     });
     await session.select('s1');
     const saved = await session.markReviewed();
     expect(saved?.checkpointId).toBeUndefined();
+    await expect(session.undoSaveProgress()).resolves.toStrictEqual({ kind: 'undone' });
+    expect(invoked.find(([channel]) => channel === 'session:undo-mark-reviewed')).toStrictEqual([
+      'session:undo-mark-reviewed',
+      { sessionId: 's1', checkpointId: 'c1' },
+    ]);
+  });
+
+  test('undoes nothing in a review that has no saved progress', async ({ expect }) => {
+    const { session, invoked } = createSessionHarness({
+      replies: {
+        'session:get-review': ok(createReviewView({ sessionId: 's1' })),
+        'session:list': listed('s1'),
+      },
+    });
+    await session.select('s1');
     await expect(session.undoSaveProgress()).resolves.toStrictEqual({ kind: 'nothing' });
     expect(invoked.some(([channel]) => channel === 'session:undo-mark-reviewed')).toBe(false);
+  });
+
+  test('keeps the review shown when asked, and undo removes the new save', async ({ expect }) => {
+    const review = createReviewView({ sessionId: 's1' });
+    const { session, invoked } = createSessionHarness({
+      replies: {
+        'session:get-review': ok({ ...review, session: { id: 's1', lastCheckpointId: 'c1' } }),
+        'session:list': listed('s1'),
+        'session:mark-reviewed': ok({ id: 's1', lastCheckpointId: 'c2' }),
+        'session:undo-mark-reviewed': ok({ id: 's1' }),
+      },
+    });
+    await session.select('s1');
+    const loads = invoked.filter(([channel]) => channel === 'session:get-review').length;
+    await expect(session.markReviewed({ keepShown: true })).resolves.toMatchObject({
+      checkpointId: 'c2',
+    });
+    expect(invoked.filter(([channel]) => channel === 'session:get-review')).toHaveLength(loads);
+    await session.undoSaveProgress();
+    expect(invoked.find(([channel]) => channel === 'session:undo-mark-reviewed')).toStrictEqual([
+      'session:undo-mark-reviewed',
+      { sessionId: 's1', checkpointId: 'c2' },
+    ]);
   });
 
   test('undoes the save this window made, once, and reloads the review', async ({ expect }) => {
