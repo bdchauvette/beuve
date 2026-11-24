@@ -1697,7 +1697,7 @@ export class BeuveReview extends LitElement {
     }
     const row = path.find((element) => element.dataset['itemPath'] !== undefined);
     if (row !== undefined) {
-      this.renderRoot
+      void this.renderRoot
         .querySelector<BeuveFilesSidebar>('beuve-files-sidebar')
         ?.revealPath(row.dataset['itemPath'] ?? '');
       this.focusedZone = 'files';
@@ -2001,7 +2001,9 @@ export class BeuveReview extends LitElement {
     this.treeMode = 'neighborhood';
     this.focusSidebar('files');
     void this.updateComplete.then(() => {
-      this.renderRoot.querySelector<BeuveFilesSidebar>('beuve-files-sidebar')?.revealPath(path);
+      void this.renderRoot
+        .querySelector<BeuveFilesSidebar>('beuve-files-sidebar')
+        ?.revealPath(path);
     });
   }
 
