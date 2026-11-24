@@ -53,15 +53,16 @@ export class BeuveFilesSidebar extends LitElement {
       .files-header {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
+        align-items: stretch;
         gap: var(--beuve-space-1);
         margin-block-end: var(--beuve-space-1);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
 
-      .filter {
+      .files-header .filter {
         flex: 1 1 calc(8 * var(--beuve-measure-em));
+        block-size: auto;
       }
 
       beuve-radar-tree {
