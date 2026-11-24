@@ -164,8 +164,8 @@ const entries = Object.freeze([
   },
   {
     id: 'export-agent-xml',
-    title: 'Copy Review as XML',
-    label: 'Copy as XML',
+    title: 'Copy Review as XML…',
+    label: 'Copy as XML…',
     menu: { menu: 'file', group: 3, submenu: 'Export Review' },
     when: ['session'],
     windows: ['main'],
@@ -173,8 +173,8 @@ const entries = Object.freeze([
   },
   {
     id: 'export-agent-json',
-    title: 'Copy Review as JSON',
-    label: 'Copy as JSON',
+    title: 'Copy Review as JSON…',
+    label: 'Copy as JSON…',
     menu: { menu: 'file', group: 3, submenu: 'Export Review' },
     when: ['session'],
     windows: ['main'],
@@ -182,8 +182,8 @@ const entries = Object.freeze([
   },
   {
     id: 'export-github',
-    title: 'Copy GitHub Review (JSON)',
-    label: 'Copy GitHub Review (JSON)',
+    title: 'Copy GitHub Review (JSON)…',
+    label: 'Copy GitHub Review (JSON)…',
     menu: { menu: 'file', group: 3, submenu: 'Export Review' },
     when: ['session'],
     windows: ['main'],

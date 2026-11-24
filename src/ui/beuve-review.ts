@@ -2025,6 +2025,16 @@ export class BeuveReview extends LitElement {
     }
   }
 
+  /**
+   * A Copy Review command from the menu or the palette (ADR 0157 amendment): finishing always
+   * passes through the notes, so it shows the notes list with that Copy button focused, as Post
+   * Review shows the Post button, rather than copying at once.
+   */
+  showExport(target: UraExportTarget): void {
+    this.focusSidebar('ura');
+    this.renderRoot.querySelector<BeuveNoteList>('beuve-note-list')?.focusExport(target);
+  }
+
   /** Opens `sha` on the review's remote, for a commit shown outside the review (ADR 0108). */
   async openCommitOnRemote(sha: string): Promise<void> {
     await this.openCommit(sha);
