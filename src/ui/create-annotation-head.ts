@@ -22,23 +22,32 @@ export interface AnnotationHeadParts {
   readonly marks: readonly AnnotationMark[];
   /** Controls after the marks (✨, a button that reveals hidden lines), which keep their clicks. */
   readonly trailing: readonly Node[];
+  /**
+   * What a click on the head does: open the annotation in place (an insight, a thread), or open
+   * the note's editor in the diff (`edit-note`, ADR 0155 amendment).
+   */
+  readonly opens: 'in-place' | 'editor';
 }
 
 /**
  * The one-line head every annotation under a diff line shares (ADR 0155): a toggle button (the
- * emoji and what the annotation says, ellipsized) with `aria-expanded`, the marks, any trailing
- * controls, and a chevron. A click on the head outside its controls toggles too
- * (`data-action="annotation-toggle"` on both). Built from text nodes only (ADR 0077).
+ * emoji and what the annotation says, ellipsized), the marks, any trailing controls, and a
+ * chevron. A click on the head outside its controls does what the toggle does: opens the
+ * annotation in place (`annotation-toggle`, with `aria-expanded` and the chevron), or opens the
+ * note's editor (`edit-note`, no chevron). Built from text nodes only (ADR 0077).
  */
 export function createAnnotationHead(parts: AnnotationHeadParts): HTMLElement {
+  const action = actionOf(parts.opens);
   const head = document.createElement('div');
   head.className = 'annotation-head';
-  head.dataset['action'] = 'annotation-toggle';
+  head.dataset['action'] = action;
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'annotation-toggle';
-  toggle.dataset['action'] = 'annotation-toggle';
-  toggle.setAttribute('aria-expanded', 'false');
+  toggle.dataset['action'] = action;
+  if (parts.opens === 'in-place') {
+    toggle.setAttribute('aria-expanded', 'false');
+  }
   const emoji = createTextSpan({ className: 'annotation-emoji', text: parts.emoji });
   emoji.setAttribute('role', 'img');
   emoji.setAttribute('aria-label', parts.emojiName);
@@ -65,8 +74,17 @@ export function createAnnotationHead(parts: AnnotationHeadParts): HTMLElement {
     head.append(marks);
   }
   head.append(...parts.trailing);
-  const chevron = createTextSpan({ className: 'annotation-chevron', text: '' });
-  chevron.setAttribute('aria-hidden', 'true');
-  head.append(chevron);
+  if (parts.opens === 'in-place') {
+    const chevron = createTextSpan({ className: 'annotation-chevron', text: '' });
+    chevron.setAttribute('aria-hidden', 'true');
+    head.append(chevron);
+  }
   return head;
+}
+
+function actionOf(opens: AnnotationHeadParts['opens']): string {
+  if (opens === 'editor') {
+    return 'edit-note';
+  }
+  return 'annotation-toggle';
 }

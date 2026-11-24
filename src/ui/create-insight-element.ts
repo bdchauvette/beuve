@@ -57,6 +57,7 @@ export function createInsightElement(insight: ReviewInsight, isOpen: boolean): H
       isBodyText: false,
       marks,
       trailing: [agent],
+      opens: 'in-place',
     }),
   );
   setInsightOpen(root, insight, isOpen);

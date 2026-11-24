@@ -74,7 +74,6 @@ import type { UraMarker } from './ura-markers-from.ts';
 import { createInsightElement } from './create-insight-element.ts';
 import { createNoteAnnotation } from './create-note-annotation.ts';
 import { createThreadAnnotation } from './create-thread-annotation.ts';
-import { setNoteOpen } from './set-note-open.ts';
 import { setThreadOpen } from './set-thread-open.ts';
 import type { DelegatedActions } from './delegate-actions.ts';
 import { dispatchAction } from './dispatch-action.ts';
@@ -443,7 +442,10 @@ export class BeuveFileCard extends LitElement {
       }
 
       /* ADR 0155: notes, insights and threads under diff lines share one head and open in place. */
+      /* The note measure, as the composer's form has, so a note keeps its width when edited. */
       .annotation {
+        box-sizing: border-box;
+        max-inline-size: var(--beuve-size-note-measure);
         margin: var(--beuve-space-0-5) var(--beuve-space-3);
         border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
@@ -606,46 +608,45 @@ export class BeuveFileCard extends LitElement {
         background: none;
       }
 
-      :is(.insight-text, .annotation-markdown)
-        :is(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6, .table) {
+      .insight-text :is(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6, .table) {
         margin: 0 0 var(--beuve-space-1);
       }
 
-      :is(.insight-text, .annotation-markdown) :is(h1, h2, h3, h4, h5, h6) {
+      .insight-text :is(h1, h2, h3, h4, h5, h6) {
         font: inherit;
         font-weight: var(--beuve-font-weight-semibold);
       }
 
-      :is(.insight-text, .annotation-markdown) :is(ul, ol) {
+      .insight-text :is(ul, ol) {
         padding-inline-start: var(--beuve-space-4);
       }
 
-      :is(.insight-text, .annotation-markdown) .table {
+      .insight-text .table {
         overflow-inline: auto;
       }
 
-      :is(.insight-text, .annotation-markdown) table {
+      .insight-text table {
         border-collapse: collapse;
         font: inherit;
       }
 
-      :is(.insight-text, .annotation-markdown) :is(th, td) {
+      .insight-text :is(th, td) {
         padding: var(--beuve-space-px) var(--beuve-space-2);
         border: var(--beuve-border-width) solid var(--beuve-border);
         text-align: start;
         vertical-align: top;
       }
 
-      :is(.insight-text, .annotation-markdown) th {
+      .insight-text th {
         background: var(--beuve-surface-sunken);
         font-weight: var(--beuve-font-weight-semibold);
       }
 
-      :is(.insight-text, .annotation-markdown) .align-center {
+      .insight-text .align-center {
         text-align: center;
       }
 
-      :is(.insight-text, .annotation-markdown) .align-right {
+      .insight-text .align-right {
         text-align: end;
       }
 
@@ -733,7 +734,7 @@ export class BeuveFileCard extends LitElement {
         cursor: pointer;
       }
 
-      :is(.insight-text, .annotation-markdown) pre {
+      .insight-text pre {
         margin: 0 0 var(--beuve-space-1);
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border-radius: var(--beuve-radius-small);
@@ -1426,12 +1427,9 @@ export class BeuveFileCard extends LitElement {
     return this.openAnnotations.has(key);
   }
 
-  /** A note's annotation, open if the reviewer left it open. */
+  /** A note's annotation, which a click opens in the editor. */
   private noteNode(item: UraItemView, outside: string | undefined): HTMLElement {
-    return createNoteAnnotation(item, {
-      isOpen: this.isOpen(`ura:${item.id}`),
-      ...(outside !== undefined && { outside }),
-    });
+    return createNoteAnnotation(item, { ...(outside !== undefined && { outside }) });
   }
 
   /** A `/review` finding's annotation, open if the reviewer left it open. */
@@ -1451,8 +1449,8 @@ export class BeuveFileCard extends LitElement {
   }
 
   /**
-   * Opens or closes (`undefined`: toggles) the annotation `element` is in, a note, an insight or
-   * a thread (ADR 0155), and remembers it.
+   * Opens or closes (`undefined`: toggles) the annotation `element` is in, an insight or a thread
+   * (ADR 0155), and remembers it. A note opens in the editor instead.
    */
   private toggleAnnotation(element: HTMLElement, isOpen: boolean | undefined): void {
     const root = element.closest<HTMLElement>('[data-annotation-key]');
@@ -1462,13 +1460,7 @@ export class BeuveFileCard extends LitElement {
     }
     const isOpening = isOpen ?? !root.classList.contains('open');
     const [kind = '', id = ''] = splitKey(key);
-    if (kind === 'ura') {
-      const item = this.uraItems.find((candidate) => candidate.id === id);
-      if (item === undefined) {
-        return;
-      }
-      setNoteOpen(root, item, isOpening);
-    } else if (kind === 'insight') {
+    if (kind === 'insight') {
       const insight = this.insights.find((candidate) => candidate.key === id);
       if (insight === undefined) {
         return;

@@ -20,3 +20,7 @@ Hiding needs one name for both. "Resolved" is taken: other reviewers' GitHub thr
 ## Consequences
 
 The notes list can be kept to the notes still in play, and the line under the list means a hidden note is never forgotten. Addressed and withdrawn notes hide together; one cannot be listed without the other. The preference is global, not per session.
+
+## Amendment 2026-11-24: The Closed heading collapses the closed notes
+
+The notes list's Closed heading (ADR 0154) is a disclosure button with a chevron and the count of closed notes, listed or not; it runs Show Closed Notes, so collapsing the section is the same preference as the menu toggle. While closed notes are hidden the heading stays, collapsed, in place of the "3 closed notes hidden." line and its Show button; when every note is closed, "Every note is closed." stands above it.

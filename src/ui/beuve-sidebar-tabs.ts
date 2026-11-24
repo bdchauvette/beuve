@@ -48,9 +48,21 @@ export class BeuveSidebarTabs extends LitElement {
         cursor: pointer;
       }
 
-      button[aria-selected='true'] {
+      button:not([aria-selected='true']):hover {
         color: var(--beuve-text);
-        box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 var(--beuve-border);
+      }
+
+      /*
+       * The chosen tab says so as the chosen segment of a segmented control does (ADR 0115): accent
+       * text over an accent bar along the row's bottom edge.
+       */
+      button[aria-selected='true'] {
+        color: var(--beuve-accent);
+        box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 var(--beuve-accent);
+      }
+
+      button[aria-selected='true'] .count {
+        color: inherit;
       }
 
       .count {

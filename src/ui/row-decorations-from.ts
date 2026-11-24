@@ -17,9 +17,8 @@ const compactCount = new Intl.NumberFormat('en-US', {
 
 /**
  * The radar tree's row decorations (ADR 0026, 0052, 0064): for each changed file, its reviewed
- * mark, `gen` when it is generated, and how many lines it changes, added plus deleted and
- * abbreviated (`342`, `1.2K`). The tooltip spells each out. A file with nothing to say gets none.
- * Pure.
+ * mark, `⚙` when it is generated, and the lines it adds and deletes, each abbreviated (`+342/−7`,
+ * `+1.2K/−0`). The tooltip spells each out. A file with nothing to say gets none. Pure.
  */
 export function rowDecorationsFrom(facts: RowFacts): ReadonlyMap<string, TreeDecoration> {
   const marked = reviewedDecorations(facts.marks);
@@ -33,12 +32,11 @@ export function rowDecorationsFrom(facts: RowFacts): ReadonlyMap<string, TreeDec
       titles.push(mark.title);
     }
     if (facts.generated.has(file.path)) {
-      texts.push('gen');
+      texts.push('⚙');
       titles.push('Generated file');
     }
-    const changed = file.additions + file.deletions;
-    if (changed > 0) {
-      texts.push(compactCount.format(changed));
+    if (file.additions + file.deletions > 0) {
+      texts.push(`+${compactCount.format(file.additions)}/−${compactCount.format(file.deletions)}`);
       titles.push(`+${String(file.additions)} −${String(file.deletions)} lines`);
     }
     if (texts.length > 0) {

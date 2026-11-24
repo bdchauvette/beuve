@@ -5,7 +5,7 @@ import { createDiffFileView } from './testing/create-diff-file-view.ts';
 import { test } from './testing/test.ts';
 
 describe('rowDecorationsFrom', () => {
-  test('says how many lines a file changes, and the mark and generated flag before it', ({
+  test('says how many lines a file adds and deletes, after its mark and generated flag', ({
     expect,
   }) => {
     const small = createDiffFileView('src/a.ts', ['+one', '+two', '-three', ' same']);
@@ -18,8 +18,8 @@ describe('rowDecorationsFrom', () => {
       }),
     ).toStrictEqual(
       new Map([
-        ['src/a.ts', { text: '✓ 3', title: 'Reviewed\n+2 −1 lines' }],
-        ['package-lock.json', { text: 'gen 1', title: 'Generated file\n+1 −0 lines' }],
+        ['src/a.ts', { text: '✓ +2/−1', title: 'Reviewed\n+2 −1 lines' }],
+        ['package-lock.json', { text: '⚙ +1/−0', title: 'Generated file\n+1 −0 lines' }],
       ]),
     );
   });
@@ -35,7 +35,7 @@ describe('rowDecorationsFrom', () => {
       marks: new Map(),
       generated: new Set(),
     });
-    expect(decorations.get('src/big.ts')?.text).toBe('1.2K');
+    expect(decorations.get('src/big.ts')?.text).toBe('+1.2K/−0');
     expect(decorations.has('logo.png')).toBe(false);
   });
 });

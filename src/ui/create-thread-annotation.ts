@@ -37,6 +37,7 @@ export function createThreadAnnotation(thread: ReviewThreadView, isOpen: boolean
       isBodyText: true,
       marks,
       trailing: [],
+      opens: 'in-place',
     }),
   );
   setThreadOpen(root, thread, isOpen);
