@@ -210,6 +210,11 @@ export class BeuveReview extends LitElement {
         min-block-size: 0;
       }
 
+      /* The cards' sticky headers stack inside the stream, under the cover. */
+      .stage > beuve-diff-stream {
+        isolation: isolate;
+      }
+
       .covered {
         display: none;
       }
