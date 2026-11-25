@@ -74,4 +74,4 @@ The Notes tab's Export block (verdict, the GitHub summary, Post and the copy act
 
 ## Amendment 2026-11-25: the status bar names the head branch only
 
-The status bar's branches are now a chip naming only the head branch, ellipsized when the bar is tight, with "Reviewing head against base" on hover. A click opens a popover (`branches`) that names the head and the base in full, as selectable text. `head → base` beside the commit span's `base..head` read in two opposite orders, and with both names in the bar the one under review was the first to lose its room.
+The status bar's branches are now a chip naming only the head branch, ellipsized when the bar is tight, with "Reviewing head against base" on hover. A click opens a popover (`branches`) that names the head and the base in full, as selectable text. The commit span beside it never shrinks: when the bar is tight, the branch name gives way first. `head → base` beside the commit span's `base..head` read in two opposite orders, and with both names in the bar the one under review was the first to lose its room.

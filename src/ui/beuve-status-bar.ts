@@ -214,10 +214,9 @@ export class BeuveStatusBar extends LitElement {
         margin: 0;
       }
 
+      /* The commits keep their room; the head branch's name is ellipsized instead. */
       .span {
-        flex: 0 100 auto;
-        min-inline-size: 0;
-        overflow: hidden;
+        flex: none;
         font: var(--beuve-font-code);
       }
 
