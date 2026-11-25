@@ -67,3 +67,7 @@ A pull request's CI chip leaves the status bar, which the amendment "Ambient fac
 ## Amendment 2026-11-24: The chosen tab is open onto its panel
 
 The sidebar's tabs carry the title band's full-height lines: each tab fills the band's height with its own padding, and only the chosen one shows lines on both sides, the panel's background, accent text, and an accent bar. Every tab reaches over the band's bottom border, so the chosen tab's bar lies on the band's very bottom edge and runs straight into the focused panel's own accent line (`zoneStyles`) with no border between them. The first tab's start line lies over the sidebar's edge rather than beside it.
+
+## Amendment 2026-11-25: the Export block is pinned under the notes
+
+The Notes tab's Export block (verdict, the GitHub summary, Post and the copy actions) is a footer pinned to the bottom of the tab, with the notes scrolling above it, so the summary and the finishing actions stay in one place however many notes come and go. It scrolls on its own only past 60% of the tab's height.
