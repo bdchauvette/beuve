@@ -243,8 +243,21 @@ export class BeuveStatusBar extends LitElement {
       }
 
       .branch-names {
+        display: flex;
+        gap: var(--beuve-space-1);
+        min-inline-size: 0;
+      }
+
+      .branch-names > :is(.base, .head) {
+        min-inline-size: 0;
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* The head is what is under review: the base gives up its room first. */
+      .branch-names > .base {
+        flex-shrink: 1000;
       }
 
       .meter {
@@ -559,16 +572,24 @@ export class BeuveStatusBar extends LitElement {
     >`;
   }
 
-  /** The head branch and the base it is reviewed against, ellipsized when the bar is tight. */
+  /**
+   * The base and the head branch reviewed against it, base first as in the commit span
+   * (`base..head`); when the bar is tight the base is ellipsized before the head.
+   */
   private renderBranches(branches: ReviewBranches): TemplateResult {
-    let title = `Reviewing ${branches.head}`;
-    let text = branches.head;
-    if (branches.base !== undefined) {
-      title = `Reviewing ${branches.head} against ${branches.base}`;
-      text = `${branches.head} → ${branches.base}`;
+    const { base, head } = branches;
+    if (base === undefined) {
+      return html`<span class="branches" title=${`Reviewing ${head}`}
+        >${displayIcon('branch')}<span class="branch-names"
+          ><span class="head">${head}</span></span
+        ></span
+      >`;
     }
-    return html`<span class="branches" title=${title}
-      >${displayIcon('branch')}<span class="branch-names">${text}</span></span
+    return html`<span class="branches" title=${`Reviewing ${head} against ${base}`}
+      >${displayIcon('branch')}<span class="branch-names"
+        ><span class="base">${base}</span><span aria-hidden="true">←</span
+        ><span class="head">${head}</span></span
+      ></span
     >`;
   }
 

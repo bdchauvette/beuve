@@ -181,8 +181,8 @@ export class BeuvePullRequestIntent extends LitElement {
           Open in Sheet
         </button>
       </div>
-      <div class="branches" title="head → base">
-        ${pullRequest.headBranch} → ${pullRequest.baseBranch}
+      <div class="branches" title="base ← head">
+        ${pullRequest.baseBranch} ← ${pullRequest.headBranch}
       </div>
       ${
         bodyNodes.length === 0

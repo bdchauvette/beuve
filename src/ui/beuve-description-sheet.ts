@@ -276,8 +276,8 @@ export class BeuveDescriptionSheet extends LitElement {
       <div class="meta">
         <span class="badge" data-tone=${badge.tone}>${badge.label}</span>
         <span>@${pullRequest.author}</span>
-        <span class="branches" title="head → base"
-          >${pullRequest.headBranch} → ${pullRequest.baseBranch}</span
+        <span class="branches" title="base ← head"
+          >${pullRequest.baseBranch} ← ${pullRequest.headBranch}</span
         >
       </div>
       ${
