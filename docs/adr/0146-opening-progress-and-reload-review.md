@@ -24,3 +24,7 @@ The window answers a pick at once, and a slow fetch can be stopped. The look of 
 ## Amendment 2026-11-18: Reload is an icon
 
 The titlebar's Reload is an icon-only `.button.icon` with the refresh glyph, named "Reload Review" for assistive technology, with the catalog's title and key as its tooltip. While the fetch or the reload runs it is disabled and `aria-busy`, and the glyph spins as the Review Queue's Refresh does; under reduced motion the glyph holds still and the disabled look says it is busy. There is one refresh glyph: it moves from the queue's icons (`queueIcon`) to `displayIcon`, the glyphs of icon-only controls, which both use.
+
+## Amendment 2026-11-25: one cover over the whole review
+
+The cover (`reviewCoverFrom`) is up from the pick until the new review arrives: during the fetch, then while the picked session's review is read (a session picked from the palette or the Open dialog goes straight to this second step). It is one `beuve-opening` whose step changes from "Fetching pull request #12…" to "Opening review…", so it appears once; the diff stream no longer draws its own. While it is up, everything that described the review being replaced is hidden from the first frame: the sidebar and the terminal (hidden and inert, still mounted, so a cancelled open restores them as they were), the titlebar's diffstat and view controls, and the status bar's range, span, scope, branches, attention, remote branch and save state. The window no longer shows the old review around the cover, and then an emptied window, before the new review appears.

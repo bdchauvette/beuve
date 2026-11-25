@@ -22,7 +22,6 @@ import './beuve-commit-pairing.ts';
 import type { CommitPairFilterDetail } from './beuve-commit-pairing.ts';
 import { BeuveFileCard } from './beuve-file-card.ts';
 import './beuve-find-bar.ts';
-import './beuve-opening.ts';
 import type { FileDiagnostics } from './file-diagnostics.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import type { ImageLoader } from './rich-view/beuve-rich-view.ts';
@@ -574,8 +573,6 @@ export class BeuveDiffStream extends LitElement {
   @property() accessor sessionNote = 'Loading sessions…';
   @property({ attribute: false }) accessor review: ReviewView | undefined;
   @property({ type: Boolean }) accessor loading = false;
-  /** Names the session being opened, shown while `loading` and no review has arrived. */
-  @property() accessor loadingLabel = '';
   /** `process.platform`, for the shortcuts in tooltips. */
   @property() accessor platform = '';
   @property() accessor error = '';
@@ -1230,12 +1227,9 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private renderWelcome(): TemplateResult {
+    // The review's own cover shows a session opening (`reviewCoverFrom`, ADR 0146).
     if (this.loading && this.error === '') {
-      return html`
-        <div class="body welcome">
-          <beuve-opening .label=${this.loadingLabel} stage="Opening review…"></beuve-opening>
-        </div>
-      `;
+      return html`<div class="body welcome"></div>`;
     }
     return html`
       <div class="body welcome">

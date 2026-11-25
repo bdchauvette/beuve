@@ -76,6 +76,7 @@ import { sessionHeadingFrom } from './session-heading-from.ts';
 import { saveStateFrom } from './save-state-from.ts';
 import { branchesFrom } from './branches-from.ts';
 import { reviewSpanFrom } from './review-span-from.ts';
+import { reviewCoverFrom } from './review-cover-from.ts';
 import './beuve-review-diffstat.ts';
 import './beuve-view-controls.ts';
 import type { SplitNarrowDetail } from './beuve-diff-stream.ts';
@@ -513,6 +514,24 @@ export class BeuveApp extends LitElement {
 
   private get review(): ReviewView | undefined {
     return this.session.review;
+  }
+
+  /**
+   * The review the titlebar and status bar describe: none while a review is on its way, so the
+   * one being replaced is hidden from the first frame (ADR 0146).
+   */
+  private get shownReview(): ReviewView | undefined {
+    const isCovered =
+      reviewCoverFrom({
+        fetch: this.github.fetch,
+        isLoading: this.session.isLoading,
+        hasReview: this.review !== undefined,
+        loadingLabel: '',
+      }) !== undefined;
+    if (isCovered) {
+      return undefined;
+    }
+    return this.review;
   }
 
   private connect(): void {
@@ -1052,17 +1071,17 @@ export class BeuveApp extends LitElement {
       @beuve-titlebar-reload=${this.onTitlebarReload}
     >
       ${
-        (this.review?.files.length ?? 0) === 0
+        (this.shownReview?.files.length ?? 0) === 0
           ? nothing
-          : html`<beuve-review-diffstat .review=${this.review}></beuve-review-diffstat>`
+          : html`<beuve-review-diffstat .review=${this.shownReview}></beuve-review-diffstat>`
       }
       ${
-        this.review === undefined
+        this.shownReview === undefined
           ? nothing
           : html`<beuve-view-controls
               .display=${this.settings.display}
               .order=${this.reviewData.order}
-              headSha=${this.review.headSha}
+              headSha=${this.shownReview.headSha}
               ?isNarrow=${this.isSplitNarrow}
             ></beuve-view-controls>`
       }
@@ -1107,6 +1126,11 @@ export class BeuveApp extends LitElement {
   }
 
   override render(): TemplateResult {
+    const { shownReview } = this;
+    let pullRequest = this.github.pullRequest;
+    if (shownReview === undefined) {
+      pullRequest = undefined;
+    }
     return html`
       <beuve-review
         .model=${this.model}
@@ -1124,25 +1148,25 @@ export class BeuveApp extends LitElement {
         .lspServers=${this.lspServers}
         .notice=${this.statusNotice}
         .progress=${this.reviewData.progress}
-        .range=${this.review?.range}
-        .span=${reviewSpanFrom(this.review)}
-        .attention=${this.github.pullRequest?.attention}
+        .range=${shownReview?.range}
+        .span=${reviewSpanFrom(shownReview)}
+        .attention=${pullRequest?.attention}
         @beuve-open-commit=${this.onStatusOpenCommit}
         @beuve-status-copy=${this.onStatusCopy}
         @beuve-status-github-check=${this.onStatusGithubCheck}
         .branches=${branchesFrom({
-          session: this.review?.session,
-          pullRequest: this.github.pullRequest?.pullRequest,
+          session: shownReview?.session,
+          pullRequest: pullRequest?.pullRequest,
         })}
-        .scopeText=${this.review === undefined ? '' : describeReviewScope(this.review.scope)}
+        .scopeText=${shownReview === undefined ? '' : describeReviewScope(shownReview.scope)}
         @beuve-review-range=${this.onStatusRange}
         @beuve-remove-saved-progress=${this.onStatusRemoveSaved}
         .saveState=${saveStateFrom({
-          review: this.review,
+          review: shownReview,
           savedProgress: this.session.savedProgress,
           isMarking: this.session.isMarking,
         })}
-        .remoteBranch=${this.github.branch}
+        .remoteBranch=${shownReview === undefined ? undefined : this.github.branch}
         .githubAuth=${this.github.auth}
         @beuve-status-action=${this.onStatusAction}
         @beuve-status-open-url=${this.onStatusOpenUrl}
