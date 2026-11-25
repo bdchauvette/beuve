@@ -125,6 +125,15 @@ export class BeuveNoteList extends LitElement {
         border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
+      /* Pinned under the notes, so the verdict, summary and Post stay in one place as notes come and go. */
+      .export {
+        flex: none;
+        max-block-size: 60%;
+        overflow: auto;
+        padding: var(--beuve-space-3);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
+      }
+
       .count {
         margin-inline-start: auto;
         font-weight: var(--beuve-font-weight-normal);
@@ -1576,7 +1585,7 @@ export class BeuveNoteList extends LitElement {
             </button>
             <button
               type="button"
-              class="button primary"
+              class="button danger"
               data-action="review-edits"
               data-op="discard"
             >
@@ -1928,8 +1937,9 @@ export class BeuveNoteList extends LitElement {
               : html`${this.renderSelectionBar()} ${this.renderLists(ordered)}`
           }
         </section>
-        ${this.renderReviewEdits()} ${this.renderExport(stagedCount)}
+        ${this.renderReviewEdits()}
       </div>
+      <footer class="export">${this.renderExport(stagedCount)}</footer>
       ${this.emoji.render()}
     `;
   }
