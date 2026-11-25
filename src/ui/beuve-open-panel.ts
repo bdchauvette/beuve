@@ -250,6 +250,7 @@ export class BeuveOpenPanel extends LitElement {
         grid-column: 2;
         display: flex;
         align-items: center;
+        justify-content: end;
         gap: var(--beuve-space-3);
       }
 
@@ -723,9 +724,6 @@ export class BeuveOpenPanel extends LitElement {
           request into this clone; it never clones for you.
         </p>
         <div class="actions">
-          <button class="button large primary" type="submit" ?disabled=${this.openingPull}>
-            ${this.openingPull ? 'Fetching…' : 'Open pull request'}
-          </button>
           ${
             this.openingPull
               ? html`<button
@@ -738,6 +736,9 @@ export class BeuveOpenPanel extends LitElement {
                 </button>`
               : nothing
           }
+          <button class="button large primary" type="submit" ?disabled=${this.openingPull}>
+            ${this.openingPull ? 'Fetching…' : 'Open pull request'}
+          </button>
         </div>
         ${this.renderFailure(this.pullFailure)}
       </form>
