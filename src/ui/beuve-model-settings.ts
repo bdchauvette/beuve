@@ -159,6 +159,12 @@ export class BeuveModelSettings extends LitElement {
     void this.load();
   };
 
+  /** Enter in a field, or Save, saves the model being added or edited. */
+  private readonly onFormSubmit = (event: SubmitEvent): void => {
+    event.preventDefault();
+    void this.save();
+  };
+
   @property({ attribute: false }) accessor api: SettingsApi | undefined;
 
   @state() accessor registry: ModelRegistryView | undefined;
@@ -424,7 +430,7 @@ export class BeuveModelSettings extends LitElement {
       </div>`;
     };
     return html`<h2>${draft.id === undefined ? 'Add Model' : 'Edit Model'}</h2>
-      <div class="group" data-section="model-form">
+      <form class="group" data-section="model-form" @submit=${this.onFormSubmit}>
         <div class="row">
           <span>Kind</span>
           <span>
@@ -592,9 +598,9 @@ export class BeuveModelSettings extends LitElement {
           >
             Cancel
           </button>
-          <button class="button" type="button" @click=${(): void => void this.save()}>Save</button>
+          <button class="button primary" type="submit">Save</button>
         </div>
-      </div>`;
+      </form>`;
   }
 
   /** The write-only key field: it shows whether a key is stored, never the key. */

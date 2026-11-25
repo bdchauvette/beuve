@@ -342,6 +342,7 @@
   --beuve-warn-soft: var(--beuve-scale-amber-a4);
   --beuve-danger: var(--beuve-scale-red-11);
   --beuve-danger-solid: var(--beuve-scale-red-9);
+  --beuve-danger-solid-hover: var(--beuve-scale-red-10);
   --beuve-danger-soft: var(--beuve-scale-red-a4);
 
   --beuve-focus-ring: 2px solid var(--beuve-accent);

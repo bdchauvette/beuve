@@ -4,7 +4,8 @@ import { focusRingStyles } from './focus-ring-styles.ts';
 
 /**
  * Buttons (ADR 0115), on a native `<button>` or `<a>` with class `button` and at most one variant:
- * none (bordered, on a surface), `primary` (the one action that moves things forward), `quiet` (no
+ * none (bordered, on a surface), `primary` (the one action that moves things forward), `danger`
+ * (the one action that moves things forward and can't be undone, such as Discard), `quiet` (no
  * chrome until hovered: toolbars, headers), `link` (text only, accent) and `icon` (square and
  * quiet: ×, toolbar icons), plus the sizes `small` for bars shorter than a control (the status
  * bar) and `large` for dialogs and empty screens. A button is at least `--beuve-size-control`
@@ -73,6 +74,18 @@ export const buttonStyles = css`
     background: var(--beuve-accent-solid-hover);
   }
 
+  .button.danger {
+    border-color: var(--beuve-danger-solid);
+    background: var(--beuve-danger-solid);
+    color: var(--beuve-on-accent);
+  }
+
+  .button.danger:hover:not(:disabled, [aria-disabled='true']),
+  .button.danger:active:not(:disabled, [aria-disabled='true']) {
+    border-color: var(--beuve-danger-solid-hover);
+    background: var(--beuve-danger-solid-hover);
+  }
+
   .button.quiet,
   .button.icon {
     border-color: transparent;
@@ -125,8 +138,8 @@ export const buttonStyles = css`
     cursor: default;
   }
 
-  .button.primary:disabled,
-  .button.primary[aria-disabled='true'] {
+  .button:is(.primary, .danger):disabled,
+  .button:is(.primary, .danger)[aria-disabled='true'] {
     border-color: var(--beuve-border);
     background: var(--beuve-surface-sunken);
   }
