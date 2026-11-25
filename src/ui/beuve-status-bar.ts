@@ -47,14 +47,15 @@ export interface StatusCopyDetail {
   readonly text: string;
 }
 
-/** `beuve-status-popover`: which popover (`lsp` or `save`) just opened. */
+/** `beuve-status-popover`: which popover (`branches`, `lsp`, `save` or `github`) just opened. */
 export interface StatusPopoverDetail {
   readonly id: string;
 }
 
 /**
- * Bottom bar, from broad to narrow on the left: the branches the review compares, what the diff
- * shows (the range menu, ADR 0142) and the commits it spans, how many files are marked reviewed,
+ * Bottom bar, from broad to narrow on the left: the branch under review (click for it and its
+ * base in full), what the diff shows (the range menu, ADR 0142) and the commits it spans, how
+ * many files are marked reviewed,
  * and whether the head is saved (ADR 0157; click for Save Progress and Remove Last Saved
  * Progress), then a transient notice. On the right, ambient facts worth a glance: whose turn a
  * pull request is, a followed branch's state, and the language servers and GitHub sign-in as
@@ -230,9 +231,7 @@ export class BeuveStatusBar extends LitElement {
       }
 
       .branches {
-        display: inline-flex;
         flex: 0 1 auto;
-        align-items: center;
         gap: var(--beuve-space-1);
         min-inline-size: 0;
         font: var(--beuve-font-code);
@@ -242,22 +241,23 @@ export class BeuveStatusBar extends LitElement {
         flex: none;
       }
 
-      .branch-names {
-        display: flex;
-        gap: var(--beuve-space-1);
-        min-inline-size: 0;
-      }
-
-      .branch-names > :is(.base, .head) {
+      .branch-name {
         min-inline-size: 0;
         overflow: hidden;
         text-overflow: ellipsis;
-        white-space: nowrap;
       }
 
-      /* The head is what is under review: the base gives up its room first. */
-      .branch-names > .base {
-        flex-shrink: 1000;
+      .branch-role {
+        flex: none;
+        inline-size: calc(4 * var(--beuve-measure-em));
+        color: var(--beuve-text-muted);
+      }
+
+      .branch-full {
+        font: var(--beuve-font-code);
+        overflow-wrap: anywhere;
+        user-select: text;
+        -webkit-user-select: text;
       }
 
       .meter {
@@ -573,24 +573,43 @@ export class BeuveStatusBar extends LitElement {
   }
 
   /**
-   * The base and the head branch reviewed against it, base first as in the commit span
-   * (`base..head`); when the bar is tight the base is ellipsized before the head.
+   * The head branch under review, ellipsized when the bar is tight, as a chip whose popover names
+   * it in full with the base it is reviewed against.
    */
   private renderBranches(branches: ReviewBranches): TemplateResult {
     const { base, head } = branches;
-    if (base === undefined) {
-      return html`<span class="branches" title=${`Reviewing ${head}`}
-        >${displayIcon('branch')}<span class="branch-names"
-          ><span class="head">${head}</span></span
-        ></span
-      >`;
+    let title = `Reviewing ${head}`;
+    if (base !== undefined) {
+      title = `Reviewing ${head} against ${base}`;
     }
-    return html`<span class="branches" title=${`Reviewing ${head} against ${base}`}
-      >${displayIcon('branch')}<span class="branch-names"
-        ><span class="base">${base}</span><span aria-hidden="true">←</span
-        ><span class="head">${head}</span></span
-      ></span
-    >`;
+    return html`<button
+        type="button"
+        class="button small quiet chip branches"
+        popovertarget="branches"
+        title=${title}
+        aria-haspopup="dialog"
+      >
+        ${displayIcon('branch')}<span class="branch-name">${head}</span>
+      </button>
+      <div
+        id="branches"
+        popover
+        class="start"
+        role="dialog"
+        aria-label="Branches"
+        @toggle=${this.onPopoverToggle}
+      >
+        <p class="popover-title">Branches</p>
+        <ul class="rows">
+          <li class="row">
+            <span class="branch-role">Head</span><span class="branch-full">${head}</span>
+          </li>
+          <li class="row">
+            <span class="branch-role">Base</span
+            ><span class="branch-full">${base ?? 'Not known yet'}</span>
+          </li>
+        </ul>
+      </div>`;
   }
 
   /** The followed branch's state and, when its head commit names one, the agent session's link. */

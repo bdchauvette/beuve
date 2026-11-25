@@ -71,3 +71,7 @@ The sidebar's tabs carry the title band's full-height lines: each tab fills the 
 ## Amendment 2026-11-25: the Export block is pinned under the notes
 
 The Notes tab's Export block (verdict, the GitHub summary, Post and the copy actions) is a footer pinned to the bottom of the tab, with the notes scrolling above it, so the summary and the finishing actions stay in one place however many notes come and go. It scrolls on its own only past 60% of the tab's height.
+
+## Amendment 2026-11-25: the status bar names the head branch only
+
+The status bar's branches are now a chip naming only the head branch, ellipsized when the bar is tight, with "Reviewing head against base" on hover. A click opens a popover (`branches`) that names the head and the base in full, as selectable text. `head → base` beside the commit span's `base..head` read in two opposite orders, and with both names in the bar the one under review was the first to lose its room.
