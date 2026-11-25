@@ -1147,7 +1147,7 @@ export class BeuveApp extends LitElement {
       <beuve-status-bar
         .lspServers=${this.lspServers}
         .notice=${this.statusNotice}
-        .progress=${this.reviewData.progress}
+        .progress=${shownReview === undefined ? undefined : this.reviewData.progress}
         .range=${shownReview?.range}
         .span=${reviewSpanFrom(shownReview)}
         .attention=${pullRequest?.attention}
