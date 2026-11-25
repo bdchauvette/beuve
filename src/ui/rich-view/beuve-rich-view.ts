@@ -120,7 +120,11 @@ export class BeuveRichView extends LitElement {
     const region = event.composedPath().find((node): node is HTMLElement => {
       return node instanceof HTMLElement && node.matches(regionSelector);
     });
-    if (region === undefined || region === this.hovered) {
+    if (
+      region === undefined ||
+      region === this.hovered ||
+      isLeavingSideways(region, { hovered: this.hovered, clientY: event.clientY })
+    ) {
       return;
     }
     this.hover(region);
@@ -702,6 +706,26 @@ interface Documents {
 interface ToggleLabel {
   readonly key: string;
   readonly label: string;
+}
+
+/** The region the note button is on, and where the pointer is now. */
+interface HoverMove {
+  readonly hovered: HTMLElement | undefined;
+  readonly clientY: number;
+}
+
+/**
+ * Whether the pointer left the hovered region through its start side into an ancestor (a list
+ * item's bullet sits in its parent's padding) while still level with it: on its way to the
+ * margin's note button, which then stays on the region it was offered for.
+ */
+function isLeavingSideways(region: HTMLElement, move: HoverMove): boolean {
+  const { hovered, clientY } = move;
+  if (hovered === undefined || !region.contains(hovered)) {
+    return false;
+  }
+  const bounds = hovered.getBoundingClientRect();
+  return clientY >= bounds.top && clientY < bounds.bottom;
 }
 
 const emptyLines: LineRange = { start: 0, end: -1 };
