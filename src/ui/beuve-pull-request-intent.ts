@@ -61,8 +61,9 @@ export class BeuvePullRequestIntent extends LitElement {
       }
 
       .body {
-        max-block-size: var(--beuve-size-scroll);
-        overflow: auto;
+        padding: var(--beuve-space-3);
+        border: var(--beuve-border-width) solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
         font: var(--beuve-font-body);
         color: var(--beuve-text);
         overflow-wrap: anywhere;
@@ -180,8 +181,8 @@ export class BeuvePullRequestIntent extends LitElement {
           Open in Sheet
         </button>
       </div>
-      <div class="branches" title="base ← head">
-        ${pullRequest.baseBranch} ← ${pullRequest.headBranch}
+      <div class="branches" title="head → base">
+        ${pullRequest.headBranch} → ${pullRequest.baseBranch}
       </div>
       ${
         bodyNodes.length === 0
