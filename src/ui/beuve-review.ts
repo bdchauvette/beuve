@@ -96,6 +96,8 @@ import { describeNoteRestore } from './describe-note-restore.ts';
 import type { GithubFetch, GithubPostDetail } from './github-controller.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
+import { reviewCoverFrom } from './review-cover-from.ts';
+import type { ReviewCover } from './review-cover-from.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { mergeReviewInsights } from './merge-review-insights.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
@@ -206,6 +208,10 @@ export class BeuveReview extends LitElement {
       .stage > .empty-screen {
         flex: 1;
         min-block-size: 0;
+      }
+
+      .covered {
+        display: none;
       }
 
       .cover {
@@ -1320,26 +1326,40 @@ export class BeuveReview extends LitElement {
   }
 
   /**
-   * The review, or the empty screen, with a review being fetched to open over it (ADR 0146): what
-   * was shown stays under the cover, so a cancelled or failed open leaves it as it was.
+   * The review, or the empty screen, with a review on its way over it (ADR 0146): what was shown
+   * stays under the cover, so a cancelled or failed open leaves it as it was. The cover is one
+   * element from the fetch through reading the review, so it appears once.
    */
   private renderStage(): TemplateResult {
-    const fetch = this.shownOpening();
+    const cover = this.cover();
     return html`<div class="stage">
       ${this.renderDiff()}
       ${
-        fetch === undefined
+        cover === undefined
           ? nothing
           : html`<div class="cover">
               <beuve-opening
-                .label=${fetch.label}
-                .stage=${fetch.stage}
-                cancellable
+                .label=${cover.label}
+                .stage=${cover.stage}
+                ?cancellable=${cover.cancellable}
                 @beuve-opening-cancel=${this.onOpeningCancel}
               ></beuve-opening>
             </div>`
       }
     </div>`;
+  }
+
+  private cover(): ReviewCover | undefined {
+    return reviewCoverFrom({
+      fetch: this.github.fetch,
+      isLoading: this.session.isLoading,
+      hasReview: this.review !== undefined,
+      loadingLabel: describeSessionLabel(
+        this.session.sessions,
+        this.session.selectedId,
+        this.review?.session,
+      ),
+    });
   }
 
   /** The fetch to show over the stage: one opening what the reviewer picked. */
@@ -1372,7 +1392,6 @@ export class BeuveReview extends LitElement {
       .reviewProgress=${this.reviewData.progress}
       .order=${this.reviewData.order}
       ?loading=${this.session.isLoading}
-      .loadingLabel=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
       .platform=${this.platform}
       .error=${this.session.error}
       .peek=${this.navigation.peek}
@@ -1494,9 +1513,12 @@ export class BeuveReview extends LitElement {
     this.sidebarTab = 'overview';
   }
 
-  private renderSidebar(): TemplateResult {
+  /** The sidebar; `isCovered` hides it, still mounted, while a review is on its way. */
+  private renderSidebar(isCovered: boolean): TemplateResult {
     return html`<beuve-sidebar
       slot="sidebar"
+      class=${isCovered ? 'covered' : ''}
+      ?inert=${isCovered}
       .side=${this.sidebarSide}
       .width=${this.sidebarWidth}
       .selected=${this.sidebarTab}
@@ -1518,7 +1540,8 @@ export class BeuveReview extends LitElement {
     this.isTerminalFocused = false;
   }
 
-  private renderTerminal(): TemplateResult | typeof nothing {
+  /** The terminal; `isCovered` hides it, still mounted, while a review is on its way. */
+  private renderTerminal(isCovered: boolean): TemplateResult | typeof nothing {
     const { review } = this;
     if (review === undefined || !this.terminalShown) {
       return nothing;
@@ -1526,6 +1549,8 @@ export class BeuveReview extends LitElement {
     return html`${keyed(
       review.session.id,
       html`<beuve-terminal-panel
+        class=${isCovered ? 'covered' : ''}
+        ?inert=${isCovered}
         .api=${beuveBridge()}
         .sessionId=${review.session.id}
         .headSha=${review.headSha}
@@ -2066,11 +2091,12 @@ export class BeuveReview extends LitElement {
     if (this.model === undefined || this.actions === undefined) {
       return nothing;
     }
+    const isCovered = this.cover() !== undefined;
     const hasSidebar = this.review !== undefined && !this.sidebarHidden;
     return html`
       <beuve-workspace
         .side=${this.sidebarSide}
-        ?hasSidebar=${hasSidebar}
+        ?hasSidebar=${hasSidebar && !isCovered}
         .sidebarWidth=${this.sidebarWidth}
       >
         <div
@@ -2082,9 +2108,9 @@ export class BeuveReview extends LitElement {
           @beuve-remove-saved-progress=${this.onRemoveSavedProgress}
           @beuve-titlebar-overview=${this.onTitlebarOverview}
         >
-          <slot name="titlebar"></slot>${this.renderStage()}${this.renderTerminal()}
+          <slot name="titlebar"></slot>${this.renderStage()}${this.renderTerminal(isCovered)}
         </div>
-        ${hasSidebar ? this.renderSidebar() : nothing}
+        ${hasSidebar ? this.renderSidebar(isCovered) : nothing}
       </beuve-workspace>
       ${
         this.review === undefined
