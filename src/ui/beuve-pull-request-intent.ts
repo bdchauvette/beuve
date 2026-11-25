@@ -29,8 +29,10 @@ export class BeuvePullRequestIntent extends LitElement {
     buttonStyles,
     markdownBodyStyles,
     css`
+      /* One column that may shrink below its content, so a long stack chip ellipsizes instead of widening the panel. */
       :host {
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
         gap: var(--beuve-space-2);
       }
 
