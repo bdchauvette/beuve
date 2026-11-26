@@ -98,6 +98,7 @@ import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import { reviewCoverFrom } from './review-cover-from.ts';
 import type { ReviewCover } from './review-cover-from.ts';
+import { reviewRangeMenuFrom } from './review-range-menu-from.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { mergeReviewInsights } from './merge-review-insights.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
@@ -977,6 +978,20 @@ export class BeuveReview extends LitElement {
     });
   }
 
+  /**
+   * The range radio the menu checks. With nothing saved the stored choice is only a default and the
+   * review shows the whole change, as the header's menu does (ADR 0142).
+   */
+  private menuReviewRange(): MenuStateInput['reviewRange'] {
+    if (this.review === undefined) {
+      return undefined;
+    }
+    if (reviewRangeMenuFrom(this.review.range) === undefined) {
+      return 'whole';
+    }
+    return this.review.range?.choice.kind;
+  }
+
   private async undoDeleteNote(): Promise<void> {
     const deletion = this.lastDeletion;
     if (deletion === undefined) {
@@ -1413,6 +1428,7 @@ export class BeuveReview extends LitElement {
       .deferrals=${this.reviewDeferrals().deferrals}
       @beuve-status-notice=${this.onStatusNotice}
       @beuve-ura-update=${this.onUraUpdate}
+      @beuve-ura-delete=${this.onUraDelete}
       @beuve-peek-request=${this.onPeekRequest}
       @beuve-peek-expand=${this.onPeekExpand}
       @beuve-peek-close=${this.onPeekClose}
@@ -2088,7 +2104,7 @@ export class BeuveReview extends LitElement {
       isTerminalFocused: this.isTerminalFocused,
       treeMode: this.treeMode,
       isFindCaseSensitive: this.stream()?.isFindCaseSensitive === true,
-      reviewRange: this.review?.range?.choice.kind,
+      reviewRange: this.menuReviewRange(),
     };
   }
 

@@ -164,7 +164,7 @@ interface NoteAddDetail {
  * above the config and mechanical group, and an interdiff's commit pairs can narrow the stream
  * to what one commit produced (ADR 0054).
  * Emits `beuve-split-narrow` when it becomes too narrow for split diffs or wide enough again,
- * `beuve-ura-update`, `beuve-status-notice`,
+ * `beuve-ura-update`, `beuve-ura-delete` (a note's delete button), `beuve-status-notice`,
  * `beuve-review-range` and `beuve-remove-saved-progress` (ADR 0142, 0156, from the up-to-date screen),
  * `beuve-peek-request`, `beuve-peek-close`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
