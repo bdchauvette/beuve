@@ -38,6 +38,7 @@ export class BeuveSidebarTabs extends LitElement {
       beuve-tab-list {
         display: flex;
         align-items: stretch;
+        box-sizing: border-box;
         block-size: var(--beuve-titlebar-height);
         padding-inline-start: var(--beuve-sidebar-tabs-inset, 0);
         border-block-end: var(--beuve-border-width) solid var(--beuve-border);
