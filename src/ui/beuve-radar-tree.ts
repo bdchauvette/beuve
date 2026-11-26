@@ -104,6 +104,8 @@ export class BeuveRadarTree extends LitElement {
 
   private fileTree: FileTree | undefined;
   private plan: RadarTreePlan | undefined;
+  /** What the tree last showed, so a new `files` array with the same listing keeps scroll and folders. */
+  private listingKey = '';
   /** In the flat layout, each shown name's real path; empty while nested. */
   private readonly realByShown = new Map<string, string>();
   private decorations: ReadonlyMap<string, TreeDecoration> = new Map();
@@ -138,6 +140,7 @@ export class BeuveRadarTree extends LitElement {
         this.fileTree?.cleanUp();
         this.fileTree = undefined;
         this.plan = undefined;
+        this.listingKey = '';
       },
     });
   }
@@ -287,16 +290,16 @@ export class BeuveRadarTree extends LitElement {
       }
       return entry;
     });
+    const listingKey = listingKeyFrom({ plan, gitStatus, layout: this.layout });
     if (this.fileTree === undefined) {
+      this.listingKey = listingKey;
       this.mountTree(library, { ...plan, gitStatus });
       return;
     }
-    const isNewListing = ['tree', 'files', 'mode', 'layout', 'query', 'generatedPaths'].some(
-      (key) => {
-        return changed.has(key as keyof BeuveRadarTree);
-      },
-    );
-    if (isNewListing) {
+    // A refreshed review hands over a new `files` array with the same listing; resetting then
+    // would scroll the tree to the top and collapse the folders the reviewer opened.
+    if (listingKey !== this.listingKey) {
+      this.listingKey = listingKey;
       this.fileTree.resetPaths(this.shownPaths(plan.paths), {
         initialExpandedPaths: plan.expandedPaths.map((path) => revealFormatControls(path)),
       });
@@ -313,6 +316,16 @@ export class BeuveRadarTree extends LitElement {
     return html`<p class="empty" role="status" ?hidden=${!isUnmatched}>No files match.</p>
       <div class="mount"></div>`;
   }
+}
+
+function listingKeyFrom({ plan, gitStatus, layout }: ListingKeyParts): string {
+  return JSON.stringify([layout, plan.paths, plan.expandedPaths, gitStatus]);
+}
+
+interface ListingKeyParts {
+  plan: RadarTreePlan;
+  gitStatus: RadarTreePlan['gitStatus'];
+  layout: RadarTreeLayout;
 }
 
 declare global {
