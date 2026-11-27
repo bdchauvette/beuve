@@ -36,7 +36,9 @@ export class BeuveFindBar extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
-        padding: var(--beuve-space-1) var(--beuve-space-3);
+        /* The zone's focus line overlays the top edge, so the top padding starts below it. */
+        padding: calc(var(--beuve-space-2) + var(--beuve-border-width-thick)) var(--beuve-space-3)
+          var(--beuve-space-2);
         border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface);
         font: var(--beuve-font-small);

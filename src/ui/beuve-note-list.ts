@@ -50,6 +50,9 @@ import type { InlineSpan } from './parse-markdown-subset.ts';
 import { noteLabelStateFrom } from './note-label-state-from.ts';
 import { resolveNoteListVerdict } from './resolve-note-list-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
+import { isNoteInFilter } from './is-note-in-filter.ts';
+import type { NoteFilter } from './is-note-in-filter.ts';
+import { segmentedStyles } from './primitives/segmented-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { describeSuggestionLines } from './describe-suggestion-lines.ts';
@@ -125,6 +128,7 @@ export class BeuveNoteList extends LitElement {
   static override styles = [
     buttonStyles,
     fieldStyles,
+    segmentedStyles,
     formatControlStyles,
     zoneStyles,
     completionListStyles,
@@ -132,6 +136,10 @@ export class BeuveNoteList extends LitElement {
     css`
       :host {
         border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
+      }
+
+      .filters {
+        margin-block-end: var(--beuve-space-2);
       }
 
       /* Pinned under the notes, so the verdict, summary and Post stay in one place as notes come and go. */
@@ -710,6 +718,8 @@ export class BeuveNoteList extends LitElement {
   /** Set for pull request sessions: posting to GitHub replaces copying the review JSON. */
   @property({ attribute: false }) accessor github: GithubNoteListState | undefined;
 
+  /** Which notes the list shows; every note until the reviewer narrows it. */
+  @state() accessor filter: NoteFilter = 'all';
   @state() accessor cursor = 0;
   /** The notes picked besides the cursor (ADR 0144); empty is the cursor's note alone. */
   @state() accessor selection: NoteListSelection = { selected: [], anchor: undefined };
@@ -746,6 +756,13 @@ export class BeuveNoteList extends LitElement {
     this.addController(
       new ActionDelegation(this, {
         click: {
+          'set-filter': ({ filter = '' }, event): void => {
+            event.stopPropagation();
+            const chosen = noteFilters.find((entry) => entry.id === filter);
+            if (chosen !== undefined) {
+              this.filter = chosen.id;
+            }
+          },
           'toggle-closed': (_data, event): void => {
             event.stopPropagation();
             this.emit('beuve-ura-toggle-closed', undefined);
@@ -956,11 +973,17 @@ export class BeuveNoteList extends LitElement {
    * addressed), unless closed notes are hidden (ADR 0149).
    */
   private ordered(): UraItemView[] {
-    const staged = this.items.filter((item) => item.status.kind === 'staged');
-    if (!this.showClosed) {
+    const shown = this.items.filter((item) => isNoteInFilter(item, this.filter));
+    const staged = shown.filter((item) => item.status.kind === 'staged');
+    if (!this.isClosedShown()) {
       return staged;
     }
-    return [...staged, ...this.items.filter((item) => item.status.kind !== 'staged')];
+    return [...staged, ...shown.filter((item) => item.status.kind !== 'staged')];
+  }
+
+  /** Whether the closed notes are listed: Show Closed Notes, or the Closed filter asking for them. */
+  private isClosedShown(): boolean {
+    return this.showClosed || this.filter === 'closed';
   }
 
   /** Open in Editor: the item's file at its current first line (line 1 for file notes and outdated items). */
@@ -1838,11 +1861,7 @@ export class BeuveNoteList extends LitElement {
   private renderLists(ordered: readonly UraItemView[]): TemplateResult {
     const openCount = ordered.filter((item) => item.status.kind === 'staged').length;
     const closed = ordered.slice(openCount);
-    return html`${
-        openCount === 0 && !this.showClosed
-          ? html`<p class="empty">Every note is closed.</p>`
-          : nothing
-      }
+    return html`${this.renderEmpty(ordered)}
       <ol
         ?hidden=${openCount === 0}
         aria-label="Open notes"
@@ -1861,21 +1880,53 @@ export class BeuveNoteList extends LitElement {
       }`;
   }
 
+  /** Why the list shows no notes, when it does not: the filter matched none, or closed ones are hidden. */
+  private renderEmpty(ordered: readonly UraItemView[]): TemplateResult | typeof nothing {
+    if (ordered.length > 0) {
+      return nothing;
+    }
+    if (this.filter !== 'all') {
+      return html`<p class="empty">No ${noteFilterNames[this.filter]} notes.</p>`;
+    }
+    return html`<p class="empty">Every note is closed.</p>`;
+  }
+
+  /** The filter control above the list: every note, the open, outdated or closed ones, with counts. */
+  private renderFilters(): TemplateResult {
+    return html`<span class="segmented filters" role="radiogroup" aria-label="Notes shown">
+      ${noteFilters.map(({ id, label, title }) => {
+        const count = this.items.filter((item) => isNoteInFilter(item, id)).length;
+        return html`<button
+          type="button"
+          role="radio"
+          aria-checked=${String(this.filter === id)}
+          data-action="set-filter"
+          data-filter=${id}
+          title=${title}
+        >
+          ${label} ${count}
+        </button>`;
+      })}
+    </span>`;
+  }
+
   /** The Closed heading, a disclosure button with the count, listed or hidden. */
   private renderClosedHeading(): TemplateResult | typeof nothing {
-    const count = this.items.filter((item) => item.status.kind !== 'staged').length;
+    const count = this.items.filter((item) => {
+      return item.status.kind !== 'staged' && isNoteInFilter(item, this.filter);
+    }).length;
     if (count === 0) {
       return nothing;
     }
     let title = 'Hide closed notes: addressed and withdrawn';
-    if (!this.showClosed) {
+    if (!this.isClosedShown()) {
       title = 'Show closed notes: addressed and withdrawn';
     }
     return html`<h3 class="list-heading">
       <button
         type="button"
         id="closed-notes"
-        aria-expanded=${String(this.showClosed)}
+        aria-expanded=${String(this.isClosedShown())}
         data-action="toggle-closed"
         title=${title}
       >
@@ -2046,7 +2097,8 @@ export class BeuveNoteList extends LitElement {
                       : 'Open a review session to stage notes.'
                   }
                 </p>`
-              : html`${this.renderSelectionBar()} ${this.renderLists(ordered)}`
+              : html`${this.renderFilters()} ${this.renderSelectionBar()}
+                ${this.renderLists(ordered)}`
           }
         </section>
         ${this.renderReviewEdits()}
@@ -2057,7 +2109,7 @@ export class BeuveNoteList extends LitElement {
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
-    if (changed.has('items') || changed.has('showClosed')) {
+    if (changed.has('items') || changed.has('showClosed') || changed.has('filter')) {
       const listed = this.ordered();
       this.cursor = Math.min(this.cursor, Math.max(0, listed.length - 1));
       const present = new Set(listed.map((item) => item.id));
@@ -2100,6 +2152,31 @@ export type SuggestionTargetAnswer =
 /** `beuve-suggestion-target`: the notes list asks the review for the diff's selected lines. */
 export interface SuggestionTargetRequestDetail {
   readonly respond: (answer: SuggestionTargetAnswer) => void;
+}
+
+const noteFilters: readonly NoteFilterChoice[] = [
+  { id: 'all', label: 'All', title: 'Show every note' },
+  { id: 'open', label: 'Open', title: 'Show the notes still staged' },
+  {
+    id: 'outdated',
+    label: 'Outdated',
+    title: 'Show the notes whose lines changed or left the head',
+  },
+  { id: 'closed', label: 'Closed', title: 'Show the addressed and withdrawn notes' },
+];
+
+const noteFilterNames: Readonly<Record<NoteFilter, string>> = {
+  all: '',
+  open: 'open',
+  outdated: 'outdated',
+  closed: 'closed',
+};
+
+/** One segment of the filter control. */
+interface NoteFilterChoice {
+  readonly id: NoteFilter;
+  readonly label: string;
+  readonly title: string;
 }
 
 /** Where dragged notes would land: before or after the staged note `id`. */

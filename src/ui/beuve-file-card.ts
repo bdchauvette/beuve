@@ -28,6 +28,7 @@ import type { FlowNodeActivateDetail } from './flow-graph-view.ts';
 import './beuve-peek-portal.ts';
 import './beuve-ura-composer.ts';
 import type { BeuveUraComposer } from './beuve-ura-composer.ts';
+import type { UraDeleteDetail } from './app-event-details.ts';
 import type { NoteEdit } from './note-edit-from.ts';
 import type { SuggestionFieldView } from './suggestion-field-view.ts';
 import { describeDiagnostics } from './describe-diagnostics.ts';
@@ -536,6 +537,26 @@ export class BeuveFileCard extends LitElement {
         cursor: pointer;
       }
 
+      .annotation-delete {
+        flex: none;
+        padding: 0 var(--beuve-space-1);
+        border: none;
+        border-radius: var(--beuve-radius-small);
+        background: none;
+        font: inherit;
+        color: var(--beuve-text-faint);
+        cursor: pointer;
+      }
+
+      .annotation-delete:hover {
+        color: var(--beuve-text);
+      }
+
+      .annotation-delete:focus-visible {
+        outline: var(--beuve-border-width) solid var(--beuve-accent);
+        outline-offset: var(--beuve-focus-ring-offset);
+      }
+
       .annotation-reveal:hover {
         text-decoration: underline;
       }
@@ -921,6 +942,10 @@ export class BeuveFileCard extends LitElement {
       'edit-note': ({ uraItemId = '' }): void => {
         this.emitNoteEdit(uraItemId);
       },
+      'delete-note': ({ uraItemId = '' }, event): void => {
+        event.stopPropagation();
+        this.emitNoteDelete(uraItemId);
+      },
       'annotation-toggle': (_data, event, element): void => {
         event.stopPropagation();
         this.toggleAnnotation(element, undefined);
@@ -1197,6 +1222,17 @@ export class BeuveFileCard extends LitElement {
     const detail: NoteEditDetail = { itemId };
     this.dispatchEvent(
       new CustomEvent('beuve-note-edit', { detail, bubbles: true, composed: true }),
+    );
+  }
+
+  /** The delete button on a staged note's head: the review deletes it, with the Undo notice (ADR 0144). */
+  private emitNoteDelete(itemId: string): void {
+    if (itemId === '') {
+      return;
+    }
+    const detail: UraDeleteDetail = { itemIds: [itemId] };
+    this.dispatchEvent(
+      new CustomEvent('beuve-ura-delete', { detail, bubbles: true, composed: true }),
     );
   }
 

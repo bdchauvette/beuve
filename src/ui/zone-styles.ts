@@ -36,6 +36,7 @@ export const zoneStyles = css`
     flex: 1;
     min-block-size: 0;
     overflow: auto;
+    scrollbar-gutter: stable;
     padding: var(--beuve-space-3);
   }
 

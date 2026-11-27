@@ -17,7 +17,7 @@ export interface NoteAnnotationOptions {
  * A note under its lines in the diff (ADR 0155): the shared one-line head (the label's emoji,
  * what the note says, its marks: Blocking, Posted, then ✨ for an agent's note). A click on it
  * opens the note's editor in its place (`edit-note`, ADR 0155 amendment), which shows the body and
- * the suggestion; there is no read-only open state. It carries `data-action="note"`, so a
+ * the suggestion; there is no read-only open state. A delete button ends the head (`delete-note`). It carries `data-action="note"`, so a
  * double-click edits it too (ADR 0129).
  */
 export function createNoteAnnotation(
@@ -45,6 +45,15 @@ export function createNoteAnnotation(
     reveal.textContent = options.outside;
     trailing.push(reveal);
   }
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'annotation-delete';
+  remove.dataset['action'] = 'delete-note';
+  remove.dataset['uraItemId'] = item.id;
+  remove.title = 'Delete this note';
+  remove.setAttribute('aria-label', 'Delete this note');
+  remove.textContent = '🗑';
+  trailing.push(remove);
   const text = noteText(item);
   const head = createAnnotationHead({
     emoji: uraSeverityEmoji(item.severity),
