@@ -10,6 +10,7 @@ import { sessionReviewRangesMigration } from '#internal/session/session-review-r
 import { setupMigrations } from '#internal/setup/setup-migrations.ts';
 import { uraFindingConfidenceMigration } from '#internal/ura/ura-finding-confidence-migration.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
+import { uraPostingPiecesMigration } from '#internal/ura/ura-posting-pieces-migration.ts';
 import { uraSuggestionsMigration } from '#internal/ura/ura-suggestions-migration.ts';
 import { openDatabase } from '#sqlite/open-database.ts';
 import { runMigrations } from '#sqlite/run-migrations.ts';
@@ -116,6 +117,7 @@ function shippedMigrations(): Record<string, string> {
     'ura-0003-finding-confidence': 'b0c3ded2d62506b8',
     'session-0002-review-ranges': '98797b855283d465',
     'ura-0004-suggestions': 'function',
+    'ura-0005-posting-pieces': '345c266ced9057d7',
   };
 }
 
@@ -217,7 +219,12 @@ function keptTableCounts(
 function domainMigrations(): Record<string, readonly Migration[]> {
   return {
     session: [...sessionMigrations, sessionReviewRangesMigration],
-    ura: [...uraMigrations, uraFindingConfidenceMigration, uraSuggestionsMigration],
+    ura: [
+      ...uraMigrations,
+      uraFindingConfidenceMigration,
+      uraSuggestionsMigration,
+      uraPostingPiecesMigration,
+    ],
     chat: chatMigrations,
     github: githubMigrations,
     'review-edits': reviewEditsMigrations,

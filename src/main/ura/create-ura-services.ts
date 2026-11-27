@@ -22,6 +22,7 @@ import type {
   UraOrderView,
   UraPlacementView,
   UraRestoredView,
+  UraSuggestionPlacementView,
   UraStagedView,
   UraVerdictStateView,
   UraVerdictView,
@@ -43,6 +44,7 @@ import type { LineMapping } from '#internal/ura/line-mapping.ts';
 import { listUraItems } from '#internal/ura/list-ura-items.ts';
 import { listUraPostings } from '#internal/ura/list-ura-postings.ts';
 import { reanchorUraAnchor } from '#internal/ura/reanchor-ura-anchor.ts';
+import { reanchorUraSuggestion } from '#internal/ura/reanchor-ura-suggestion.ts';
 import { recordUraPostings } from '#internal/ura/record-ura-postings.ts';
 import { readVerdictChoice } from '#internal/ura/read-verdict-choice.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
@@ -173,6 +175,12 @@ export interface UraServicesOptions {
   readonly cacheSize?: number;
 }
 
+/** Where an item, and each of its suggestions, sits on the session's current head. */
+interface ItemPlacements {
+  readonly placement: UraPlacementView;
+  readonly suggestionPlacements: readonly UraSuggestionPlacementView[];
+}
+
 interface Head {
   readonly sessionId: string;
   readonly headSha: CommitSha;
@@ -251,31 +259,46 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   const placer = async (
     head: Head,
     items: readonly UraItem[],
-  ): Promise<(item: UraItem) => UraPlacementView> => {
+  ): Promise<(item: UraItem) => ItemPlacements> => {
     const built = await mappingsFor(head, items);
     const byHead = new Map(
       built.map((mapping) => {
         return [mapping.fromHeadSha, mapping] as const;
       }),
     );
-    return (item: UraItem): UraPlacementView => {
+    return (item: UraItem): ItemPlacements => {
       if (item.headSha === head.headSha) {
-        return { kind: 'current', anchor: item.anchor };
+        return {
+          placement: { kind: 'current', anchor: item.anchor },
+          suggestionPlacements: item.suggestions.map(({ path, startLine, endLine }) => {
+            return { kind: 'current', path, startLine, endLine };
+          }),
+        };
       }
       const mapping = byHead.get(item.headSha);
       if (mapping === undefined) {
-        return { kind: 'outdated', reason: 'no-line-mapping' };
+        const outdated = { kind: 'outdated', reason: 'no-line-mapping' } as const;
+        return {
+          placement: outdated,
+          suggestionPlacements: item.suggestions.map(() => outdated),
+        };
       }
-      return reanchorUraAnchor(item.anchor, mapping.files);
+      return {
+        placement: reanchorUraAnchor(item.anchor, mapping.files),
+        suggestionPlacements: item.suggestions.map((suggestion): UraSuggestionPlacementView => {
+          const moved = reanchorUraSuggestion(suggestion, mapping.files);
+          if (moved.kind === 'outdated') {
+            return moved;
+          }
+          const { path, startLine, endLine } = moved.suggestion;
+          return { kind: 'current', path, startLine, endLine };
+        }),
+      };
     };
   };
 
-  const postingsFor = (sessionId: string): ReadonlyMap<string, UraPosting> => {
-    return new Map(
-      listUraPostings(db, sessionId as SessionId).map((posting) => {
-        return [posting.itemId, posting];
-      }),
-    );
+  const postingsFor = (sessionId: string): readonly UraPosting[] => {
+    return listUraPostings(db, sessionId as SessionId);
   };
 
   const headOf = async (sessionId: string): Promise<IpcResult<Head>> => {
@@ -331,8 +354,8 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     const place = await placer(head.value, [item]);
     return ok(
       uraItemViewFrom(item, {
-        placement: place(item),
-        posting: postingsFor(item.sessionId).get(item.id),
+        ...place(item),
+        postings: postingsFor(item.sessionId),
         headTexts: await textsFor(head.value, [item]),
       }),
     );
@@ -524,8 +547,8 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const headTexts = await textsFor(head.value, items.value);
       const views = items.value.map((item) => {
         return uraItemViewFrom(item, {
-          placement: place(item),
-          posting: postings.get(item.id),
+          ...place(item),
+          postings,
           headTexts,
         });
       });
@@ -579,7 +602,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const place = await placer(head.value, [item.value]);
       return ok(
         uraItemViewFrom(item.value, {
-          placement: place(item.value),
+          ...place(item.value),
           headTexts: headTexts.value,
         }),
       );

@@ -9,6 +9,8 @@ import type {
 import { advanceHead } from '#internal/session/advance-head.ts';
 import type { CommitSha } from '#internal/session/session.ts';
 import { updateSessionHead } from '#internal/session/update-session-head.ts';
+import { listUraPostings } from '#internal/ura/list-ura-postings.ts';
+import type { SessionId } from '#internal/ura/ura-item.ts';
 import type { AppInfo, OpenPullRequestResponse } from '#contract/ipc-contract.ts';
 import { startHoldServer } from '#internal/git/testing/start-hold-server.ts';
 import { writeHoldScript } from '#internal/git/testing/write-hold-script.ts';
@@ -371,7 +373,11 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       comments: [{ path: 'app.ts', line: 1 }],
     });
     expect(api.reviews[0]?.token).toBe(token);
-    expect(api.reviews[0]?.body.body.startsWith('### Not attached to a line\n\n')).toBe(true);
+    expect(
+      api.reviews[0]?.body.body.startsWith(
+        '<details>\n<summary>❓ question: Why a notes file?</summary>\n\nhttps://github.com/octo-org/hello-world/blob/',
+      ),
+    ).toBe(true);
     expect(api.reviews[0]?.body.body).not.toContain('beuve');
     const listed = okValueFrom(await ura.list({ sessionId }));
     expect(listed.items.map((item) => item.posted?.placement)).toStrictEqual(['inline', 'body']);
@@ -410,7 +416,84 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     expect(api.reviews).toHaveLength(2);
     expect(api.reviews[1]?.body.comments).toStrictEqual([]);
     expect(api.reviews[1]?.body.body.startsWith('One more nit, otherwise good.\n\n')).toBe(true);
-    expect(api.reviews[1]?.body.body).toContain('Comments GitHub could not attach to the diff');
+    expect(api.reviews[1]?.body.body).toContain(
+      '<summary>⛏️ nitpick: Trailing comment</summary>\n\nhttps://github.com/octo-org/hello-world/blob/',
+    );
+    expect(okValueFrom(await ura.list({ sessionId })).items[2]?.posted?.placement).toBe('body');
+  });
+
+  test('posts each piece of a note on its own, records where each went, and later sends only new ones', async ({
+    expect,
+    services,
+    opened,
+    world,
+    db,
+  }) => {
+    const { firstHead, api } = world;
+    const sessionId = await opened();
+    const ura = services.ura;
+    const first = {
+      path: 'app.ts',
+      startLine: 1,
+      endLine: 1,
+      replacement: 'export const ANSWER = 42;',
+    };
+    const second = {
+      path: 'app.ts',
+      startLine: 2,
+      endLine: 2,
+      replacement: 'export const other = 3;',
+    };
+    const item = okValueFrom(
+      await ura.create({
+        sessionId,
+        anchor: { kind: 'lines', path: 'app.ts', startLine: 1, endLine: 1 },
+        severity: 'suggestion',
+        title: 'Name the constant',
+        body: '',
+        suggestions: [first, second],
+      }),
+    );
+    okValueFrom(await services.github.postReview({ sessionId, expectedHeadSha: firstHead }));
+    expect(api.reviews[0]?.body.comments).toStrictEqual([
+      expect.objectContaining({
+        line: 1,
+        body: '💡 **suggestion:** Name the constant\n\n```suggestion\nexport const ANSWER = 42;\n```',
+      }),
+      expect.objectContaining({
+        line: 2,
+        body: 'Suggestion 2 of 2 for **Name the constant**\n\n```suggestion\nexport const other = 3;\n```',
+      }),
+    ]);
+    expect(
+      listUraPostings(db, sessionId as SessionId).map(({ piece, placement }) => {
+        return { piece, placement };
+      }),
+    ).toStrictEqual([
+      { piece: { kind: 'note' }, placement: 'comment' },
+      { piece: { kind: 'suggestion', position: 0 }, placement: 'comment' },
+      { piece: { kind: 'suggestion', position: 1 }, placement: 'suggestion-comment' },
+    ]);
+    expect(okValueFrom(await ura.list({ sessionId })).items[0]?.posted?.placement).toBe('inline');
+
+    const third = { path: 'notes.md', startLine: 1, endLine: 1, replacement: 'because' };
+    okValueFrom(await ura.update({ itemId: item.id, suggestions: [first, second, third] }));
+    expect(okValueFrom(await ura.list({ sessionId })).items[0]?.posted).toBeUndefined();
+    expect(
+      okValueFrom(await services.github.previewReview({ sessionId, expectedHeadSha: firstHead })),
+    ).toMatchObject({ inlineCount: 1, bodyCount: 0, alreadyPostedCount: 0 });
+    okValueFrom(await services.github.postReview({ sessionId, expectedHeadSha: firstHead }));
+    expect(api.reviews[1]?.body).toMatchObject({
+      body: '',
+      comments: [
+        {
+          path: 'notes.md',
+          line: 1,
+          body: 'Suggestion 3 of 3 for **Name the constant**\n\n```suggestion\nbecause\n```',
+        },
+      ],
+    });
+    expect(okValueFrom(await ura.list({ sessionId })).items[0]?.posted).toBeDefined();
   });
 
   test('posts nothing when the head moved after the reviewer opened the confirmation', async ({

@@ -38,7 +38,7 @@ export function createSampleArtifact(verdict?: UraArtifactVerdict): UraArtifact 
  * One entry of each interesting shape: a multi-line blocking issue with a pure-replacement patch, a
  * single-line review finding with its confidence, a file-level question with a non-replacement patch, a
  * whole-change praise, and an outdated review finding, staged before confidences were kept, with text that
- * needs escaping.
+ * needs escaping and an outdated suggestion whose text holds a CDATA terminator.
  */
 function sampleEntries(): UraEntry[] {
   const blocking = createTestUraItem({
@@ -100,6 +100,10 @@ function sampleEntries(): UraEntry[] {
       patch: ['@@ -1,2 +1 @@', '-# Scratch', ' Notes', ''].join('\n'),
     }),
     createTestEntry({ item: praise, placement: { kind: 'current', anchor: praise.anchor } }),
-    createTestEntry({ item: outdated, placement: { kind: 'outdated', reason: 'lines-changed' } }),
+    createTestEntry({
+      item: outdated,
+      placement: { kind: 'outdated', reason: 'lines-changed' },
+      patch: ['@@ -11 +11 @@', '-const x = [1];', '+const x = [[1]]> as const;', ''].join('\n'),
+    }),
   ];
 }

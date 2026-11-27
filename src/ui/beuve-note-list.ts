@@ -82,11 +82,11 @@ const noteListExportTargets: readonly NoteListExportTarget[] = [
 const noteListExports: Readonly<Record<NoteListExportTarget, NoteListExport>> = {
   'agent-xml': {
     label: 'Copy as XML',
-    title: 'Copy the review as XML for Claude Code (beuve.ura/1), summary included',
+    title: 'Copy the review as XML for Claude Code (beuve.ura/2), summary included',
   },
   'agent-json': {
     label: 'Copy as JSON',
-    title: 'Copy the same review as JSON for agents (beuve.ura/1), summary included',
+    title: 'Copy the same review as JSON for agents (beuve.ura/2), summary included',
   },
   github: {
     label: 'Copy GitHub review (JSON)',

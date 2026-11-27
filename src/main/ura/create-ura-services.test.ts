@@ -90,6 +90,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(edited.suggestions).toStrictEqual([
       {
         ...suggestion,
+        placement: { kind: 'current', path: 'src/app.ts', startLine: 2, endLine: 2 },
         patch: [
           '--- a/src/app.ts',
           '+++ b/src/app.ts',
@@ -172,6 +173,10 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
         severity: 'question',
         title: 'Why a new file?',
         body: '',
+        suggestions: [
+          { path: 'src/app.ts', startLine: 5, endLine: 6, replacement: 'moved' },
+          { path: 'src/app.ts', startLine: 2, endLine: 2, replacement: 'replaced' },
+        ],
       }),
     );
     const oldHead = await repo.git('rev-parse', 'feature');
@@ -201,6 +206,12 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       reason: 'lines-changed',
     });
     expect(byId.get(fileNote.id)?.placement).toMatchObject({ kind: 'current' });
+    expect(
+      byId.get(fileNote.id)?.suggestions.map((suggestion) => suggestion.placement),
+    ).toStrictEqual([
+      { kind: 'current', path: 'src/app.ts', startLine: 7, endLine: 8 },
+      { kind: 'outdated', reason: 'lines-changed' },
+    ]);
     expect(changes).toContain(sessionId);
 
     okValueFrom(
@@ -495,7 +506,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       itemCount: 2,
     });
     expect(JSON.parse(json.text)).toMatchObject({
-      schema: 'beuve.ura/1',
+      schema: 'beuve.ura/2',
       change: { scope: 'full', headSha: head, repository: { kind: 'local', headRef: 'feature' } },
       items: [{ title: 'Prefer <const>' }, { severity: 'issue', blocking: true }],
     });
@@ -527,13 +538,13 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     await note({ startLine: 5, endLine: 6, title: 'Below the edit' });
     const json = okValueFrom(await services.ura.export({ sessionId, target: 'agent-json' }));
     expect(JSON.parse(json.text)).toMatchObject({
-      schema: 'beuve.ura/1',
+      schema: 'beuve.ura/2',
       verdict: 'comment',
       counts: { issue: 1 },
       items: [{ anchor: { kind: 'lines', path: 'src/app.ts', startLine: 5, endLine: 6 } }],
     });
     const xml = okValueFrom(await services.ura.export({ sessionId, target: 'agent-xml' }));
-    expect(xml.text).toContain('<beuve-review schema="beuve.ura/1" verdict="comment"');
+    expect(xml.text).toContain('<beuve-review schema="beuve.ura/2" verdict="comment"');
     await expect(
       services.ura.export({ sessionId: 'nope', target: 'agent-json' }),
     ).resolves.toMatchObject({ ok: false });

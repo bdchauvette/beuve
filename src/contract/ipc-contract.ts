@@ -1380,10 +1380,25 @@ export interface UraSuggestionDraftView {
   readonly replacement: string;
 }
 
+/**
+ * Where a suggestion sits on the session's current head (ADR 0162): its lines there, or why it
+ * can't be placed.
+ */
+export type UraSuggestionPlacementView =
+  | {
+      readonly kind: 'current';
+      readonly path: string;
+      readonly startLine: number;
+      readonly endLine: number;
+    }
+  | { readonly kind: 'outdated'; readonly reason: UraOutdatedReasonView };
+
 /** A stored suggestion, with the unified diff main derives for it from the head's file. */
 export interface UraSuggestionView extends UraSuggestionDraftView {
   /** Absent when the file can't be read at the item's head, or the suggestion changes nothing. */
   readonly patch?: string;
+  /** Placed on its own, like the item; outdated suggestions are kept. */
+  readonly placement: UraSuggestionPlacementView;
 }
 
 /**
@@ -1407,10 +1422,14 @@ export interface UraItemView {
   readonly status: UraStatusView;
   readonly createdAt: string;
   readonly updatedAt: string;
-  /** Set once a posted GitHub review carried the item (ADR 0039); it is not posted again. */
+  /**
+   * Set once posted GitHub reviews carried every piece of the item, its text and each suggestion
+   * (ADR 0039, 0162); it is not posted again.
+   */
   readonly posted?: UraPostingView;
 }
 
+/** The latest review that carried a piece of the item, and where the item's own text went. */
 export interface UraPostingView {
   readonly url: string;
   readonly placement: 'inline' | 'body';
@@ -1609,7 +1628,7 @@ export interface UraStagedView {
 }
 
 /**
- * Where an export goes: `agent-json` (the `beuve.ura/1` payload `beuve_read_human_review`
+ * Where an export goes: `agent-json` (the `beuve.ura/2` payload `beuve_read_human_review`
  * returns), `agent-xml` (the same as XML, for pasting into Claude Code), `github` (the body of a
  * pull request review, not posted).
  */
@@ -2276,9 +2295,14 @@ export interface GithubReviewPreviewView {
   readonly sessionId: string;
   readonly headSha: string;
   readonly verdict: UraVerdictView;
+  /** Inline comments: notes' comments and suggestions' comments of their own (ADR 0162). */
   readonly inlineCount: number;
+  /** Notes with a section in the review body. */
   readonly bodyCount: number;
+  /** Notes an earlier review carried every piece of. */
   readonly alreadyPostedCount: number;
+  /** Pieces of notes the body had no room for (GitHub's 65,536 characters); absent when none. */
+  readonly leftOutCount?: number;
 }
 
 export type PostGithubReviewResponse =
