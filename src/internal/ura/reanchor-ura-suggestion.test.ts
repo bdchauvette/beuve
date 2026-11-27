@@ -2,10 +2,10 @@ import { describe } from 'vitest';
 
 import type { FileLineMapping } from './line-mapping.ts';
 import { reanchorUraSuggestion } from './reanchor-ura-suggestion.ts';
-import type { UraSuggestion } from './ura-item.ts';
+import type { UraSuggestionRange } from './ura-item.ts';
 import { test } from './testing/test.ts';
 
-function suggestion(start: number, end: number): UraSuggestion {
+function suggestion(start: number, end: number): UraSuggestionRange {
   return { path: 'src/a.ts', startLine: start, endLine: end, replacement: 'x' };
 }
 

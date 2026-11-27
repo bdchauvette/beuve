@@ -613,7 +613,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       if (!found.ok) {
         return uraFailure(logger, found.error);
       }
-      const edited = editUraItem(found.value, edit, Temporal.Now.instant());
+      const edited = editUraItem(found.value, edit, { now: Temporal.Now.instant(), deps });
       if (!edited.ok) {
         return uraFailure(logger, edited.error);
       }
@@ -652,7 +652,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const now = Temporal.Now.instant();
       const edited: UraItem[] = [];
       for (const item of items) {
-        const next = changedItem(item, { change, atSha, now });
+        const next = changedItem(item, { change, atSha, now, deps });
         if (!next.ok) {
           return uraFailure(logger, next.error);
         }
@@ -871,12 +871,13 @@ interface ItemChange {
   readonly change: UraItemsChange;
   readonly atSha: CommitSha | undefined;
   readonly now: Temporal.Instant;
+  readonly deps: UraDeps;
 }
 
 /** The item after the change, or `undefined` when it is in the asked-for state already. */
 function changedItem(
   item: UraItem,
-  { change, atSha, now }: ItemChange,
+  { change, atSha, now, deps }: ItemChange,
 ): Result<UraItem | undefined, UraItemError> {
   switch (change.kind) {
     case 'withdraw': {
@@ -901,13 +902,13 @@ function changedItem(
       if (item.severity === change.severity) {
         return ok(undefined);
       }
-      return editUraItem(item, { severity: change.severity }, now);
+      return editUraItem(item, { severity: change.severity }, { now, deps });
     }
     case 'blocking': {
       if (item.blocking === change.blocking) {
         return ok(undefined);
       }
-      return editUraItem(item, { blocking: change.blocking }, now);
+      return editUraItem(item, { blocking: change.blocking }, { now, deps });
     }
   }
 }

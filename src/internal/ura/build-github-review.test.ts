@@ -1,5 +1,7 @@
 import { describe } from 'vitest';
 
+import { tailOf } from '#x/text/tail-of.ts';
+
 import { buildGithubReview } from './build-github-review.ts';
 import type { GithubPermalinkTarget, GithubReview, LineSpan } from './build-github-review.ts';
 import { suggestedPatchFrom } from './suggested-patch-from.ts';
@@ -13,18 +15,23 @@ import type {
   UraPlacedSuggestion,
   UraSuggestionPlacement,
 } from './ura-artifact.ts';
-import type { UraSuggestion } from './ura-item.ts';
+import type { UraSuggestionId, UraSuggestionRange } from './ura-item.ts';
 import type { UraItemCandidate } from './validate-ura-item.ts';
 import { test } from './testing/test.ts';
 
+/** Where a test suggestion sits: outdated, or current on these lines. */
+type TestPlacement =
+  | Extract<UraSuggestionPlacement, { kind: 'outdated' }>
+  | { readonly kind: 'current'; readonly suggestion: UraSuggestionRange };
+
 /**
  * A suggestion of a test entry: its `path:start-end` (`new` replacing them unless given), where it
- * sits (current on its own lines by default) and its file.
+ * sits (current on its own lines by default) and its file. Its id is `suggestionId(n)` for the n-th.
  */
 interface SuggestionSource {
   readonly at: string;
   readonly replacement?: string;
-  readonly placement?: UraSuggestionPlacement;
+  readonly placement?: TestPlacement;
   /** The file at the item's head, to derive the patch from; no patch without it. */
   readonly file?: string;
 }
@@ -48,8 +55,8 @@ function twentyLines(): string {
   return `${Array.from({ length: 20 }, (_, index) => `line ${String(index + 1)}`).join('\n')}\n`;
 }
 
-/** The suggestion of `new` over `path:start-end`. */
-function at(spec: string): UraSuggestion {
+/** The suggestion of `new` over `path:start-end`, without its id. */
+function at(spec: string): UraSuggestionRange {
   const match = /^(?<path>.+):(?<start>\d+)-(?<end>\d+)$/u.exec(spec);
   if (match?.groups === undefined) {
     throw new Error(`not a test range: ${spec}`);
@@ -67,18 +74,31 @@ function entryFrom({ placement, suggestions = [], ...overrides }: EntrySource): 
   return {
     item,
     placement: placement ?? { kind: 'current', anchor: item.anchor },
-    suggestions: suggestions.map((source) => placedFrom(source)),
+    suggestions: suggestions.map((source, index) => {
+      return placedFrom({ ...source, id: testUraIds.suggestionId(index + 1) });
+    }),
   };
 }
 
-function suggestionFrom({ at: spec, replacement = 'new' }: SuggestionSource): UraSuggestion {
+function suggestionFrom({ at: spec, replacement = 'new' }: SuggestionSource): UraSuggestionRange {
   return { ...at(spec), replacement };
 }
 
-function placedFrom(source: SuggestionSource): UraPlacedSuggestion {
-  const { placement, file } = source;
-  const suggestion = suggestionFrom(source);
-  const placed = { suggestion, placement: placement ?? { kind: 'current', suggestion } } as const;
+/** A test suggestion and the id its item gave it. */
+interface IdentifiedSource extends SuggestionSource {
+  readonly id: UraSuggestionId;
+}
+
+function placedFrom(source: IdentifiedSource): UraPlacedSuggestion {
+  const { file, id } = source;
+  const suggestion = { ...suggestionFrom(source), id };
+  let placement: UraSuggestionPlacement = { kind: 'current', suggestion };
+  if (source.placement?.kind === 'outdated') {
+    placement = source.placement;
+  } else if (source.placement !== undefined) {
+    placement = { kind: 'current', suggestion: { ...source.placement.suggestion, id } };
+  }
+  const placed = { suggestion, placement } as const;
   if (file === undefined) {
     return placed;
   }
@@ -101,8 +121,13 @@ function placedPieces(review: GithubReview): string[] {
     if (piece.kind === 'note') {
       return `note:${placement}`;
     }
-    return `s${String(piece.position)}:${placement}`;
+    return `s${String(positionOf(piece.suggestionId))}:${placement}`;
   });
+}
+
+/** The 0-based position of the test suggestion with this id. */
+function positionOf(id: string): number {
+  return Number(tailOf(id, 12)) - 1;
 }
 
 function link({ sha, path, startLine, endLine }: GithubPermalinkTarget): string {
@@ -677,8 +702,8 @@ describe('buildGithubReview', () => {
       commentableRanges: appDiff(),
       posted: [
         { itemId: id, piece: { kind: 'note' } },
-        { itemId: id, piece: { kind: 'suggestion', position: 0 } },
-        { itemId: id, piece: { kind: 'suggestion', position: 1 } },
+        { itemId: id, piece: { kind: 'suggestion', suggestionId: testUraIds.suggestionId(1) } },
+        { itemId: id, piece: { kind: 'suggestion', suggestionId: testUraIds.suggestionId(2) } },
       ],
     });
     expect(all.placements).toStrictEqual([]);
@@ -694,10 +719,15 @@ describe('buildGithubReview', () => {
     const first = buildGithubReview(artifact);
     expect(first.placements).toStrictEqual([
       { itemId: id, piece: { kind: 'note' }, placement: 'comment', comment: 0 },
-      { itemId: id, piece: { kind: 'suggestion', position: 0 }, placement: 'comment', comment: 0 },
       {
         itemId: id,
-        piece: { kind: 'suggestion', position: 1 },
+        piece: { kind: 'suggestion', suggestionId: testUraIds.suggestionId(1) },
+        placement: 'comment',
+        comment: 0,
+      },
+      {
+        itemId: id,
+        piece: { kind: 'suggestion', suggestionId: testUraIds.suggestionId(2) },
         placement: 'suggestion-comment',
         comment: 1,
       },

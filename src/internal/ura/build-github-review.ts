@@ -239,7 +239,7 @@ function pieceKey({ itemId, piece }: GithubReviewPiece): string {
   if (piece.kind === 'note') {
     return `${itemId}\0note`;
   }
-  return `${itemId}\0${String(piece.position)}`;
+  return `${itemId}\0${piece.suggestionId}`;
 }
 
 /** Places each piece of one note that is still to be posted. */
@@ -257,12 +257,12 @@ function planEntry(entry: UraEntry, context: PlanContext): EntryPlan {
       isNoteInBody = true;
     } else {
       comments.push(noteComment);
-      condensed = condensedPosition(noteComment);
+      condensed = condensedPosition(entry, noteComment);
     }
   }
   const inBody: number[] = [];
-  for (const position of entry.suggestions.keys()) {
-    if (position === condensed || !isPending({ kind: 'suggestion', position })) {
+  for (const [position, placed] of entry.suggestions.entries()) {
+    if (position === condensed || !isPending(suggestionPiece(placed))) {
       continue;
     }
     const comment = suggestionCommentFrom(entry, position, context);
@@ -278,13 +278,17 @@ function planEntry(entry: UraEntry, context: PlanContext): EntryPlan {
   return { comments, section: sectionFrom(entry, { isNoteInBody, positions: inBody }, context) };
 }
 
-function condensedPosition(planned: PlannedComment): number | undefined {
+function condensedPosition(entry: UraEntry, planned: PlannedComment): number | undefined {
   for (const piece of planned.pieces) {
     if (piece.kind === 'suggestion') {
-      return piece.position;
+      return entry.suggestions.findIndex(({ suggestion }) => suggestion.id === piece.suggestionId);
     }
   }
   return undefined;
+}
+
+function suggestionPiece({ suggestion }: UraPlacedSuggestion): UraPostingPiece {
+  return { kind: 'suggestion', suggestionId: suggestion.id };
 }
 
 function isMoved(item: UraItem, piece: UraPostingPiece, context: PlanContext): boolean {
@@ -312,8 +316,8 @@ function noteCommentFrom(entry: UraEntry, context: PlanContext): PlannedComment 
   if (body !== '') {
     parts.push(body);
   }
-  const position = entry.suggestions.findIndex((placed, index) => {
-    const piece: UraPostingPiece = { kind: 'suggestion', position: index };
+  const position = entry.suggestions.findIndex((placed) => {
+    const piece = suggestionPiece(placed);
     return (
       placed.placement.kind === 'current' &&
       !context.posted.has(pieceKey({ itemId: item.id, piece })) &&
@@ -325,7 +329,7 @@ function noteCommentFrom(entry: UraEntry, context: PlanContext): PlannedComment 
   });
   const exact = entry.suggestions[position];
   if (exact !== undefined) {
-    pieces.push({ kind: 'suggestion', position });
+    pieces.push(suggestionPiece(exact));
     parts.push(suggestionBlock(linesOf(exact.suggestion.replacement)));
   }
   parts.push(...agentFooter(item.origin));
@@ -347,8 +351,7 @@ function suggestionCommentFrom(
   context: PlanContext,
 ): PlannedComment | undefined {
   const placed = entry.suggestions[position];
-  const piece: UraPostingPiece = { kind: 'suggestion', position };
-  if (placed === undefined || isMoved(entry.item, piece, context)) {
+  if (placed === undefined || isMoved(entry.item, suggestionPiece(placed), context)) {
     return undefined;
   }
   const target = commentTargetOf(entry, placed, context.headSha);
@@ -365,7 +368,11 @@ function suggestionCommentFrom(
   if (text.length > maxLength) {
     return undefined;
   }
-  return { comment: commentOn(target, text), pieces: [piece], placement: 'suggestion-comment' };
+  return {
+    comment: commentOn(target, text),
+    pieces: [suggestionPiece(placed)],
+    placement: 'suggestion-comment',
+  };
 }
 
 /**
@@ -521,7 +528,11 @@ function sectionFrom(
     parts.push(...noteParts(entry, context));
   }
   for (const position of positions) {
-    pieces.push({ kind: 'suggestion', position });
+    const placed = entry.suggestions[position];
+    if (placed === undefined) {
+      continue;
+    }
+    pieces.push(suggestionPiece(placed));
     parts.push(...suggestionParts(entry, position, context));
   }
   parts.push(...agentFooter(item.origin), '</details>');

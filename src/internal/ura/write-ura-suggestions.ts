@@ -9,13 +9,15 @@ import type { UraItem } from './ura-item.ts';
 export function writeUraSuggestions(db: DatabaseSync, item: UraItem): void {
   db.prepare('DELETE FROM ura_item_suggestions WHERE item_id = ?;').run(item.id);
   const insert = db.prepare(
-    `INSERT INTO ura_item_suggestions (item_id, position, path, start_line, end_line, replacement)
-     VALUES (?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO ura_item_suggestions
+       (item_id, position, id, path, start_line, end_line, replacement)
+     VALUES (?, ?, ?, ?, ?, ?, ?);`,
   );
   for (const [position, suggestion] of item.suggestions.entries()) {
     insert.run(
       item.id,
       position,
+      suggestion.id,
       suggestion.path,
       suggestion.startLine,
       suggestion.endLine,

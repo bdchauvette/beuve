@@ -87,9 +87,11 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       blocking: false,
       title: 'Name the constant',
     });
+    expect(edited.suggestions[0]?.id).toMatch(/^[\da-f-]{36}$/u);
     expect(edited.suggestions).toStrictEqual([
       {
         ...suggestion,
+        id: edited.suggestions[0]?.id ?? '',
         placement: { kind: 'current', path: 'src/app.ts', startLine: 2, endLine: 2 },
         patch: [
           '--- a/src/app.ts',

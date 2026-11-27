@@ -1,6 +1,7 @@
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { isUuid } from '#x/text/is-uuid.ts';
 
 import type { UraAnchor, UraItem, UraItemError, UraOrigin, UraSuggestion } from './ura-item.ts';
 
@@ -15,7 +16,7 @@ const maxReplacementBytes = 64 * 1024;
  * The one gate every item passes, whether built by a constructor, edited or read from a row:
  * the anchor is a sane repository-relative location, the origin's facts are well-formed and fit
  * the anchor, the title (optional) is one short line, the item says something (a title, a body or
- * a suggestion), its suggestions are on sane paths and lines, never overlap, number at most 500
+ * a suggestion), its suggestions are on sane paths and lines, never overlap, have distinct UUIDs, number at most 500
  * and replace with at most 64 KiB each (ADR 0162), and an item is never `addressed` at the head it
  * was written against. Whether a suggestion's lines exist at the head is main's to check: the
  * domain reads no files.
@@ -159,11 +160,18 @@ function checkSuggestions(suggestions: readonly UraSuggestion[]): string | undef
   if (hasOverlap(suggestions)) {
     return 'suggestions of one note must not overlap';
   }
+  const ids = new Set(suggestions.map((suggestion) => suggestion.id));
+  if (ids.size < suggestions.length) {
+    return 'suggestions of one note have distinct ids';
+  }
   return undefined;
 }
 
 function checkSuggestion(suggestion: UraSuggestion): string | undefined {
-  const { path, startLine, endLine, replacement } = suggestion;
+  const { id, path, startLine, endLine, replacement } = suggestion;
+  if (!isUuid(id)) {
+    return "a suggestion's id is a UUID";
+  }
   const pathReason = checkPath(path);
   if (pathReason !== undefined) {
     return `a suggestion's path: ${pathReason}`;

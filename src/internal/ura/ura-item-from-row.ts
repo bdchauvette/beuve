@@ -15,6 +15,7 @@ import type {
   UraStatus,
   UraStoreError,
   UraSuggestion,
+  UraSuggestionId,
 } from './ura-item.ts';
 import { uraSeverities } from './ura-severities.ts';
 import type { UraSeverity } from './ura-severities.ts';
@@ -179,16 +180,18 @@ function statusFrom(row: Row): UraStatus | string {
 
 function suggestionsFrom(rows: readonly Row[]): UraSuggestion[] | string {
   const suggestions: UraSuggestion[] = [];
-  for (const { path, start_line, end_line, replacement } of rows) {
+  for (const { id, path, start_line, end_line, replacement } of rows) {
     if (
+      typeof id !== 'string' ||
       typeof path !== 'string' ||
       typeof replacement !== 'string' ||
       !isInteger(start_line) ||
       !isInteger(end_line)
     ) {
-      return 'path, start_line, end_line or replacement is missing';
+      return 'id, path, start_line, end_line or replacement is missing';
     }
     suggestions.push({
+      id: id as UraSuggestionId,
       path,
       startLine: Number(start_line),
       endLine: Number(end_line),

@@ -135,7 +135,13 @@ describe('renderAgentReviewXml', () => {
   test('writes a deletion as an empty replacement and leaves out a patch it could not derive', ({
     expect,
   }) => {
-    const suggestion = { path: 'lib/b.ts', startLine: 4, endLine: 5, replacement: '' };
+    const suggestion = {
+      id: testUraIds.suggestionId(1),
+      path: 'lib/b.ts',
+      startLine: 4,
+      endLine: 5,
+      replacement: '',
+    };
     const item = createTestUraItem({ headSha: testUraIds.laterHeadSha, suggestions: [suggestion] });
     const artifact = {
       ...createSampleArtifact(),

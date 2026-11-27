@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 import { parseSuggestedPatch } from './parse-suggested-patch.ts';
-import type { UraSuggestion } from './ura-item.ts';
+import type { UraSuggestionRange } from './ura-item.ts';
 import { uraSuggestionsFromPatch } from './ura-suggestions-from-patch.ts';
 
 /**
@@ -24,7 +24,7 @@ export const uraSuggestionsMigration: Migration = {
 interface SuggestionRow {
   readonly itemId: string;
   readonly position: number;
-  readonly suggestion: UraSuggestion;
+  readonly suggestion: UraSuggestionRange;
 }
 
 const columns = [

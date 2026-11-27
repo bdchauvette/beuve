@@ -2,7 +2,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import type { UraSuggestion } from './ura-item.ts';
+import type { UraSuggestionRange } from './ura-item.ts';
 
 /** Why a suggestion has no patch: its lines aren't in the file, or it changes nothing. */
 export type SuggestedPatchError =
@@ -34,7 +34,7 @@ const noNewline = '\\ No newline at end of file';
  */
 export function suggestedPatchFrom(
   head: string,
-  suggestion: UraSuggestion,
+  suggestion: UraSuggestionRange,
 ): Result<string, SuggestedPatchError> {
   const before = splitText(head);
   const count = before.lines.length;
@@ -89,7 +89,7 @@ function splitText(text: string): SplitText {
  * changes nothing. At the end of a file without a final newline, a change that only adds or only
  * removes lines also changes which line ends the file, so it takes the line before it along.
  */
-function coreOf(before: SplitText, suggestion: UraSuggestion): Core | undefined {
+function coreOf(before: SplitText, suggestion: UraSuggestionRange): Core | undefined {
   let first = suggestion.startLine - 1;
   let last = suggestion.endLine;
   const added = linesOfReplacement(suggestion.replacement);

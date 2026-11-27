@@ -54,11 +54,15 @@ describe('compileUraArtifact', () => {
   test('places each suggestion on its own and derives its patch from the head texts', ({
     expect,
   }) => {
-    const moved = { path: 'src/app.ts', startLine: 4, endLine: 4, replacement: 'D' };
-    const touched = { path: 'src/app.ts', startLine: 1, endLine: 1, replacement: 'A' };
-    const inserted = { path: 'src/app.ts', startLine: 3, endLine: 2, replacement: 'new' };
-    const unread = { path: 'lib/x.ts', startLine: 1, endLine: 1, replacement: 'y' };
-    const item = createTestUraItem({ suggestions: [moved, touched, inserted, unread] });
+    const item = createTestUraItem({
+      suggestions: [
+        { path: 'src/app.ts', startLine: 4, endLine: 4, replacement: 'D' },
+        { path: 'src/app.ts', startLine: 1, endLine: 1, replacement: 'A' },
+        { path: 'src/app.ts', startLine: 3, endLine: 2, replacement: 'new' },
+        { path: 'lib/x.ts', startLine: 1, endLine: 1, replacement: 'y' },
+      ],
+    });
+    const [moved, touched, inserted, unread] = item.suggestions;
     const changed: LineMapping = {
       ...mapping(),
       files: [

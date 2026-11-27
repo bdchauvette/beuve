@@ -9,8 +9,9 @@ import type {
   UraItemError,
   UraItemId,
   UraOrigin,
-  UraSuggestion,
+  UraSuggestionDraft,
 } from './ura-item.ts';
+import { uraSuggestionsFromDrafts } from './ura-suggestions-from-drafts.ts';
 import type { UraSeverity } from './ura-severities.ts';
 import { validateUraItem } from './validate-ura-item.ts';
 
@@ -24,8 +25,8 @@ export interface UraItemDraft {
   readonly origin: UraOrigin;
   readonly title: string;
   readonly body: string;
-  /** None by default. */
-  readonly suggestions?: readonly UraSuggestion[];
+  /** None by default; each gets a fresh id. */
+  readonly suggestions?: readonly UraSuggestionDraft[];
 }
 
 /** A new, `staged` item. The title is trimmed; everything else must already be valid. */
@@ -41,7 +42,7 @@ export function createUraItem(draft: UraItemDraft, deps: UraDeps): Result<UraIte
     origin: draft.origin,
     title: draft.title.trim(),
     body: draft.body,
-    suggestions: draft.suggestions ?? [],
+    suggestions: uraSuggestionsFromDrafts({ drafts: draft.suggestions ?? [], existing: [] }, deps),
     status: { kind: 'staged' },
     createdAt: now,
     updatedAt: now,

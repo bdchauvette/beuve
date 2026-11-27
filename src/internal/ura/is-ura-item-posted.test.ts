@@ -38,5 +38,5 @@ describe('isUraItemPosted', () => {
 });
 
 function suggestion(position: number): UraPostingPiece {
-  return { kind: 'suggestion', position };
+  return { kind: 'suggestion', suggestionId: testUraIds.suggestionId(position + 1) };
 }

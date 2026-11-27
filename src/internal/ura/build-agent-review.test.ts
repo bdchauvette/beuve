@@ -199,7 +199,13 @@ describe('buildAgentReview', () => {
   test('places each suggestion on its own: moved lines on the head, the patch on its own head', ({
     expect,
   }) => {
-    const written = { path: 'src/app.ts', startLine: 8, endLine: 7, replacement: 'inserted' };
+    const written = {
+      id: testUraIds.suggestionId(1),
+      path: 'src/app.ts',
+      startLine: 8,
+      endLine: 7,
+      replacement: 'inserted',
+    };
     const moved = { ...written, startLine: 12, endLine: 11 };
     const item = createTestUraItem({ suggestions: [written] });
     const artifact = {

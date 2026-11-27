@@ -78,7 +78,7 @@ interface PostingSource {
 function posting({ itemId, at, position, placement = 'body' }: PostingSource): UraPosting {
   let piece: UraPosting['piece'] = { kind: 'note' };
   if (position !== undefined) {
-    piece = { kind: 'suggestion', position };
+    piece = { kind: 'suggestion', suggestionId: testUraIds.suggestionId(position + 1) };
   }
   return {
     itemId,

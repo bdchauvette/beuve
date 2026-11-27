@@ -2,13 +2,28 @@ import { describe } from 'vitest';
 
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
-import type { UraAnchor, UraItem, UraItemError, UraOrigin, UraSuggestion } from './ura-item.ts';
+import type {
+  UraAnchor,
+  UraItem,
+  UraItemError,
+  UraOrigin,
+  UraSuggestion,
+  UraSuggestionDraft,
+} from './ura-item.ts';
 import { validateUraItem } from './validate-ura-item.ts';
 import type { UraItemCandidate } from './validate-ura-item.ts';
 import { test } from './testing/test.ts';
 
-function errorOf(overrides: Partial<UraItemCandidate>): UraItemError | undefined {
-  const result = validateUraItem({ ...candidate(), ...overrides });
+/** Fields of the candidate to override; a suggestion without an id gets `suggestionId(n)`. */
+type CandidateOverrides = Partial<Omit<UraItemCandidate, 'suggestions'>> & {
+  readonly suggestions?: readonly UraSuggestionDraft[];
+};
+
+function errorOf({ suggestions = [], ...overrides }: CandidateOverrides): UraItemError | undefined {
+  const identified = suggestions.map(({ id, ...range }, index): UraSuggestion => {
+    return { id: (id ?? testUraIds.suggestionId(index + 1)) as UraSuggestion['id'], ...range };
+  });
+  const result = validateUraItem({ ...candidate(), ...overrides, suggestions: identified });
   if (result.ok) {
     return undefined;
   }
@@ -125,7 +140,7 @@ describe('validateUraItem', () => {
     ).toBeUndefined();
   });
 
-  test.for<[string, readonly UraSuggestion[], string]>([
+  test.for<[string, readonly UraSuggestionDraft[], string]>([
     ['a bad path', [suggestion({ path: 'src/../x' })], "a suggestion's path: "],
     ['line zero', [suggestion({ startLine: 0, endLine: 0 })], 'must be positive integers'],
     ['a fractional line', [suggestion({ endLine: 2.5 })], 'must be positive integers'],
@@ -138,6 +153,15 @@ describe('validateUraItem', () => {
       'an empty insertion',
       [suggestion({ startLine: 5, endLine: 4, replacement: '' })],
       'adds at least',
+    ],
+    ['an id that is no UUID', [suggestion({ id: 'nope' })], "a suggestion's id is a UUID"],
+    [
+      'one id twice',
+      [
+        suggestion({ id: testUraIds.suggestionId(1) }),
+        suggestion({ id: testUraIds.suggestionId(1), startLine: 9, endLine: 9 }),
+      ],
+      'distinct ids',
     ],
     [
       'shared lines',
@@ -193,11 +217,11 @@ describe('validateUraItem', () => {
   });
 });
 
-function suggestion(overrides: Partial<UraSuggestion>): UraSuggestion {
+function suggestion(overrides: Partial<UraSuggestionDraft>): UraSuggestionDraft {
   return { path: 'src/app.ts', startLine: 1, endLine: 1, replacement: 'x', ...overrides };
 }
 
-function suggestionsOnLines(count: number): UraSuggestion[] {
+function suggestionsOnLines(count: number): UraSuggestionDraft[] {
   return Array.from({ length: count }, (_, index) => {
     return suggestion({ startLine: index + 1, endLine: index + 1 });
   });

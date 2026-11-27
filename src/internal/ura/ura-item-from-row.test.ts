@@ -4,6 +4,7 @@ import { describe } from 'vitest';
 
 import { uraItemFromRow } from './ura-item-from-row.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
+import { testUraIds } from './testing/test-ura-ids.ts';
 import { uraItemRowFrom } from './ura-item-row-from.ts';
 import type { UraItem } from './ura-item.ts';
 import { test } from './testing/test.ts';
@@ -95,34 +96,47 @@ describe('uraItemFromRow', () => {
   });
 
   test('maps suggestion rows in order, with integers as numbers or bigints', ({ expect }) => {
+    const [first, second] = [testUraIds.suggestionId(1), testUraIds.suggestionId(2)];
     const rows = [
-      { path: 'src/b.ts', start_line: 4n, end_line: 3n, replacement: 'new' },
-      { path: 'src/app.ts', start_line: 10, end_line: 11, replacement: '' },
+      { id: first, path: 'src/b.ts', start_line: 4n, end_line: 3n, replacement: 'new' },
+      { id: second, path: 'src/app.ts', start_line: 10, end_line: 11, replacement: '' },
     ];
     expect(uraItemFromRow(row(), rows)).toStrictEqual({
       ok: true,
       value: {
         ...item(),
         suggestions: [
-          { path: 'src/b.ts', startLine: 4, endLine: 3, replacement: 'new' },
-          { path: 'src/app.ts', startLine: 10, endLine: 11, replacement: '' },
+          { id: first, path: 'src/b.ts', startLine: 4, endLine: 3, replacement: 'new' },
+          { id: second, path: 'src/app.ts', startLine: 10, endLine: 11, replacement: '' },
         ],
       },
     });
   });
 
   test('reports bad suggestion rows', ({ expect }) => {
-    const good = { path: 'src/b.ts', start_line: 4, end_line: 4, replacement: 'x' };
+    const good = {
+      id: testUraIds.suggestionId(1),
+      path: 'src/b.ts',
+      start_line: 4,
+      end_line: 4,
+      replacement: 'x',
+    };
     expect(uraItemFromRow(row(), [{ ...good, replacement: 7 }])).toMatchObject({
       ok: false,
       error: {
         table: 'ura_item_suggestions',
-        reason: 'path, start_line, end_line or replacement is missing',
+        reason: 'id, path, start_line, end_line or replacement is missing',
       },
     });
-    expect(uraItemFromRow(row(), [good, good])).toMatchObject({
+    expect(
+      uraItemFromRow(row(), [good, { ...good, id: testUraIds.suggestionId(2) }]),
+    ).toMatchObject({
       ok: false,
       error: { reason: 'invalid-suggestion: suggestions of one note must not overlap' },
+    });
+    expect(uraItemFromRow(row(), [{ ...good, id: 'x' }])).toMatchObject({
+      ok: false,
+      error: { reason: "invalid-suggestion: a suggestion's id is a UUID" },
     });
   });
 

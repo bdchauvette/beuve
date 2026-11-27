@@ -66,7 +66,10 @@ describe('uraPostingPiecesMigration', () => {
     ['the old inline placement', "'note', 0, 'inline'"],
     ['a negative position', "'suggestion', -1, 'body'"],
     ['an unknown piece', "'title', 0, 'body'"],
-  ])('rejects a posting row with %s', ([, values], { expect, db }) => {
+  ])('rejects a posting row with %s', ([, values], { expect, closing }) => {
+    const db = closing(openDatabase(':memory:'));
+    runMigrations(db, [...beforePieces(), uraPostingPiecesMigration]);
+    db.prepare('INSERT INTO sessions (id) VALUES (?);').run(testUraIds.sessionId);
     db.exec(
       `INSERT INTO ura_items (id, session_id, position, head_sha, anchor_kind, path, severity,
                               blocking, origin_kind, title, body, status, created_at, updated_at)

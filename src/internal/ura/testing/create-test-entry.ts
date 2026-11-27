@@ -1,7 +1,9 @@
 import { parseSuggestedPatch } from '../parse-suggested-patch.ts';
 import type { UraEntry, UraPlacedSuggestion, UraPlacement } from '../ura-artifact.ts';
-import type { PatchHunk, UraItem } from '../ura-item.ts';
+import type { PatchHunk, UraItem, UraSuggestion } from '../ura-item.ts';
 import { uraSuggestionsFromPatch } from '../ura-suggestions-from-patch.ts';
+
+import { testUraIds } from './test-ura-ids.ts';
 
 /** An artifact entry to build: the item, where it sits, and a patch its suggestions come from. */
 export interface TestEntrySource {
@@ -25,7 +27,9 @@ export function createTestEntry({ item, placement, patch }: TestEntrySource): Ur
     throw new Error(`invalid test patch: ${parsed.error.reason}`);
   }
   const { path, hunks } = parsed.value;
-  const suggestions = uraSuggestionsFromPatch(parsed.value);
+  const suggestions = uraSuggestionsFromPatch(parsed.value).map((range, index): UraSuggestion => {
+    return { id: testUraIds.suggestionId(index + 1), ...range };
+  });
   const placed = suggestions.map((suggestion, index): UraPlacedSuggestion => {
     const hunk = hunks[index];
     let text: string | undefined;

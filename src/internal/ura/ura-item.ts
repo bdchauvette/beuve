@@ -6,6 +6,12 @@ import type { UraSeverity } from './ura-severities.ts';
 export type UraItemId = Brand<string, 'UraItemId'>;
 
 /**
+ * A suggestion's id (a UUID), unique within its item and kept across edits, so a posting names the
+ * same suggestion however the list around it changes (ADR 0162).
+ */
+export type UraSuggestionId = Brand<string, 'UraSuggestionId'>;
+
+/**
  * A review session's id. Structurally identical to the session domain's `SessionId`, so main
  * passes one for the other without either domain importing the other (ADR 0009).
  */
@@ -62,17 +68,30 @@ export type UraStatus =
     };
 
 /**
- * A replacement of head lines a note suggests (ADR 0162), on the head side of its item's
- * `headSha`, on any path of that head's tree. Lines are 1-based and inclusive; `endLine` is
- * `startLine - 1` for an insertion before `startLine` (after the last line when `startLine` is one
- * past it). `replacement` is the new lines, `\n`-joined, without a final newline: `''` is no
- * lines, so a suggestion with it deletes its lines.
+ * What a suggestion replaces and with what (ADR 0162), on the head side of its item's `headSha`,
+ * on any path of that head's tree. Lines are 1-based and inclusive; `endLine` is `startLine - 1`
+ * for an insertion before `startLine` (after the last line when `startLine` is one past it).
+ * `replacement` is the new lines, `\n`-joined, without a final newline: `''` is no lines, so a
+ * suggestion with it deletes its lines.
  */
-export interface UraSuggestion {
+export interface UraSuggestionRange {
   readonly path: string;
   readonly startLine: number;
   readonly endLine: number;
   readonly replacement: string;
+}
+
+/** A replacement of head lines a note suggests, with its id. */
+export interface UraSuggestion extends UraSuggestionRange {
+  readonly id: UraSuggestionId;
+}
+
+/**
+ * A suggestion as a caller supplies it: with the id of one the item already has to keep that
+ * suggestion's identity, or without one for a new suggestion (`uraSuggestionsFromDrafts`).
+ */
+export interface UraSuggestionDraft extends UraSuggestionRange {
+  readonly id?: string;
 }
 
 /** One line of a suggested patch's hunk, without its prefix. */

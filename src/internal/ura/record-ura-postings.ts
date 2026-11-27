@@ -11,23 +11,23 @@ import type { UraPosting } from './ura-posting.ts';
 export function recordUraPostings(db: DatabaseSync, postings: readonly UraPosting[]): void {
   const insert = db.prepare(
     `INSERT INTO ura_item_postings
-       (item_id, target, piece, position, session_id, url, head_sha, placement, posted_at)
+       (item_id, target, piece, suggestion_id, session_id, url, head_sha, placement, posted_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (item_id, target, piece, position) DO UPDATE SET
+     ON CONFLICT (item_id, target, piece, suggestion_id) DO UPDATE SET
        url = excluded.url, head_sha = excluded.head_sha, placement = excluded.placement,
        posted_at = excluded.posted_at;`,
   );
   withTransaction(db, () => {
     for (const posting of postings) {
-      let position = 0;
+      let suggestionId = '';
       if (posting.piece.kind === 'suggestion') {
-        position = posting.piece.position;
+        suggestionId = posting.piece.suggestionId;
       }
       insert.run(
         posting.itemId,
         posting.target,
         posting.piece.kind,
-        position,
+        suggestionId,
         posting.sessionId,
         posting.url,
         posting.headSha,

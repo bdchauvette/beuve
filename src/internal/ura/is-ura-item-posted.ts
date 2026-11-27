@@ -13,11 +13,11 @@ export function isUraItemPosted(
   if (own.every((posting) => posting.piece.kind !== 'note')) {
     return false;
   }
-  const positions = new Set<number>();
+  const posted = new Set<string>();
   for (const { piece } of own) {
     if (piece.kind === 'suggestion') {
-      positions.add(piece.position);
+      posted.add(piece.suggestionId);
     }
   }
-  return item.suggestions.every((_suggestion, position) => positions.has(position));
+  return item.suggestions.every((suggestion) => posted.has(suggestion.id));
 }

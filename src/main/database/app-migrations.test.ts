@@ -11,6 +11,7 @@ import { setupMigrations } from '#internal/setup/setup-migrations.ts';
 import { uraFindingConfidenceMigration } from '#internal/ura/ura-finding-confidence-migration.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
 import { uraPostingPiecesMigration } from '#internal/ura/ura-posting-pieces-migration.ts';
+import { uraSuggestionIdsMigration } from '#internal/ura/ura-suggestion-ids-migration.ts';
 import { uraSuggestionsMigration } from '#internal/ura/ura-suggestions-migration.ts';
 import { openDatabase } from '#sqlite/open-database.ts';
 import { runMigrations } from '#sqlite/run-migrations.ts';
@@ -118,6 +119,7 @@ function shippedMigrations(): Record<string, string> {
     'session-0002-review-ranges': '98797b855283d465',
     'ura-0004-suggestions': 'function',
     'ura-0005-posting-pieces': '345c266ced9057d7',
+    'ura-0006-suggestion-ids': '222e30a5de96a0da',
   };
 }
 
@@ -224,6 +226,7 @@ function domainMigrations(): Record<string, readonly Migration[]> {
       uraFindingConfidenceMigration,
       uraSuggestionsMigration,
       uraPostingPiecesMigration,
+      uraSuggestionIdsMigration,
     ],
     chat: chatMigrations,
     github: githubMigrations,

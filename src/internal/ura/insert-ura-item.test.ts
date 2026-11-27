@@ -7,6 +7,7 @@ import { findUraItem } from './find-ura-item.ts';
 import { insertUraItem } from './insert-ura-item.ts';
 import { listUraItems } from './list-ura-items.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
+import { fixedUraDeps } from './testing/fixed-ura-deps.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
 import { markUraItemAddressed } from './mark-ura-item-addressed.ts';
 import type { SessionId, UraItem } from './ura-item.ts';
@@ -97,7 +98,11 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
     });
     insertUraItem(db, item);
     const edited = okValueFrom(
-      editUraItem(item, { blocking: true, body: 'Now urgent.', suggestions: [] }, later()),
+      editUraItem(
+        item,
+        { blocking: true, body: 'Now urgent.', suggestions: [] },
+        { now: later(), deps: fixedUraDeps() },
+      ),
     );
     expect(updateUraItem(db, edited)).toStrictEqual({ ok: true, value: undefined });
     expect(findUraItem(db, item.id)).toStrictEqual({ ok: true, value: edited });
@@ -131,11 +136,12 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
     const item = createTestUraItem();
     insertUraItem(db, item);
     const insert = db.prepare(
-      `INSERT INTO ura_item_suggestions (item_id, position, path, start_line, end_line, replacement)
-       VALUES (?, ?, 'src/a.ts', 1, 2, 'x');`,
+      `INSERT INTO ura_item_suggestions
+         (item_id, position, id, path, start_line, end_line, replacement)
+       VALUES (?, ?, ?, 'src/a.ts', 1, 2, 'x');`,
     );
-    insert.run(item.id, 0);
-    insert.run(item.id, 1);
+    insert.run(item.id, 0, testUraIds.suggestionId(1));
+    insert.run(item.id, 1, testUraIds.suggestionId(2));
     expect(listUraItems(db, testUraIds.sessionId)).toStrictEqual({
       ok: false,
       error: {

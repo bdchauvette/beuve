@@ -167,11 +167,12 @@ function uraRows(): string {
        NULL, NULL, NULL, 'Mind the locale', '', 'withdrawn', NULL, NULL, '${at(7)}',
        '${at(8)}');
 
-    INSERT INTO ura_item_suggestions (item_id, position, path, start_line, end_line, replacement)
+    INSERT INTO ura_item_suggestions (item_id, position, id, path, start_line, end_line,
+                                      replacement)
     VALUES
-      ('${id(21)}', 0, 'src/a.ts', 3, 3, ${quoted(replacement)}),
-      ('${id(22)}', 0, 'README.md', 1, 0, '# Usage'),
-      ('${id(26)}', 0, 'src/c.ts', 1, 2, 'const limit = 3;');
+      ('${id(21)}', 0, '${id(41)}', 'src/a.ts', 3, 3, ${quoted(replacement)}),
+      ('${id(22)}', 0, '${id(42)}', 'README.md', 1, 0, '# Usage'),
+      ('${id(26)}', 0, '${id(43)}', 'src/c.ts', 1, 2, 'const limit = 3;');
 
     INSERT INTO ura_verdict_choices (session_id, verdict, cleared_reason, head_sha, updated_at)
     VALUES
@@ -179,15 +180,15 @@ function uraRows(): string {
       ('${id(2)}', NULL, 'head-moved', NULL, '${at(6)}'),
       ('${id(3)}', NULL, 'blocking-staged', NULL, '${at(7)}');
 
-    INSERT INTO ura_item_postings (item_id, target, piece, position, session_id, url, head_sha,
-                                   placement, posted_at)
+    INSERT INTO ura_item_postings (item_id, target, piece, suggestion_id, session_id, url,
+                                   head_sha, placement, posted_at)
     VALUES
-      ('${id(25)}', 'github', 'note', 0, '${id(2)}',
+      ('${id(25)}', 'github', 'note', '', '${id(2)}',
        'https://github.com/octo/beuve/pull/42#discussion_r1', '${sha(4)}', 'comment', '${at(5)}'),
-      ('${id(26)}', 'github', 'note', 0, '${id(2)}',
+      ('${id(26)}', 'github', 'note', '', '${id(2)}',
        'https://github.com/octo/beuve/pull/42#pullrequestreview-2', '${sha(4)}', 'body',
        '${at(5)}'),
-      ('${id(26)}', 'github', 'suggestion', 0, '${id(2)}',
+      ('${id(26)}', 'github', 'suggestion', '${id(43)}', '${id(2)}',
        'https://github.com/octo/beuve/pull/42#pullrequestreview-2', '${sha(4)}',
        'suggestion-comment', '${at(5)}');
   `;

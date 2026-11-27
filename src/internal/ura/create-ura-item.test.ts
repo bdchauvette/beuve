@@ -35,7 +35,14 @@ describe('createUraItem', () => {
   test('validates the suggestions', ({ expect, deps }) => {
     const suggestion = { path: 'src/a.ts', startLine: 3, endLine: 3, replacement: 'count' };
     const result = createUraItem({ ...draft(), suggestions: [suggestion] }, deps);
-    expect(result.ok && result.value.suggestions).toStrictEqual([suggestion]);
+    expect(result.ok && result.value.suggestions).toStrictEqual([
+      { ...suggestion, id: testUraIds.itemId(2) },
+    ]);
+    const sent = createUraItem(
+      { ...draft(), suggestions: [{ ...suggestion, id: testUraIds.suggestionId(1) }] },
+      deps,
+    );
+    expect(sent.ok && sent.value.suggestions[0]?.id).not.toBe(testUraIds.suggestionId(1));
     expect(
       createUraItem({ ...draft(), suggestions: [{ ...suggestion, path: '../a.ts' }] }, deps).ok,
     ).toBe(false);

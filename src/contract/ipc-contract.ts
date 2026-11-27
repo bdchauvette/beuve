@@ -1374,6 +1374,11 @@ export type UraPlacementView =
  * `startLine`. `replacement` is the new lines, `\n`-joined, without a final newline (`''` is none).
  */
 export interface UraSuggestionDraftView {
+  /**
+   * The id of a suggestion the note already has, to edit that one in place and keep its postings
+   * (ADR 0162); absent for a new suggestion, which gets a fresh id.
+   */
+  readonly id?: string;
   readonly path: string;
   readonly startLine: number;
   readonly endLine: number;
@@ -1395,6 +1400,8 @@ export type UraSuggestionPlacementView =
 
 /** A stored suggestion, with the unified diff main derives for it from the head's file. */
 export interface UraSuggestionView extends UraSuggestionDraftView {
+  /** Unique within the note and kept across edits that send it back. */
+  readonly id: string;
   /** Absent when the file can't be read at the item's head, or the suggestion changes nothing. */
   readonly patch?: string;
   /** Placed on its own, like the item; outdated suggestions are kept. */

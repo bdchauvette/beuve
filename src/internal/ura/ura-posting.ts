@@ -1,12 +1,12 @@
-import type { CommitSha, SessionId, UraItemId } from './ura-item.ts';
+import type { CommitSha, SessionId, UraItemId, UraSuggestionId } from './ura-item.ts';
 
 /** A part of a note a posted review can carry on its own: its text, or one of its suggestions. */
 export type UraPostingPiece =
   | { readonly kind: 'note' }
   | {
       readonly kind: 'suggestion';
-      /** The suggestion's 0-based position in the note's list. */
-      readonly position: number;
+      /** The suggestion's id, which edits keep however the list around it changes. */
+      readonly suggestionId: UraSuggestionId;
     };
 
 /**

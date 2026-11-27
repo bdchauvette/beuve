@@ -387,6 +387,7 @@ const uraBody = z.string().max(100_000);
 /** A suggestion's lines may be an insertion (`endLine = startLine - 1`); the domain checks the rest. */
 const uraSuggestion = z
   .strictObject({
+    id: uuid.exactOptional(),
     path: repositoryPath,
     startLine: line,
     endLine: z.number().int().min(0).max(10_000_000),

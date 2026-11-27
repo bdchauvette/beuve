@@ -1,5 +1,5 @@
 import { changeRegionsFrom } from './change-regions-from.ts';
-import type { SuggestedPatch, UraSuggestion } from './ura-item.ts';
+import type { SuggestedPatch, UraSuggestionRange } from './ura-item.ts';
 
 /**
  * A suggested patch as suggestions (ADR 0162): each hunk that changes something becomes one
@@ -7,10 +7,10 @@ import type { SuggestedPatch, UraSuggestion } from './ura-item.ts';
  * lines). A hunk whose new side is a single empty line and nothing else reads as a deletion, since
  * a replacement of `''` is no lines; hunks with context lines never are.
  */
-export function uraSuggestionsFromPatch(patch: SuggestedPatch): UraSuggestion[] {
+export function uraSuggestionsFromPatch(patch: SuggestedPatch): UraSuggestionRange[] {
   return patch.hunks
     .filter((hunk) => changeRegionsFrom(hunk).length > 0)
-    .map((hunk): UraSuggestion => {
+    .map((hunk): UraSuggestionRange => {
       let startLine = hunk.oldStart;
       if (hunk.oldCount === 0) {
         startLine += 1;

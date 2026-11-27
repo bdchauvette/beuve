@@ -6,7 +6,6 @@ import { openDatabase } from '#sqlite/open-database.ts';
 import { runMigrations } from '#sqlite/run-migrations.ts';
 import type { Migration } from '#sqlite/run-migrations.ts';
 
-import { listUraItems } from './list-ura-items.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
 import { test } from './testing/test.ts';
 import { uraFindingConfidenceMigration } from './ura-finding-confidence-migration.ts';
@@ -74,11 +73,16 @@ describe('uraSuggestionsMigration', () => {
       });
     expect(columns).not.toContain('patch');
     expect(db.prepare('SELECT count(*) AS n FROM ura_item_postings;').get()?.['n']).toBe(1);
-    const items = listUraItems(db, testUraIds.sessionId);
     expect(
-      items.ok &&
-        items.value.map((item) => {
-          return item.suggestions.length;
+      db
+        .prepare(
+          `SELECT count(suggestions.item_id) AS n FROM ura_items AS items
+             LEFT JOIN ura_item_suggestions AS suggestions ON suggestions.item_id = items.id
+            GROUP BY items.id ORDER BY items.position;`,
+        )
+        .all()
+        .map((row) => {
+          return row['n'];
         }),
     ).toStrictEqual([0, 3, 1]);
   });
@@ -103,25 +107,30 @@ describe('uraSuggestionsMigration', () => {
     insertCurrentItem(db);
     expect(() => {
       db.exec(
-        `INSERT INTO ura_item_suggestions (item_id, position, path, start_line, end_line, replacement)
-         VALUES ('${testUraIds.itemId(1)}', 0, ${values});`,
+        `INSERT INTO ura_item_suggestions
+           (item_id, position, id, path, start_line, end_line, replacement)
+         VALUES ('${testUraIds.itemId(1)}', 0, '${testUraIds.suggestionId(1)}', ${values});`,
       );
     }).toThrow(/CHECK/u);
   });
 
-  test('cascades an item’s deletion to its suggestions and keys them by position', ({
+  test('cascades an item’s deletion to its suggestions and keys them by position and id', ({
     expect,
     db,
   }) => {
     insertCurrentItem(db);
     const insert = db.prepare(
-      `INSERT INTO ura_item_suggestions (item_id, position, path, start_line, end_line, replacement)
-       VALUES (?, ?, 'src/a.ts', 1, 1, 'x');`,
+      `INSERT INTO ura_item_suggestions
+         (item_id, position, id, path, start_line, end_line, replacement)
+       VALUES (?, ?, ?, 'src/a.ts', 1, 1, 'x');`,
     );
-    insert.run(testUraIds.itemId(1), 0);
+    insert.run(testUraIds.itemId(1), 0, testUraIds.suggestionId(1));
     expect(() => {
-      insert.run(testUraIds.itemId(1), 0);
+      insert.run(testUraIds.itemId(1), 0, testUraIds.suggestionId(2));
     }).toThrow(/UNIQUE|PRIMARY KEY/u);
+    expect(() => {
+      insert.run(testUraIds.itemId(1), 1, testUraIds.suggestionId(1));
+    }).toThrow(/UNIQUE/u);
     db.prepare('DELETE FROM ura_items WHERE id = ?;').run(testUraIds.itemId(1));
     expect(db.prepare('SELECT count(*) AS n FROM ura_item_suggestions;').get()?.['n']).toBe(0);
   });

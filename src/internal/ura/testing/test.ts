@@ -5,6 +5,7 @@ import type { UraDeps } from '../ura-item.ts';
 import { uraFindingConfidenceMigration } from '../ura-finding-confidence-migration.ts';
 import { uraMigrations } from '../ura-migrations.ts';
 import { uraPostingPiecesMigration } from '../ura-posting-pieces-migration.ts';
+import { uraSuggestionIdsMigration } from '../ura-suggestion-ids-migration.ts';
 import { uraSuggestionsMigration } from '../ura-suggestions-migration.ts';
 import { fixedUraDeps } from './fixed-ura-deps.ts';
 import { testUraIds } from './test-ura-ids.ts';
@@ -23,6 +24,7 @@ export const test = baseTest
       uraFindingConfidenceMigration,
       uraSuggestionsMigration,
       uraPostingPiecesMigration,
+      uraSuggestionIdsMigration,
     ]);
     const insert = db.prepare('INSERT INTO sessions (id) VALUES (?);');
     insert.run(testUraIds.sessionId);

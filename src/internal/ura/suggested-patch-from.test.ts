@@ -2,17 +2,17 @@ import { describe } from 'vitest';
 
 import { parseSuggestedPatch } from './parse-suggested-patch.ts';
 import { suggestedPatchFrom } from './suggested-patch-from.ts';
-import type { UraSuggestion } from './ura-item.ts';
+import type { UraSuggestionRange } from './ura-item.ts';
 import { test } from './testing/test.ts';
 
 function suggestion(
   [startLine, endLine]: readonly [number, number],
   replacement: string,
-): UraSuggestion {
+): UraSuggestionRange {
   return { path: 'src/a.ts', startLine, endLine, replacement };
 }
 
-function patchOf(head: string, of: UraSuggestion): string | undefined {
+function patchOf(head: string, of: UraSuggestionRange): string | undefined {
   const result = suggestedPatchFrom(head, of);
   if (result.ok) {
     return result.value;

@@ -422,7 +422,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     expect(okValueFrom(await ura.list({ sessionId })).items[2]?.posted?.placement).toBe('body');
   });
 
-  test('posts each piece of a note on its own, records where each went, and later sends only new ones', async ({
+  test('posts each piece of a note on its own, records where each went, and later sends only new ones, by id', async ({
     expect,
     services,
     opened,
@@ -471,13 +471,19 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       }),
     ).toStrictEqual([
       { piece: { kind: 'note' }, placement: 'comment' },
-      { piece: { kind: 'suggestion', position: 0 }, placement: 'comment' },
-      { piece: { kind: 'suggestion', position: 1 }, placement: 'suggestion-comment' },
+      {
+        piece: { kind: 'suggestion', suggestionId: item.suggestions[0]?.id },
+        placement: 'comment',
+      },
+      {
+        piece: { kind: 'suggestion', suggestionId: item.suggestions[1]?.id },
+        placement: 'suggestion-comment',
+      },
     ]);
     expect(okValueFrom(await ura.list({ sessionId })).items[0]?.posted?.placement).toBe('inline');
 
     const third = { path: 'notes.md', startLine: 1, endLine: 1, replacement: 'because' };
-    okValueFrom(await ura.update({ itemId: item.id, suggestions: [first, second, third] }));
+    okValueFrom(await ura.update({ itemId: item.id, suggestions: [...item.suggestions, third] }));
     expect(okValueFrom(await ura.list({ sessionId })).items[0]?.posted).toBeUndefined();
     expect(
       okValueFrom(await services.github.previewReview({ sessionId, expectedHeadSha: firstHead })),
@@ -493,6 +499,51 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
         },
       ],
     });
+    expect(okValueFrom(await ura.list({ sessionId })).items[0]?.posted).toBeDefined();
+  });
+
+  test('posts a suggestion added after an earlier one was removed, which takes its place in the list', async ({
+    expect,
+    services,
+    opened,
+    world,
+  }) => {
+    const { firstHead, api } = world;
+    const sessionId = await opened();
+    const ura = services.ura;
+    const item = okValueFrom(
+      await ura.create({
+        sessionId,
+        anchor: { kind: 'file', path: 'app.ts' },
+        severity: 'suggestion',
+        title: 'Rename',
+        body: '',
+        suggestions: [
+          { path: 'app.ts', startLine: 1, endLine: 1, replacement: 'export const ANSWER = 42;' },
+          { path: 'app.ts', startLine: 2, endLine: 2, replacement: 'export const OTHER = 2;' },
+        ],
+      }),
+    );
+    okValueFrom(await services.github.postReview({ sessionId, expectedHeadSha: firstHead }));
+    expect(api.reviews[0]?.body.comments).toHaveLength(2);
+    const [, kept] = item.suggestions;
+    const added = { path: 'notes.md', startLine: 1, endLine: 1, replacement: 'because' };
+    const edited = okValueFrom(
+      await ura.update({ itemId: item.id, suggestions: [kept ?? added, added] }),
+    );
+    expect(edited.suggestions.map((suggestion) => suggestion.id)).toStrictEqual([
+      kept?.id,
+      expect.not.stringMatching(item.suggestions[0]?.id ?? ''),
+    ]);
+    expect(edited.posted).toBeUndefined();
+    okValueFrom(await services.github.postReview({ sessionId, expectedHeadSha: firstHead }));
+    expect(api.reviews[1]?.body.comments).toStrictEqual([
+      expect.objectContaining({
+        path: 'notes.md',
+        line: 1,
+        body: 'Suggestion 2 of 2 for **Rename**\n\n```suggestion\nbecause\n```',
+      }),
+    ]);
     expect(okValueFrom(await ura.list({ sessionId })).items[0]?.posted).toBeDefined();
   });
 
