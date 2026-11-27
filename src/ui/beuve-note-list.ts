@@ -2,6 +2,7 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
+import { repeat } from 'lit/directives/repeat.js';
 
 import type {
   ReviewEditPreviewView,
@@ -17,6 +18,11 @@ import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
 
 import './beuve-note-expand.ts';
 import './beuve-patch-preview.ts';
+import './beuve-suggestion-field.ts';
+import type { BeuveSuggestionField, SuggestionFieldKeyDetail } from './beuve-suggestion-field.ts';
+import { suggestionFieldsFrom } from './suggestion-fields-from.ts';
+import type { SuggestionFieldView, SuggestionLines } from './suggestion-field-view.ts';
+import { withSuggestionField } from './with-suggestion-field.ts';
 import { ActionDelegation } from './action-delegation.ts';
 import { withPayload } from './with-payload.ts';
 import { displayAccelerator } from './display-accelerator.ts';
@@ -107,9 +113,10 @@ const noteListExports: Readonly<Record<NoteListExportTarget, NoteListExport>> = 
  * The Note menu and the context menu run the same commands (`runCommand`, ADR 0068), and Open in
  * Editor opens it (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocking note; export buttons copy the compiled review. Items carrying
- * a suggestion show a ± glyph named "Has suggested changes" and preview it under the cursor; the editor can re-edit the
- * suggestion in the diff stream or remove it (ADR 0043). Presentational: emits
- * `beuve-ura-edit-suggestion`, `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-edit-many`,
+ * a suggestion preview it under the cursor; the editor shows each suggestion as a field with
+ * Remove, and Add suggestion adds one over the note's lines, or for a note without lines the
+ * diff's selection (`beuve-suggestion-target`, ADR 0162). Saving sends every field back with its
+ * id. Presentational: emits `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-edit-many`,
  * `beuve-ura-delete`, `beuve-ura-reorder` and `beuve-ura-export`; `beuve-app` does the IPC.
  */
 @customElement('beuve-note-list')
@@ -430,10 +437,15 @@ export class BeuveNoteList extends LitElement {
         margin-block-start: var(--beuve-space-1);
       }
 
-      .editor .suggestion-actions {
-        display: flex;
-        align-items: center;
-        gap: var(--beuve-space-1);
+      .editor .suggestions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--beuve-space-2);
+      }
+
+      .editor .suggestion-notice {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
       }
 
       .editor {
@@ -595,6 +607,27 @@ export class BeuveNoteList extends LitElement {
     this.editingBlocking = event.detail.blocking;
   };
 
+  /** A field's Remove: the editor loses that field. */
+  private readonly onFieldRemove = (event: CustomEvent<SuggestionFieldKeyDetail>): void => {
+    event.stopPropagation();
+    const { key } = event.detail;
+    this.editingSuggestions = this.editingSuggestions.filter((field) => field.key !== key);
+  };
+
+  /** ⌘/Ctrl+Return in a field saves the editor's note, as it does in the title and body. */
+  private readonly onFieldSave = (event: Event): void => {
+    event.stopPropagation();
+    this.renderRoot.querySelector<HTMLFormElement>('form.editor')?.requestSubmit();
+  };
+
+  private readonly onFieldCancel = (event: Event): void => {
+    event.stopPropagation();
+    this.closeEditor();
+  };
+
+  /** Numbers new suggestion fields, for their keys. */
+  private fieldCount = 0;
+
   /** `:shortcode:` emoji in the editor's title and body and the review summary (ADR 0145). */
   private readonly emoji = new EmojiCompletion(this);
 
@@ -679,6 +712,10 @@ export class BeuveNoteList extends LitElement {
   /** The open editor's label and Blocking, which start from the note's own (ADR 0131). */
   @state() accessor editingSeverity: UraSeverityView = 'issue';
   @state() accessor editingBlocking = false;
+  /** The open editor's suggestion fields, which start from the note's own (ADR 0162). */
+  @state() accessor editingSuggestions: readonly SuggestionFieldView[] = [];
+  /** Why Add suggestion added no field, until the editor changes. */
+  @state() accessor suggestionNotice = '';
   @state() accessor verdictRefusal = '';
   /** The review summary being written; kept until it is posted or another pull request opens. */
   @state() accessor summary = '';
@@ -693,6 +730,9 @@ export class BeuveNoteList extends LitElement {
     super();
     this.addEventListener('keydown', this.onKeyDown);
     this.addEventListener('beuve-ura-label-change', this.onLabelChange as EventListener);
+    this.addEventListener('beuve-suggestion-field-remove', this.onFieldRemove as EventListener);
+    this.addEventListener('beuve-suggestion-field-save', this.onFieldSave);
+    this.addEventListener('beuve-suggestion-field-cancel', this.onFieldCancel);
     // ADR 0074: the items, their editor and the export buttons, through one listener per type.
     this.addController(
       new ActionDelegation(this, {
@@ -724,23 +764,13 @@ export class BeuveNoteList extends LitElement {
             event.stopPropagation();
             this.closeEditor();
           },
-          'edit-suggestion': withPayload(
+          'add-suggestion': withPayload(
             ({ itemId }) => {
               return this.itemOf(itemId);
             },
             (found, event): void => {
               event.stopPropagation();
-              this.closeEditor();
-              this.emit('beuve-ura-edit-suggestion', { itemId: found.id });
-            },
-          ),
-          'remove-suggestion': withPayload(
-            ({ itemId }) => {
-              return this.itemOf(itemId);
-            },
-            (found, event): void => {
-              event.stopPropagation();
-              this.emit('beuve-ura-update', { itemId: found.id, suggestions: [] });
+              this.addSuggestion(found);
             },
           ),
           export: withPayload(
@@ -1047,6 +1077,8 @@ export class BeuveNoteList extends LitElement {
     this.editingId = item.id;
     this.editingSeverity = item.severity;
     this.editingBlocking = item.blocking;
+    this.editingSuggestions = suggestionFieldsFrom(item);
+    this.suggestionNotice = '';
     void this.focusEditor(focus);
   }
 
@@ -1145,7 +1177,14 @@ export class BeuveNoteList extends LitElement {
       return '';
     };
     const title = field('title').trim();
-    if (title === '' && field('body').trim() === '' && item.suggestions.length === 0) {
+    const fields = [...form.querySelectorAll<BeuveSuggestionField>('beuve-suggestion-field')];
+    const suggestions = fields.map((element) => element.draft());
+    const reading = fields.find((_element, index) => suggestions[index] === undefined);
+    if (reading !== undefined) {
+      reading.focus();
+      return;
+    }
+    if (title === '' && field('body').trim() === '' && fields.length === 0) {
       form.querySelector('input')?.focus();
       return;
     }
@@ -1155,8 +1194,69 @@ export class BeuveNoteList extends LitElement {
       body: field('body'),
       severity: this.editingSeverity,
       blocking: this.editingBlocking,
+      suggestions: suggestions.filter((suggestion) => suggestion !== undefined),
     });
     this.closeEditor();
+  }
+
+  /**
+   * Add suggestion: a field over the note's own lines at the head it was written against, or, for
+   * a note without lines, over the lines selected in the diff when they are on that head.
+   */
+  private addSuggestion(item: UraItemView): void {
+    this.suggestionNotice = '';
+    if (item.anchor.kind === 'lines') {
+      const { path, startLine, endLine } = item.anchor;
+      this.addField({ path, startLine, endLine }, item.headSha);
+      return;
+    }
+    const answer = this.askSuggestionTarget();
+    if (answer.kind === 'refused') {
+      this.suggestionNotice = answer.reason;
+      return;
+    }
+    if (answer.headSha !== item.headSha) {
+      this.suggestionNotice =
+        'This note was written on an older head, so its suggestions are on that head’s lines.';
+      return;
+    }
+    this.addField(answer.lines, item.headSha);
+  }
+
+  /** The diff's selected lines, as the review answers `beuve-suggestion-target`. */
+  private askSuggestionTarget(): SuggestionTargetAnswer {
+    const answers: SuggestionTargetAnswer[] = [];
+    const detail: SuggestionTargetRequestDetail = {
+      respond: (answer): void => {
+        answers.push(answer);
+      },
+    };
+    this.dispatchEvent(
+      new CustomEvent('beuve-suggestion-target', { detail, bubbles: true, composed: true }),
+    );
+    return (
+      answers[0] ?? { kind: 'refused', reason: 'Select lines in the diff to suggest a change on.' }
+    );
+  }
+
+  /** Adds a field and focuses it, or focuses the field already on some of its lines. */
+  private addField(lines: SuggestionLines, headSha: string): void {
+    this.fieldCount += 1;
+    const field: SuggestionFieldView = { key: `new-${String(this.fieldCount)}`, headSha, ...lines };
+    const change = withSuggestionField(this.editingSuggestions, field);
+    let key = field.key;
+    if (change.kind === 'overlaps') {
+      this.suggestionNotice = 'Some of these lines already have a suggestion in this note.';
+      key = change.field.key;
+    } else {
+      this.editingSuggestions = change.fields;
+    }
+    void this.updateComplete.then(() => {
+      const element = [
+        ...this.renderRoot.querySelectorAll<BeuveSuggestionField>('.editor beuve-suggestion-field'),
+      ].find((candidate) => candidate.field?.key === key);
+      element?.focus();
+    });
   }
 
   private async revealCursor(): Promise<void> {
@@ -1343,13 +1443,35 @@ export class BeuveNoteList extends LitElement {
         data-emoji-completion
         .value=${item.body}
       ></textarea>
-      ${this.renderSuggestionActions(item)}
+      ${
+        this.editingSuggestions.length === 0
+          ? nothing
+          : html`<div class="suggestions">
+              ${repeat(
+                this.editingSuggestions,
+                (field) => {
+                  return field.key;
+                },
+                (field) => {
+                  return html`<beuve-suggestion-field .field=${field}></beuve-suggestion-field>`;
+                },
+              )}
+            </div>`
+      }
+      ${
+        this.suggestionNotice === ''
+          ? nothing
+          : html`<span class="suggestion-notice" role="status">${this.suggestionNotice}</span>`
+      }
       <div class="row">
         <beuve-note-expand
           .anchor=${item.anchor}
           .headSha=${item.headSha}
           .noteKey=${item.id}
         ></beuve-note-expand>
+        <button class="button" type="button" data-action="add-suggestion" data-item-id=${item.id}>
+          Add suggestion
+        </button>
         <span class="spacer"></span>
         <button class="button" type="button" title="Cancel (Esc)" data-action="cancel-edit">
           Cancel
@@ -1359,47 +1481,6 @@ export class BeuveNoteList extends LitElement {
         </button>
       </div>
     </form>`;
-  }
-
-  /**
-   * Re-edit or remove a suggestion. Editing happens in the diff stream (Add Suggestion there), so it is
-   * offered only for line notes current on the head they were written against.
-   */
-  private renderSuggestionActions(item: UraItemView): TemplateResult | typeof nothing {
-    const isEditable =
-      item.status.kind === 'staged' &&
-      item.anchor.kind === 'lines' &&
-      item.placement.kind === 'current';
-    const hasSuggestion = item.suggestions.length > 0;
-    if (!isEditable && !hasSuggestion) {
-      return nothing;
-    }
-    return html`<div class="suggestion-actions">
-      ${
-        isEditable
-          ? html`<button
-              class="button"
-              type="button"
-              data-action="edit-suggestion"
-              data-item-id=${item.id}
-            >
-              ${hasSuggestion ? 'Edit suggestion…' : 'Add suggestion…'}
-            </button>`
-          : nothing
-      }
-      ${
-        hasSuggestion
-          ? html`<button
-              class="button"
-              type="button"
-              data-action="remove-suggestion"
-              data-item-id=${item.id}
-            >
-              Remove suggestion
-            </button>`
-          : nothing
-      }
-    </div>`;
   }
 
   private renderExport(stagedCount: number): TemplateResult {
@@ -1985,6 +2066,16 @@ export class BeuveNoteList extends LitElement {
   }
 }
 
+/** What the diff answers `beuve-suggestion-target` with: its selected lines and their head, or why there are none. */
+export type SuggestionTargetAnswer =
+  | { readonly kind: 'lines'; readonly lines: SuggestionLines; readonly headSha: string }
+  | { readonly kind: 'refused'; readonly reason: string };
+
+/** `beuve-suggestion-target`: the notes list asks the review for the diff's selected lines. */
+export interface SuggestionTargetRequestDetail {
+  readonly respond: (answer: SuggestionTargetAnswer) => void;
+}
+
 /** Where dragged notes would land: before or after the staged note `id`. */
 interface DropTarget {
   readonly id: string;
@@ -2058,7 +2149,8 @@ function anchorLabel(anchor: UraAnchorView): string {
 }
 
 function submitOnModEnter(event: KeyboardEvent, form: HTMLFormElement): void {
-  if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) {
+  // A suggestion field saves through its own event.
+  if (event.defaultPrevented || event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) {
     return;
   }
   event.preventDefault();

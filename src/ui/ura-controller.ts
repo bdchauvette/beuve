@@ -233,7 +233,7 @@ export class UraController implements ReactiveController {
       blocking: request.draft.blocking,
       title: request.draft.title,
       body: request.draft.body,
-      ...(request.suggestion !== undefined && { suggestions: [request.suggestion] }),
+      ...(request.draft.suggestions.length > 0 && { suggestions: request.draft.suggestions }),
     });
     if (!created.ok) {
       request.settle(created.error.message);

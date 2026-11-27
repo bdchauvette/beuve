@@ -14,7 +14,6 @@ import type {
   UpdateUraItemRequest,
   UraAnchorView,
   UraItemView,
-  UraSuggestionDraftView,
 } from '#contract/ipc-contract.ts';
 
 import type { CommandId } from '#contract/command-catalog.ts';
@@ -27,14 +26,10 @@ import type { FileDiagnostics } from './file-diagnostics.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import type { ImageLoader } from './rich-view/beuve-rich-view.ts';
 import type { BeuveFindBar, FindQueryDetail, FindStepDetail } from './beuve-find-bar.ts';
-import type { DiffToggleDetail, SideLines, SuggestionCancelDetail } from './beuve-file-card.ts';
-import type {
-  ComposerState,
-  FilePairLoader,
-  NoteEditDetail,
-  SuggestionSaveDetail,
-} from './beuve-file-card.ts';
-import type { UraDraft } from './beuve-ura-composer.ts';
+import type { DiffToggleDetail, SideLines } from './beuve-file-card.ts';
+import type { ComposerState, FilePairLoader, NoteEditDetail } from './beuve-file-card.ts';
+import type { SuggestionFieldKeyDetail } from './beuve-suggestion-field.ts';
+import type { BeuveUraComposer, UraDraft } from './beuve-ura-composer.ts';
 import { noteEditFrom } from './note-edit-from.ts';
 import type { NoteEdit } from './note-edit-from.ts';
 import { ActionDelegation } from './action-delegation.ts';
@@ -57,9 +52,9 @@ import { planDiffLayout } from './plan-diff-layout.ts';
 import { planReviewStream } from './plan-review-stream.ts';
 import type { ReviewStreamPlan } from './plan-review-stream.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
-import { editTargetFrom } from './edit-target-from.ts';
-import { uneditableReasonFrom } from './uneditable-reason-from.ts';
-import type { EditTarget } from './edit-target-from.ts';
+import { suggestionTargetFrom } from './suggestion-target-from.ts';
+import type { SuggestionFieldView, SuggestionLines } from './suggestion-field-view.ts';
+import { withSuggestionField } from './with-suggestion-field.ts';
 import type { PeekState } from './peek-state.ts';
 import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
 import type { ReviewStops } from './step-review-position-skipping.ts';
@@ -67,7 +62,6 @@ import { cardIndexAtLine } from './card-index-at-line.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
-import { editedPatchFrom } from './edited-patch-from.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
 import './primitives/beuve-commit.ts';
@@ -95,24 +89,17 @@ export interface FileJump {
 export interface UraCreateRequest {
   readonly anchor: UraAnchorView;
   readonly headSha: string;
+  /** The note's text, label and suggestions (ADR 0162). */
   readonly draft: UraDraft;
-  /** The suggestion an Add Suggestion edit produced (ADR 0043, 0162), staged with the note. */
-  readonly suggestion?: UraSuggestionDraftView;
   readonly settle: (error: string | undefined) => void;
 }
 
-/** What a composer opens with besides its lines: a new note's suggestion, or the note it edits. */
+/** What a composer opens with besides its lines: the note it edits, if any. */
 interface ComposerOptions {
   readonly anchor?: UraAnchorView;
-  readonly suggestedPatch?: string;
-  readonly suggestion?: UraSuggestionDraftView;
   readonly edit?: NoteEdit;
-}
-
-/** A request from the notes list to (re-)edit an item's suggestion; `nonce` repeats it. */
-export interface SuggestionJump {
-  readonly itemId: string;
-  readonly nonce: number;
+  /** `false` when the caller reveals the composer itself, at a field. */
+  readonly isRevealed?: boolean;
 }
 
 const defaultDisplay: DiffDisplayView = {
@@ -146,6 +133,12 @@ export interface SplitNarrowDetail {
   readonly isNarrow: boolean;
 }
 
+/** Suggestion lines and the head they are on. */
+interface PlacedLines {
+  readonly lines: SuggestionLines;
+  readonly headSha: string;
+}
+
 /** What the card's gutter button asks for: a note composer on `anchor`. */
 interface NoteAddDetail {
   readonly anchor: UraAnchorView;
@@ -160,8 +153,8 @@ interface NoteAddDetail {
  * that stages the target into the notes list (ADR 0027); a staged note's marker (double-click or
  * Edit) opens it in the same composer, which saves it through `beuve-ura-update` (ADR 0129). Every line-taking action reads one
  * target: the selection, a jump's line, the focused hunk or the file (ADR 0063). View ▸ Diff switches side-by-side/inline diffs and hiding
- * whitespace (ADR 0042), and Add Suggestion edits the
- * hunk or selected lines into a suggested patch for a new or the underlying note (ADR 0043).
+ * whitespace (ADR 0042), and Add Suggestion adds a suggestion field for the selected lines or the
+ * hunk to the note being composed, the staged note under them, or a new note (ADR 0162).
  * File Reviewed marks the active file reviewed or not (ADR 0064): reviewed cards collapse to their header,
  * and Next/Previous Change can skip them. Files show in the order main computed (ADR 0065), with a divider
  * above the config and mechanical group, and an interdiff's commit pairs can narrow the stream
@@ -355,9 +348,8 @@ export class BeuveDiffStream extends LitElement {
     this.composer = { ...composer, saving: true, error: '' };
     const request: UraCreateRequest = {
       anchor: composer.anchor,
-      headSha: review.headSha,
+      headSha: composer.headSha,
       draft: event.detail,
-      ...(composer.suggestion !== undefined && { suggestion: composer.suggestion }),
       settle: (error): void => {
         if (this.composer?.path !== composer.path) {
           return;
@@ -390,38 +382,29 @@ export class BeuveDiffStream extends LitElement {
     this.closeComposer();
   };
 
-  /** An Add Suggestion edit saved: onto the note it was made for, else into a new note's composer. */
-  private readonly onSuggestionSave = (event: CustomEvent<SuggestionSaveDetail>): void => {
-    const { target, patch, suggestion } = event.detail;
-    if (target.itemId === undefined) {
-      this.openComposer({
-        anchor: {
-          kind: 'lines',
-          path: target.path,
-          startLine: target.startLine,
-          endLine: target.endLine,
-        },
-        suggestedPatch: patch,
-        suggestion,
-      });
+  /** The composer's Add suggestion: a field over the note's own lines, else the diff's selection. */
+  private readonly onSuggestionAdd = (event: Event): void => {
+    event.stopPropagation();
+    const own = this.composerLines();
+    if (own !== undefined) {
+      this.addField(own);
       return;
     }
-    this.dispatchEvent(
-      new CustomEvent('beuve-ura-update', {
-        detail: { itemId: target.itemId, suggestions: [suggestion] },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    this.notify('info', 'Suggestion attached to the note.');
-    this.focus();
+    this.addTargetField();
   };
 
-  private readonly onSuggestionCancel = (event: CustomEvent<SuggestionCancelDetail>): void => {
-    if (event.detail.message !== '') {
-      this.notify('info', event.detail.message);
+  /** A field's Remove: the composer loses that field. */
+  private readonly onFieldRemove = (event: CustomEvent<SuggestionFieldKeyDetail>): void => {
+    const { composer } = this;
+    const { key } = event.detail;
+    if (composer?.suggestions.some((field) => field.key === key) !== true) {
+      return;
     }
-    this.focus();
+    event.stopPropagation();
+    this.composer = {
+      ...composer,
+      suggestions: composer.suggestions.filter((field) => field.key !== key),
+    };
   };
 
   private readonly onFindQuery = (event: CustomEvent<FindQueryDetail>): void => {
@@ -487,6 +470,9 @@ export class BeuveDiffStream extends LitElement {
       this.activate(index);
     }
   };
+
+  /** Numbers new suggestion fields, for their keys. */
+  private fieldCount = 0;
 
   /** What `beuve-split-narrow` last said, so it is said only when it changes. */
   private isNarrowReported = false;
@@ -599,7 +585,6 @@ export class BeuveDiffStream extends LitElement {
     noDiagnostics;
   /** The reviewer's diff layout and whitespace preference (ADR 0042). */
   @property({ attribute: false }) accessor display: DiffDisplayView = defaultDisplay;
-  @property({ attribute: false }) accessor suggestionJump: SuggestionJump | undefined;
   /** Files that start collapsed and why (ADR 0052), from {@link planDiffDeferrals}. */
   @property({ attribute: false }) accessor deferrals: ReadonlyMap<string, DiffDeferral> =
     noDeferrals;
@@ -666,10 +651,10 @@ export class BeuveDiffStream extends LitElement {
     this.addEventListener('keydown', this.onKeyDown);
     this.addEventListener('beuve-ura-compose-submit', this.onComposeSubmit as EventListener);
     this.addEventListener('beuve-ura-compose-cancel', this.onComposeCancel);
-    this.addEventListener('beuve-suggestion-save', this.onSuggestionSave as EventListener);
+    this.addEventListener('beuve-suggestion-add', this.onSuggestionAdd);
+    this.addEventListener('beuve-suggestion-field-remove', this.onFieldRemove as EventListener);
     this.addEventListener('beuve-note-add', this.onNoteAdd as EventListener);
     this.addEventListener('beuve-note-edit', this.onNoteEdit as EventListener);
-    this.addEventListener('beuve-suggestion-cancel', this.onSuggestionCancel as EventListener);
     this.addEventListener('beuve-diff-toggle', this.onDiffToggle as EventListener);
     this.addEventListener('beuve-find-query', this.onFindQuery as EventListener);
     this.addEventListener('beuve-find-step', this.onFindStep as EventListener);
@@ -964,77 +949,106 @@ export class BeuveDiffStream extends LitElement {
     );
   }
 
-  /** Add Suggestion: edits the target's lines, or the staged note under them, on the active card. */
-  private editActive(): void {
-    const { review } = this;
-    const reviewTarget = this.target();
-    let target: EditTarget | undefined;
-    if (review !== undefined) {
-      target = editTargetFrom(reviewTarget, this.uraItems, review.headSha);
-    }
-    if (target === undefined) {
-      let reason: string | undefined;
-      if (reviewTarget.kind !== 'change') {
-        reason = uneditableReasonFrom(reviewTarget.file);
-      }
-      this.notify(
-        'info',
-        reason ?? 'Pick a hunk with Next Change, or select head lines, to suggest an edit.',
-      );
+  /**
+   * Add Suggestion (ADR 0162): a field for the target's lines, added to the note being composed,
+   * else to the staged note under them (opened in the composer), else to a new note on them.
+   */
+  private addSuggestion(): void {
+    const { review, composer } = this;
+    if (review === undefined) {
       return;
     }
-    void this.loadedCard(this.activeIndex).then(async (loaded) => loaded?.startEdit(target));
+    const target = suggestionTargetFrom(this.target(), this.uraItems, review.headSha);
+    if (target.kind === 'refused') {
+      this.notify('info', target.reason);
+      return;
+    }
+    if (composer !== undefined) {
+      this.addTargetField();
+      return;
+    }
+    const item = this.uraItems.find((candidate) => candidate.id === target.itemId);
+    let edit: NoteEdit | undefined;
+    if (item !== undefined) {
+      edit = noteEditFrom(item);
+    }
+    if (edit === undefined) {
+      this.openComposer({ anchor: { kind: 'lines', ...target.lines }, isRevealed: false });
+    } else {
+      this.openComposer({ anchor: edit.anchor, edit, isRevealed: false });
+    }
+    this.addField({ lines: target.lines, headSha: review.headSha });
   }
 
-  /** The notes list asked to (re-)edit an item's suggestion: its file, its lines, attached to it. */
-  private async editItem(itemId: string): Promise<void> {
-    const item = this.uraItems.find((entry) => entry.id === itemId);
-    let anchor: UraAnchorView | undefined;
-    if (item?.placement.kind === 'current') {
-      anchor = item.placement.anchor;
-    }
-    let index = -1;
-    if (anchor?.kind === 'lines') {
-      const { path } = anchor;
-      index = this.shownFiles().findIndex((file) => file.path === path);
-    }
-    if (index === -1 || item === undefined || anchor?.kind !== 'lines') {
-      this.notify('error', 'That note is not on a line of this diff, so it cannot be edited here.');
+  /** A field for the diff's target lines in the open composer, when they are on its head. */
+  private addTargetField(): void {
+    const { review } = this;
+    if (review === undefined) {
       return;
     }
-    if (item.headSha !== this.review?.headSha) {
-      this.notify('error', 'That note was written on an older head; stage a new one to suggest.');
+    const target = suggestionTargetFrom(this.target(), [], review.headSha);
+    if (target.kind === 'refused') {
+      this.notify('info', target.reason);
       return;
     }
-    const file = this.shownFiles()[index];
-    let reason: string | undefined;
-    if (file !== undefined) {
-      reason = uneditableReasonFrom(file);
-    }
-    if (reason !== undefined) {
-      this.notify('error', reason);
-      return;
-    }
-    this.activeIndex = index;
-    this.activeHunk = -1;
-    const card = await this.loadedCard(index);
-    const patch = editedPatchFrom(item);
-    const target: EditTarget = {
-      path: anchor.path,
-      startLine: anchor.startLine,
-      endLine: anchor.endLine,
-      itemId,
-      ...(patch !== undefined && { patch }),
-    };
-    await card?.startEdit(target);
+    this.addField({ lines: target.lines, headSha: review.headSha });
   }
 
   /**
-   * Add Note: a composer on the active card, staging the target's head lines (ADR 0063), or `anchor`
-   * with the suggestion an Add Suggestion edit produced, or the staged note it edits.
+   * The lines the composer's own note is on, at the head it was written against: a new note's
+   * lines, or an edited note's own; `undefined` for a file note.
+   */
+  private composerLines(): PlacedLines | undefined {
+    const { composer } = this;
+    if (composer === undefined) {
+      return undefined;
+    }
+    let anchor: UraAnchorView = composer.anchor;
+    const itemId = composer.edit?.itemId;
+    if (itemId !== undefined) {
+      anchor = this.uraItems.find((item) => item.id === itemId)?.anchor ?? anchor;
+    }
+    if (anchor.kind !== 'lines') {
+      return undefined;
+    }
+    const { path, startLine, endLine } = anchor;
+    return { lines: { path, startLine, endLine }, headSha: composer.headSha };
+  }
+
+  /**
+   * Adds a field over `lines` to the open composer and focuses it, unless the note's lines are on
+   * another head or a field already covers some of them, which is focused instead.
+   */
+  private addField({ lines, headSha }: PlacedLines): void {
+    const { composer } = this;
+    if (composer === undefined) {
+      return;
+    }
+    if (headSha !== composer.headSha) {
+      this.notify(
+        'info',
+        'This note was written on an older head, so its suggestions are on that head’s lines; stage a new note for these.',
+      );
+      return;
+    }
+    this.fieldCount += 1;
+    const field: SuggestionFieldView = { key: `new-${String(this.fieldCount)}`, headSha, ...lines };
+    const change = withSuggestionField(composer.suggestions, field);
+    if (change.kind === 'overlaps') {
+      this.notify('info', 'Some of these lines already have a suggestion in this note.');
+      void this.revealComposer(composer.anchor, change.field.key);
+      return;
+    }
+    this.composer = { ...composer, suggestions: change.fields };
+    void this.revealComposer(composer.anchor, field.key);
+  }
+
+  /**
+   * Add Note: a composer on the active card, staging the target's head lines (ADR 0063) or
+   * `anchor`, or editing a staged note.
    */
   private openComposer(options: ComposerOptions = {}): void {
-    const { anchor: given, suggestedPatch, suggestion, edit } = options;
+    const { anchor: given, edit, isRevealed = true } = options;
     const { review } = this;
     const files = this.shownFiles();
     if (given !== undefined && given.kind !== 'change') {
@@ -1070,11 +1084,13 @@ export class BeuveDiffStream extends LitElement {
       where,
       saving: false,
       error: '',
-      ...(suggestedPatch !== undefined && { suggestedPatch }),
-      ...(suggestion !== undefined && { suggestion }),
+      headSha: edit?.headSha ?? review.headSha,
+      suggestions: edit?.suggestions ?? [],
       ...(edit !== undefined && { edit }),
     };
-    void this.revealComposer(anchor);
+    if (isRevealed) {
+      void this.revealComposer(anchor);
+    }
   }
 
   /** Edits staged note `itemId` in a composer that takes its marker's place (ADR 0129). */
@@ -1087,11 +1103,7 @@ export class BeuveDiffStream extends LitElement {
     if (edit === undefined) {
       return;
     }
-    this.openComposer({
-      anchor: edit.anchor,
-      edit,
-      ...(edit.suggestedPatch !== undefined && { suggestedPatch: edit.suggestedPatch }),
-    });
+    this.openComposer({ anchor: edit.anchor, edit });
   }
 
   /** Saves the edited note through `ura:update`, as the notes list's editor does, and closes the composer. */
@@ -1102,6 +1114,7 @@ export class BeuveDiffStream extends LitElement {
       blocking: draft.blocking,
       title: draft.title,
       body: draft.body,
+      suggestions: draft.suggestions,
     };
     this.dispatchEvent(
       new CustomEvent('beuve-ura-update', { detail, bubbles: true, composed: true }),
@@ -1121,7 +1134,12 @@ export class BeuveDiffStream extends LitElement {
     }
   }
 
-  private async revealComposer(anchor: UraAnchorView): Promise<void> {
+  /** Scrolls to the composer on the active card and focuses its title, or field `fieldKey`. */
+  private async revealComposer(anchor: UraAnchorView, fieldKey?: string): Promise<void> {
+    const index = this.shownFiles().findIndex((file) => file.path === this.composer?.path);
+    if (index !== -1) {
+      this.activeIndex = index;
+    }
     const card = await this.loadedCard(this.activeIndex);
     if (anchor.kind === 'lines') {
       await card?.revealLine(anchor.endLine);
@@ -1129,7 +1147,11 @@ export class BeuveDiffStream extends LitElement {
       await card?.revealLine(undefined);
     }
     const element = await waitForComposer(card);
-    element?.focus();
+    if (fieldKey === undefined) {
+      element?.focus();
+      return;
+    }
+    await element?.focusSuggestion(fieldKey);
   }
 
   private closeComposer(): void {
@@ -1503,7 +1525,7 @@ export class BeuveDiffStream extends LitElement {
         return true;
       }
       case 'add-suggestion': {
-        this.editActive();
+        this.addSuggestion();
         return true;
       }
       case 'open-in-editor': {
@@ -1637,10 +1659,6 @@ export class BeuveDiffStream extends LitElement {
     if (fileJump !== undefined && changed.has('fileJump')) {
       this.focusFile(fileJump);
     }
-    const suggestionJump = this.suggestionJump;
-    if (suggestionJump !== undefined && changed.has('suggestionJump')) {
-      void this.editItem(suggestionJump.itemId);
-    }
   }
 }
 
@@ -1675,7 +1693,9 @@ function insightPaths(insight: ReviewInsight): string[] {
 }
 
 /** Polls a few frames for the composer the card renders through the library's annotations. */
-async function waitForComposer(card: BeuveFileCard | undefined): Promise<HTMLElement | undefined> {
+async function waitForComposer(
+  card: BeuveFileCard | undefined,
+): Promise<BeuveUraComposer | undefined> {
   for (let frame = 0; card !== undefined && frame < 30; frame += 1) {
     const element =
       card.querySelector('beuve-ura-composer') ??

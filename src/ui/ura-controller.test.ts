@@ -142,7 +142,7 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', blocking: false, title: 't', body: '' },
+      draft: { severity: 'issue', blocking: false, title: 't', body: '', suggestions: [] },
       settle: (error): void => {
         settled.push(error);
       },
@@ -160,7 +160,7 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', blocking: false, title: 't', body: '' },
+      draft: { severity: 'issue', blocking: false, title: 't', body: '', suggestions: [] },
       settle: (error): void => {
         settled.push(error);
       },
@@ -178,8 +178,13 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', blocking: true, title: 'Handle it', body: 'b' },
-      suggestion: { path: 'src/a.ts', startLine: 1, endLine: 1, replacement: 'x' },
+      draft: {
+        severity: 'issue',
+        blocking: true,
+        title: 'Handle it',
+        body: 'b',
+        suggestions: [{ path: 'src/a.ts', startLine: 1, endLine: 1, replacement: 'x' }],
+      },
       settle: (error): void => {
         settled.push(error);
       },

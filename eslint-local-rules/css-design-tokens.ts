@@ -2,6 +2,8 @@ import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { TSESTree } from '@typescript-eslint/utils';
 
 import { cssDeclarationsFrom } from './css-declarations-from.ts';
+import { cssDeclarationsFromTheme } from './css-declarations-from-theme.ts';
+import { isCodemirrorThemeCall } from './is-codemirror-theme-call.ts';
 
 type MessageIds =
   'colorLiteral' | 'fontSizeLiteral' | 'lengthLiteral' | 'lengthInString' | 'scaleToken';
@@ -18,7 +20,8 @@ const lengthLiteral =
  * templates: no color literals (`#hex`, `rgb()`, `oklch()`, …), no lengths (`px`, `rem`, `em`,
  * `vh`, `ch`, … — sizes, spaces, borders and radii are tokens, and a text-sized width is a count
  * of `--beuve-measure-em`), and no `--beuve-scale-*` primitives, which only the token file's
- * semantic tier reads. In any other string or template (an `html` style attribute, CSS built as a
+ * semantic tier reads. A CodeMirror theme spec (`EditorView.theme({ … })`, ADR 0162) is checked
+ * the same way, its `camelCase` keys read as CSS properties. In any other string or template (an `html` style attribute, CSS built as a
  * string, `setProperty`): no lengths either. `0`, `%`, `fr`, unitless numbers, `transparent`,
  * `currentColor` and `inherit` are fine; a length computed at run time is concatenated, not
  * written, so it never matches.
@@ -60,6 +63,15 @@ export const cssDesignTokens = ESLintUtils.RuleCreator.withoutDocs<[], MessageId
           }
         }
       },
+      CallExpression(node: TSESTree.CallExpression): void {
+        const declarations = cssDeclarationsFromTheme(node) ?? [];
+        for (const { property, value, node: literal } of declarations) {
+          const messageId = messageIdFrom({ property, value });
+          if (messageId !== undefined) {
+            context.report({ node: literal, messageId, data: { property, value } });
+          }
+        }
+      },
       TemplateLiteral(node: TSESTree.TemplateLiteral): void {
         if (node.parent.type === AST_NODE_TYPES.TaggedTemplateExpression && isCssTag(node.parent)) {
           return;
@@ -69,7 +81,10 @@ export const cssDesignTokens = ESLintUtils.RuleCreator.withoutDocs<[], MessageId
         }
       },
       Literal(node: TSESTree.Literal): void {
-        if (typeof node.value === 'string') {
+        if (
+          typeof node.value === 'string' &&
+          !isInThemeSpec(context.sourceCode.getAncestors(node))
+        ) {
           reportLength(node, node.value);
         }
       },
@@ -101,4 +116,10 @@ function messageIdFrom({ property, value }: Declaration): MessageIds | undefined
 
 function isCssTag(node: TSESTree.TaggedTemplateExpression): boolean {
   return node.tag.type === AST_NODE_TYPES.Identifier && node.tag.name === 'css';
+}
+
+/** Whether a node with these ancestors is in the spec of a CodeMirror theme, which the theme's own check reads. */
+function isInThemeSpec(ancestors: readonly TSESTree.Node[]): boolean {
+  const call = ancestors.findLast((ancestor) => ancestor.type === AST_NODE_TYPES.CallExpression);
+  return call?.type === AST_NODE_TYPES.CallExpression && isCodemirrorThemeCall(call);
 }

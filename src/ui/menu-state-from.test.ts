@@ -21,8 +21,8 @@ describe('menuStateFrom', () => {
   });
 
   test.for([
-    [{ focusedZone: 'diff' }, ['session', 'file', 'diff-target', 'editable-target']],
-    [{ isActiveEditable: false }, ['session', 'file', 'diff-target']],
+    [{ focusedZone: 'diff' }, ['session', 'file', 'diff-target', 'suggestion-target']],
+    [{ isActiveSuggestable: false }, ['session', 'file', 'diff-target']],
     [{ focusedZone: 'chat', isTextFocused: true }, ['session', 'file', 'text-focus']],
     [
       {
@@ -34,11 +34,11 @@ describe('menuStateFrom', () => {
     [{ activePath: undefined }, ['session']],
     [
       { isBusy: true, isPullRequest: true, stagedCount: 2 },
-      ['session', 'file', 'diff-target', 'editable-target', 'busy', 'pull-request', 'staged'],
+      ['session', 'file', 'diff-target', 'suggestion-target', 'busy', 'pull-request', 'staged'],
     ],
     [
       { isTerminalFocused: true },
-      ['session', 'file', 'diff-target', 'editable-target', 'terminal-focus'],
+      ['session', 'file', 'diff-target', 'suggestion-target', 'terminal-focus'],
     ],
   ] as const)('focus %o gives %o', ([change, conditions], { expect }) => {
     expect(menuStateFrom({ ...open(), ...change }).conditions).toStrictEqual(conditions);
@@ -79,7 +79,7 @@ function idle(): MenuStateInput {
     hasSession: false,
     activePath: undefined,
     isActiveReviewed: false,
-    isActiveEditable: false,
+    isActiveSuggestable: false,
     focusedZone: 'diff',
     noteListItem: undefined,
     isTextFocused: false,
@@ -108,7 +108,7 @@ function open(): MenuStateInput {
     ...idle(),
     hasSession: true,
     activePath: 'src/a.ts',
-    isActiveEditable: true,
+    isActiveSuggestable: true,
     isSidebarShown: true,
   };
 }

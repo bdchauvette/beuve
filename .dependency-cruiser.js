@@ -145,6 +145,17 @@ export default {
       to: { path: '^node_modules/@pierre/' },
     },
     {
+      name: 'codemirror-only-in-suggestion-editor',
+      severity: 'error',
+      comment:
+        'Only create-suggestion-editor and suggestion-editor-theme import @codemirror/* (ADR 0162), so the fields have one editor setup and CodeMirror stays a lazy chunk.',
+      from: {
+        path: '^src/',
+        pathNot: ['^src/ui/(create-suggestion-editor|suggestion-editor-theme)\\.ts$'],
+      },
+      to: { path: '^node_modules/@codemirror/' },
+    },
+    {
       name: 'dom-input-range-only-in-caret-rect-from',
       severity: 'error',
       comment:

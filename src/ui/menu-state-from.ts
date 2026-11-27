@@ -17,8 +17,8 @@ export interface MenuStateInput {
   readonly activePath: string | undefined;
   /** Whether the reviewer marked the file under the cursor (the tree's, or else the diff's). */
   readonly isActiveReviewed: boolean;
-  /** Whether Add Suggestion can edit the file under the cursor (`uneditableReasonFrom`, ADR 0043). */
-  readonly isActiveEditable: boolean;
+  /** Whether the file under the cursor has head lines to suggest on (`unsuggestableReasonFrom`, ADR 0162). */
+  readonly isActiveSuggestable: boolean;
   readonly focusedZone: ZoneId;
   /** The notes list's selected notes (or the one under its cursor), while the notes list has the focus. */
   readonly noteListItem: NoteListSelectionFacts | undefined;
@@ -56,7 +56,7 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ...has('session', input.hasSession),
     ...has('file', isFile),
     ...has('diff-target', isDiffTarget),
-    ...has('editable-target', isDiffTarget && input.isActiveEditable),
+    ...has('suggestion-target', isDiffTarget && input.isActiveSuggestable),
     ...has('note-item', input.hasSession && input.noteListItem !== undefined),
     ...has('busy', input.isBusy),
     ...has('pull-request', input.isPullRequest),

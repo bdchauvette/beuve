@@ -16,6 +16,7 @@ describe('noteEditFrom', () => {
     });
     expect(noteEditFrom(item)).toStrictEqual({
       itemId: item.id,
+      headSha: item.headSha,
       anchor: moved,
       draft: {
         severity: 'nitpick',
@@ -23,10 +24,11 @@ describe('noteEditFrom', () => {
         title: 'Handle the empty list',
         body: 'Use `at(-1)`.',
       },
+      suggestions: [],
     });
   });
 
-  test('keeps a whole-file note on its file, with its suggestion', ({ expect }) => {
+  test('keeps a whole-file note on its file, with its suggestions as fields', ({ expect }) => {
     const anchor = { kind: 'file', path: 'src/a.ts' } as const;
     const item = createUraItemView({
       anchor,
@@ -43,7 +45,15 @@ describe('noteEditFrom', () => {
     });
     expect(noteEditFrom(item)).toMatchObject({
       anchor,
-      suggestedPatch: '@@ -1 +1 @@\n-a\n+b\n',
+      suggestions: [
+        {
+          id: item.suggestions[0]?.id,
+          path: 'src/a.ts',
+          startLine: 1,
+          endLine: 1,
+          replacement: 'b',
+        },
+      ],
     });
   });
 

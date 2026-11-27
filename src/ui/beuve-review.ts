@@ -58,7 +58,7 @@ import type { CommandId } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import type { PaletteAction } from './plan-palette.ts';
-import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
+import type { FileJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { OpenCommitDetail } from './beuve-status-bar.ts';
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import type { ChatController } from './chat-controller.ts';
@@ -82,7 +82,11 @@ import type { DiagnosticsWantedDetail, FileDiagnostics } from './file-diagnostic
 import { cycleZone } from './cycle-zone.ts';
 import { noteListCheckedCommands } from './note-list-checked-commands.ts';
 import { noteListItemOf } from './note-list-item-of.ts';
-import { uneditableReasonFrom } from './uneditable-reason-from.ts';
+import { unsuggestableReasonFrom } from './unsuggestable-reason-from.ts';
+import type { SuggestionLinesRequestDetail } from './beuve-suggestion-field.ts';
+import type { SuggestionTargetRequestDetail } from './beuve-note-list.ts';
+import { linesTextFrom } from './lines-text-from.ts';
+import { suggestionTargetFrom } from './suggestion-target-from.ts';
 import type { MenuStateInput } from './menu-state-from.ts';
 import type { AppModel } from './app-model.ts';
 import type { ReviewDataController } from './review-data-controller.ts';
@@ -132,7 +136,6 @@ import type {
   TreeModeDetail,
   TreeSelectDetail,
   UraExportDetail,
-  UraItemIdDetail,
   UraJumpDetail,
   UraDeleteDetail,
   UraReorderDetail,
@@ -616,11 +619,28 @@ export class BeuveReview extends LitElement {
     void this.ura.update(event.detail);
   };
 
-  /** The notes list's "Edit suggestion": the stream opens Add Suggestion on the item's lines (ADR 0043). */
-  private readonly onUraEditSuggestion = (event: CustomEvent<UraItemIdDetail>): void => {
-    this.jumpNonce += 1;
-    this.suggestionJump = { itemId: event.detail.itemId, nonce: this.jumpNonce };
-    this.focusedZone = 'diff';
+  /** `beuve-suggestion-lines`: a new suggestion field starts from its lines' text at its head (ADR 0162). */
+  private readonly onSuggestionLines = (event: CustomEvent<SuggestionLinesRequestDetail>): void => {
+    event.stopPropagation();
+    event.detail.respond(this.readSuggestionLines(event.detail));
+  };
+
+  /** `beuve-suggestion-target`: the notes list asks which lines of the diff are selected. */
+  private readonly onSuggestionTarget = (
+    event: CustomEvent<SuggestionTargetRequestDetail>,
+  ): void => {
+    const stream = this.stream();
+    const { review } = this;
+    if (stream === undefined || review === undefined) {
+      return;
+    }
+    event.stopPropagation();
+    const target = suggestionTargetFrom(stream.target(), [], review.headSha);
+    if (target.kind === 'refused') {
+      event.detail.respond({ kind: 'refused', reason: target.reason });
+      return;
+    }
+    event.detail.respond({ kind: 'lines', lines: target.lines, headSha: review.headSha });
   };
 
   private readonly onStatusNotice = (event: CustomEvent<StatusNotice>): void => {
@@ -744,7 +764,6 @@ export class BeuveReview extends LitElement {
   @state() accessor focusedZone: ZoneId = 'diff';
 
   /** `.gitattributes` for the review's files (ADR 0052), once `session:get-file-attributes` answers. */
-  @state() accessor suggestionJump: SuggestionJump | undefined;
 
   @state() accessor fileJump: FileJump | undefined;
 
@@ -1409,7 +1428,6 @@ export class BeuveReview extends LitElement {
       .reviewThreads=${this.reviewData.threads}
       .diagnostics=${this.shownDiagnostics()}
       .display=${this.settings.display}
-      .suggestionJump=${this.suggestionJump}
       .deferrals=${this.reviewDeferrals().deferrals}
       @beuve-status-notice=${this.onStatusNotice}
       @beuve-ura-update=${this.onUraUpdate}
@@ -1458,7 +1476,6 @@ export class BeuveReview extends LitElement {
       @beuve-ura-jump=${this.onUraJump}
       @beuve-open-editor=${this.onOpenEditor}
       @beuve-ura-update=${this.onUraUpdate}
-      @beuve-ura-edit-suggestion=${this.onUraEditSuggestion}
       @beuve-ura-edit-many=${this.onUraEditMany}
       @beuve-show-in-chat=${this.onShowInChat}
       @beuve-ura-delete=${this.onUraDelete}
@@ -1668,6 +1685,41 @@ export class BeuveReview extends LitElement {
     return this.requireActions().setDisplay(change);
   }
 
+  /**
+   * The text of a suggestion's lines at `headSha`: from the review's file pair when that is the
+   * head shown and the file is in the diff, else through `sheet:get-file`, which reads any path
+   * of a session commit (ADR 0067).
+   */
+  private async readSuggestionLines(
+    request: SuggestionLinesRequestDetail,
+  ): Promise<string | undefined> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return undefined;
+    }
+    const { headSha, path } = request;
+    let contents: string | undefined;
+    if (headSha === review.headSha && review.files.some((file) => file.path === path)) {
+      const pair = await this.loadFilePair(path);
+      contents = pair?.newContents;
+    }
+    if (contents === undefined) {
+      const read = await bridge.invoke('sheet:get-file', {
+        sessionId: review.session.id,
+        sha: headSha,
+        path,
+      });
+      if (read.ok) {
+        contents = read.value.contents;
+      }
+    }
+    if (contents === undefined) {
+      return undefined;
+    }
+    return linesTextFrom(contents, request);
+  }
+
   private scheduleMenuSync(): void {
     this.requireActions().scheduleMenuSync();
   }
@@ -1786,6 +1838,8 @@ export class BeuveReview extends LitElement {
     this.addEventListener('beuve-commit-info', this.onCommitInfo as EventListener);
     this.addEventListener('beuve-copy-text', this.onCopyText as EventListener);
     this.addEventListener('beuve-note-expand-request', this.onNoteExpand as EventListener);
+    this.addEventListener('beuve-suggestion-lines', this.onSuggestionLines as EventListener);
+    this.addEventListener('beuve-suggestion-target', this.onSuggestionTarget as EventListener);
   }
 
   override disconnectedCallback(): void {
@@ -1795,6 +1849,8 @@ export class BeuveReview extends LitElement {
     this.removeEventListener('beuve-commit-info', this.onCommitInfo as EventListener);
     this.removeEventListener('beuve-copy-text', this.onCopyText as EventListener);
     this.removeEventListener('beuve-note-expand-request', this.onNoteExpand as EventListener);
+    this.removeEventListener('beuve-suggestion-lines', this.onSuggestionLines as EventListener);
+    this.removeEventListener('beuve-suggestion-target', this.onSuggestionTarget as EventListener);
   }
 
   /** Runs a catalog command this container handles; `false` when it is not one of its own. */
@@ -2080,7 +2136,8 @@ export class BeuveReview extends LitElement {
     return {
       activePath: treePath ?? this.activePath,
       isActiveReviewed: markedPath !== undefined && this.reviewData.marks.get(markedPath) === 'yes',
-      isActiveEditable: activeFile !== undefined && uneditableReasonFrom(activeFile) === undefined,
+      isActiveSuggestable:
+        activeFile !== undefined && unsuggestableReasonFrom(activeFile) === undefined,
       focusedZone: this.focusedZone,
       noteListItem: noteListItemOf(noteList),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
@@ -2205,7 +2262,7 @@ export type ReviewMenuFacts = Pick<
   MenuStateInput,
   | 'activePath'
   | 'isActiveReviewed'
-  | 'isActiveEditable'
+  | 'isActiveSuggestable'
   | 'focusedZone'
   | 'noteListItem'
   | 'isSidebarShown'
