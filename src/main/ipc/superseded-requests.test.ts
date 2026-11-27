@@ -112,6 +112,46 @@ describe('superseded and cancelled requests (ADR 0079)', () => {
     await expect(loading).resolves.toMatchObject({ ok: false, error: { code: 'cancelled' } });
     await expect(diff.ended).resolves.toBe('terminated');
   });
+
+  test('two named reads of a file from one window both finish; unnamed, the newer wins', async ({
+    expect,
+    repo,
+    createServices,
+  }) => {
+    repo.write('f.txt', '1\n');
+    await repo.commit('base');
+    await repo.git('switch', '--quiet', '-c', 'feature');
+    repo.write('f.txt', '2\n');
+    await repo.commit('change');
+    const sha = await repo.git('rev-parse', 'HEAD');
+    const services = createServices();
+    const handlers = createIpcHandlers(services, appInfo(), { scopes: new RequestScopes() });
+    const { id: sessionId } = okValueFrom(
+      await services.sessions.createLocal({
+        repoPath: repo.directory,
+        baseRef: 'main',
+        headRef: 'feature',
+      }),
+    );
+    const read = { sessionId, sha, path: 'f.txt' };
+    const sender = { webContentsId: 1 };
+    const named = await Promise.all([
+      handlers['sheet:get-file']({ ...read, requestId: 'lines-1' }, sender),
+      handlers['sheet:get-file']({ ...read, requestId: 'lines-2' }, sender),
+    ]);
+    expect(named).toMatchObject([
+      { ok: true, value: { contents: '2\n' } },
+      { ok: true, value: { contents: '2\n' } },
+    ]);
+    const unnamed = await Promise.all([
+      handlers['sheet:get-file'](read, sender),
+      handlers['sheet:get-file'](read, sender),
+    ]);
+    expect(unnamed).toMatchObject([
+      { ok: false, error: { code: 'cancelled' } },
+      { ok: true, value: { contents: '2\n' } },
+    ]);
+  });
 });
 
 interface HeldDiffs {

@@ -596,6 +596,12 @@ const openPullRequestRequest = z.strictObject({
   requestId: requestId.optional(),
 });
 const cancelRequestRequest = z.strictObject({ requestId });
+const sheetFileReadRequest = z.strictObject({
+  sessionId,
+  sha: fullSha,
+  path: sheetPath,
+  requestId: requestId.optional(),
+});
 const expandNoteRequest = z.strictObject({
   sessionId,
   headSha: commitSha,
@@ -833,13 +839,18 @@ export function createIpcHandlers(
       return checked;
     },
     'sheet:get-file': async (request, sender): Promise<IpcResult<SheetFileView>> => {
-      const parsed = sheetFileRequest.safeParse(request);
-      if (parsed.success) {
-        return scoped({ sender, kind: 'sheet-file' }, async (options) => {
-          return services.sheets.getFile(parsed.data, options);
-        });
+      const parsed = sheetFileReadRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
       }
-      return invalid(parsed.error);
+      const { requestId: id, ...file } = parsed.data;
+      let kind: SupersededKind = 'sheet-file';
+      if (id !== undefined) {
+        kind = 'named-file';
+      }
+      return scoped({ sender, kind, id }, async (options) => {
+        return services.sheets.getFile(file, options);
+      });
     },
     'sheet:open-description': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = sessionRequest.safeParse(request);

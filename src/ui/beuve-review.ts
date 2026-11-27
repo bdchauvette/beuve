@@ -1688,7 +1688,7 @@ export class BeuveReview extends LitElement {
   /**
    * The text of a suggestion's lines at `headSha`: from the review's file pair when that is the
    * head shown and the file is in the diff, else through `sheet:get-file`, which reads any path
-   * of a session commit (ADR 0067).
+   * of a session commit (ADR 0067), named so concurrent reads don't supersede each other.
    */
   private async readSuggestionLines(
     request: SuggestionLinesRequestDetail,
@@ -1705,10 +1705,12 @@ export class BeuveReview extends LitElement {
       contents = pair?.newContents;
     }
     if (contents === undefined) {
+      // Its own name, so another field's read at the same time doesn't supersede it (ADR 0079).
       const read = await bridge.invoke('sheet:get-file', {
         sessionId: review.session.id,
         sha: headSha,
         path,
+        requestId: `suggestion-lines:${crypto.randomUUID()}`,
       });
       if (read.ok) {
         contents = read.value.contents;

@@ -637,6 +637,13 @@ export interface SheetFileRequest {
   readonly sessionId: string;
   readonly sha: string;
   readonly path: string;
+  /**
+   * Names a read that only a read with the same id from the same window supersedes, and that
+   * `request:cancel` stops (ADR 0079), so a suggestion field's read of its lines (ADR 0162) never
+   * cancels another's. Without one, a window's newer read supersedes its older one, as a sheet's
+   * file is only ever the latest.
+   */
+  readonly requestId?: string;
 }
 
 /**
