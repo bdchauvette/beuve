@@ -52,6 +52,7 @@ import { resolveNoteListVerdict } from './resolve-note-list-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { describeSuggestionLines } from './describe-suggestion-lines.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { fieldStyles } from './primitives/field-styles.ts';
 import { completionListStyles } from './completion-list-styles.ts';
@@ -565,6 +566,14 @@ export class BeuveNoteList extends LitElement {
 
       .harvest li {
         cursor: default;
+      }
+
+      .harvest-suggestions {
+        display: grid;
+        gap: var(--beuve-space-1);
+        margin: 0;
+        padding: 0;
+        list-style: none;
       }
 
       .posted {
@@ -1606,6 +1615,23 @@ export class BeuveNoteList extends LitElement {
     </section>`;
   }
 
+  /** A harvested item's diffs: each suggestion under its lines, or the note's diff (ADR 0162). */
+  private renderHarvestDiffs(edit: ReviewEditPreviewView): TemplateResult {
+    if (edit.kind === 'note') {
+      return html`<beuve-patch-preview .patch=${edit.diff}></beuve-patch-preview>`;
+    }
+    return html`<ol class="harvest-suggestions">
+      ${edit.suggestions.map((suggestion) => {
+        return html`<li>
+          <span class="anchor"
+            ><bdi>${pathText(describeSuggestionLines(suggestion).heading)}</bdi></span
+          >
+          <beuve-patch-preview .patch=${suggestion.diff}></beuve-patch-preview>
+        </li>`;
+      })}
+    </ol>`;
+  }
+
   private renderReviewEditsFlow(flow: ReviewEditsFlow): TemplateResult | typeof nothing {
     switch (flow.kind) {
       case 'idle': {
@@ -1632,7 +1658,7 @@ export class BeuveNoteList extends LitElement {
                   <span class="anchor"><bdi>${pathText(anchorLabel(edit.anchor))}</bdi></span>
                 </div>
                 <div class="title">${edit.title}</div>
-                <beuve-patch-preview .patch=${edit.diff}></beuve-patch-preview>
+                ${this.renderHarvestDiffs(edit)}
               </li>`;
             })}
           </ol>

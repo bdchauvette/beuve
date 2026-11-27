@@ -1,120 +1,161 @@
 import { describe } from 'vitest';
 
+import type { UraSuggestionDraftView } from '#contract/ipc-contract.ts';
 import { parseUnifiedDiff } from '#internal/git/parse-unified-diff.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { test } from '../testing/test.ts';
 import { planEditSuggestions } from './plan-edit-suggestions.ts';
-import type { EditPlanInput } from './plan-edit-suggestions.ts';
+import type { EditPlan, EditPlanInput, NoteAtHead } from './plan-edit-suggestions.ts';
 
 describe('planEditSuggestions', () => {
-  test('an insertion below a changed line becomes a suggestion replacing that line', ({
-    expect,
-  }) => {
-    const plan = planEditSuggestions(input(['@@ -2,0 +3,1 @@', '+inserted'], { changed: [2] }));
-    expect(plan.edits).toMatchObject([
-      {
-        action: 'create',
-        kind: 'suggestion',
-        anchor: { kind: 'lines', path: 'a.ts', startLine: 2, endLine: 2 },
-      },
-    ]);
-    expect(plan.edits[0]?.patch).toBe(
-      '--- a/a.ts\n+++ b/a.ts\n@@ -1,5 +1,6 @@\n one\n-two\n+two\n+inserted\n three\n four\n five\n',
-    );
-    expect(plan.edits[0]?.suggestions).toStrictEqual([
-      { path: 'a.ts', startLine: 2, endLine: 2, replacement: 'two\ninserted' },
-    ]);
-  });
-
-  test('a line emptied becomes a suggestion taking the line after it along, else the one before', ({
-    expect,
-  }) => {
-    const middle = planEditSuggestions(input(['@@ -2 +2 @@', '-two', '+'], { changed: [2] }));
-    expect(middle.edits[0]?.suggestions).toStrictEqual([
-      { path: 'a.ts', startLine: 2, endLine: 3, replacement: '\nthree' },
-    ]);
-    const last = planEditSuggestions(input(['@@ -5 +5 @@', '-five', '+'], { changed: [5] }));
-    expect(last.edits[0]?.suggestions).toStrictEqual([
-      { path: 'a.ts', startLine: 4, endLine: 5, replacement: 'four\n' },
-    ]);
-  });
-
-  test('an insertion at the top replaces line 1; an edit spanning unchanged lines is a note', ({
+  test('every region of a file becomes a suggestion of one new note, changed by the pull request or not', ({
     expect,
   }) => {
     const plan = planEditSuggestions(
-      input(['@@ -0,0 +1,1 @@', '+// header', '@@ -3,2 +4,2 @@', '-three', '-four', '+3', '+4'], {
-        changed: [1, 3],
-      }),
+      input(['@@ -0,0 +1,1 @@', '+// header', '@@ -3,2 +4,2 @@', '-three', '-four', '+3', '+4']),
     );
-    expect(
-      plan.edits.map((edit) => {
-        return [edit.target, edit.kind];
-      }),
-    ).toStrictEqual([
-      ['lines:a.ts:1-1', 'suggestion'],
-      ['lines:a.ts:3-4', 'note'],
+    expect(plan.edits).toMatchObject([
+      {
+        action: 'create',
+        kind: 'suggestions',
+        target: 'suggestions:a.ts',
+        severity: 'suggestion',
+        title: 'Suggested changes to `a.ts`',
+        anchor: { kind: 'lines', path: 'a.ts', startLine: 1, endLine: 1 },
+        diff: '',
+      },
     ]);
-    expect(plan.edits[1]?.body).toContain('```diff\n--- a/a.ts');
+    expect(suggestionsOf(plan)).toStrictEqual([
+      { path: 'a.ts', startLine: 1, endLine: 0, replacement: '// header' },
+      { path: 'a.ts', startLine: 3, endLine: 4, replacement: '3\n4' },
+    ]);
+    expect(plan.edits[0]?.suggestions[1]?.diff).toBe(
+      '--- a/a.ts\n+++ b/a.ts\n@@ -1,5 +1,5 @@\n one\n two\n-three\n-four\n+3\n+4\n five\n',
+    );
   });
 
-  test('regions inside one staged note become one patch over its lines; a foreign patch is kept', ({
+  test('an insertion is a suggestion of its own lines before the next one', ({ expect }) => {
+    const plan = planEditSuggestions(input(['@@ -2,0 +3,1 @@', '+inserted']));
+    expect(suggestionsOf(plan)).toStrictEqual([
+      { path: 'a.ts', startLine: 3, endLine: 2, replacement: 'inserted' },
+    ]);
+    expect(plan.edits[0]?.anchor).toStrictEqual({
+      kind: 'lines',
+      path: 'a.ts',
+      startLine: 2,
+      endLine: 2,
+    });
+  });
+
+  test('a line emptied, or one empty line inserted, takes the line after it along, else the one before', ({
+    expect,
+  }) => {
+    expect(planned(['@@ -2 +2 @@', '-two', '+'])).toStrictEqual([
+      { path: 'a.ts', startLine: 2, endLine: 3, replacement: '\nthree' },
+    ]);
+    expect(planned(['@@ -5 +5 @@', '-five', '+'])).toStrictEqual([
+      { path: 'a.ts', startLine: 4, endLine: 5, replacement: 'four\n' },
+    ]);
+    expect(planned(['@@ -2,0 +3 @@', '+'])).toStrictEqual([
+      { path: 'a.ts', startLine: 3, endLine: 3, replacement: '\nthree' },
+    ]);
+    expect(planned(['@@ -5,0 +6 @@', '+'])).toStrictEqual([
+      { path: 'a.ts', startLine: 5, endLine: 5, replacement: 'five\n' },
+    ]);
+  });
+
+  test('regions a staged note covers attach to it, each its own suggestion; the rest group', ({
     expect,
   }) => {
     const diff = ['@@ -1 +1 @@', '-one', '+ONE', '@@ -3 +3 @@', '-three', '+THREE'];
-    const attached = planEditSuggestions({
-      ...input(diff, { changed: [1, 2, 3] }),
-      notes: [{ itemId: 'n1', path: 'a.ts', startLine: 1, endLine: 3, suggestions: [] }],
-    });
-    expect(attached.edits).toMatchObject([
-      { action: 'attach', itemId: 'n1', anchor: { startLine: 1, endLine: 3 } },
-    ]);
-    expect(attached.edits[0]?.patch).toContain('-one\n-two\n-three\n+ONE\n+two\n+THREE\n');
-    expect(attached.edits[0]?.suggestions).toStrictEqual([
-      { path: 'a.ts', startLine: 1, endLine: 3, replacement: 'ONE\ntwo\nTHREE' },
-    ]);
-    const kept = planEditSuggestions({
-      ...input(diff, { changed: [1, 2, 3] }),
-      notes: [
-        {
-          itemId: 'n1',
-          path: 'a.ts',
-          startLine: 1,
-          endLine: 3,
-          suggestions: [{ path: 'a.ts', startLine: 2, endLine: 2, replacement: 'theirs' }],
-        },
-      ],
+    const diffs = [...diff, '@@ -5 +5 @@', '-five', '+FIVE'];
+    const plan = planEditSuggestions({
+      ...input(diffs),
+      notes: [note({ suggestions: [] })],
     });
     expect(
-      kept.edits.map((edit) => {
-        return [edit.action, edit.target];
+      plan.edits.map((edit) => {
+        return [edit.action, edit.target, edit.itemId, edit.title];
       }),
     ).toStrictEqual([
-      ['create', 'lines:a.ts:1-1'],
-      ['create', 'lines:a.ts:3-3'],
+      ['attach', 'note:n1', 'n1', '2 suggested changes for “Retry”'],
+      ['create', 'suggestions:a.ts', undefined, 'Suggested changes to `a.ts`'],
     ]);
+    expect(plan.edits[0]?.anchor).toStrictEqual({
+      kind: 'lines',
+      path: 'a.ts',
+      startLine: 1,
+      endLine: 3,
+    });
+    expect(
+      plan.edits.map((edit) => {
+        return edit.suggestions.map(({ suggestion }) => suggestion.replacement);
+      }),
+    ).toStrictEqual([['ONE', 'THREE'], ['FIVE']]);
   });
 
-  test('an earlier harvest makes the same edit unchanged and a different one an update', ({
+  test('a note with suggestions of its own keeps them, and its regions group instead', ({
     expect,
   }) => {
-    const first = planEditSuggestions(input(['@@ -2 +2 @@', '-two', '+TWO'], { changed: [2] }));
+    const own = { id: 's1', path: 'a.ts', startLine: 2, endLine: 2, replacement: 'theirs' };
+    const plan = planEditSuggestions({
+      ...input(['@@ -1 +1 @@', '-one', '+ONE']),
+      notes: [note({ suggestions: [own] })],
+    });
+    expect(
+      plan.edits.map((edit) => {
+        return [edit.action, edit.target];
+      }),
+    ).toStrictEqual([['create', 'suggestions:a.ts']]);
+  });
+
+  test('an earlier harvest makes the same item unchanged and a different one an update, keeping ids', ({
+    expect,
+  }) => {
+    const first = planEditSuggestions(input(['@@ -2 +2 @@', '-two', '+TWO']));
     const [edit] = first.edits;
     const harvested = new Map([
       [edit?.target ?? '', { itemId: 'i1', fingerprint: edit?.fingerprint ?? '' }],
     ]);
+    const group = note({
+      itemId: 'i1',
+      startLine: 2,
+      endLine: 2,
+      suggestions: [{ id: 's1', path: 'a.ts', startLine: 2, endLine: 2, replacement: 'TWO' }],
+    });
     const again = planEditSuggestions({
-      ...input(['@@ -2 +2 @@', '-two', '+TWO'], { changed: [2] }),
+      ...input(['@@ -2 +2 @@', '-two', '+TWO']),
+      notes: [group],
       harvested,
     });
     expect(again.edits).toMatchObject([{ action: 'unchanged', itemId: 'i1' }]);
     expect(again.digest).not.toBe(first.digest);
     const changed = planEditSuggestions({
-      ...input(['@@ -2 +2 @@', '-two', '+Two'], { changed: [2] }),
+      ...input(['@@ -2 +2 @@', '-two', '+Two']),
+      notes: [group],
       harvested,
     });
     expect(changed.edits).toMatchObject([{ action: 'update', itemId: 'i1' }]);
+    expect(suggestionsOf(changed)).toStrictEqual([
+      { id: 's1', path: 'a.ts', startLine: 2, endLine: 2, replacement: 'Two' },
+    ]);
+  });
+
+  test('a region that changes the final newline is a note with a diff', ({ expect }) => {
+    const plan = planEditSuggestions({
+      ...input(['@@ -5 +5 @@', '-five', '\\ No newline at end of file', '+five']),
+      headTexts: new Map([['a.ts', 'one\ntwo\nthree\nfour\nfive']]),
+    });
+    expect(plan.edits).toMatchObject([
+      {
+        kind: 'note',
+        target: 'lines:a.ts:5-5',
+        title: 'Edit to line 5 (its final newline changes)',
+        suggestions: [],
+      },
+    ]);
+    expect(plan.edits[0]?.body).toContain('```diff\n--- a/a.ts');
   });
 
   test('new, deleted, renamed and binary files become notes', ({ expect }) => {
@@ -146,7 +187,7 @@ describe('planEditSuggestions', () => {
         ].join('\n'),
       ),
     );
-    const plan = planEditSuggestions({ ...input([], { changed: [] }), edits: files });
+    const plan = planEditSuggestions({ ...input([]), edits: files });
     expect(
       plan.edits.map((edit) => {
         return [edit.kind, edit.anchor, edit.title];
@@ -160,13 +201,8 @@ describe('planEditSuggestions', () => {
   });
 });
 
-/** What a test changes about the default input. */
-interface Edits {
-  readonly changed: readonly number[];
-}
-
-/** `a.ts` (`one` … `five`) edited by `hunk`, with these head lines changed by the pull request. */
-function input(hunk: readonly string[], { changed }: Edits): EditPlanInput {
+/** `a.ts` (`one` … `five`) edited by `hunk`. */
+function input(hunk: readonly string[]): EditPlanInput {
   const text = [
     'diff --git a/a.ts b/a.ts',
     'index 1111111..2222222 100644',
@@ -178,9 +214,33 @@ function input(hunk: readonly string[], { changed }: Edits): EditPlanInput {
   return {
     edits: okValueFrom(parseUnifiedDiff(text)),
     headTexts: new Map([['a.ts', 'one\ntwo\nthree\nfour\nfive\n']]),
-    changedLines: new Map([['a.ts', new Set(changed)]]),
     notes: [],
     harvested: new Map(),
     branch: 'review/pr-1',
   };
+}
+
+/** Every suggestion the plan stages, in order. */
+function suggestionsOf(plan: EditPlan): UraSuggestionDraftView[] {
+  return plan.edits.flatMap((edit) => {
+    return edit.suggestions.map(({ suggestion }) => suggestion);
+  });
+}
+
+/** Staged note `n1`, “Retry”, on `a.ts` lines 1–3, with `changes` applied. */
+function note(changes: Partial<NoteAtHead>): NoteAtHead {
+  return {
+    itemId: 'n1',
+    path: 'a.ts',
+    startLine: 1,
+    endLine: 3,
+    title: 'Retry',
+    suggestions: [],
+    ...changes,
+  };
+}
+
+/** The suggestions planned for `a.ts` edited by `hunk`. */
+function planned(hunk: readonly string[]): UraSuggestionDraftView[] {
+  return suggestionsOf(planEditSuggestions(input(hunk)));
 }

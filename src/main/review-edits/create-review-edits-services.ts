@@ -18,6 +18,7 @@ import type {
   StageReviewEditsRequest,
   DiscardReviewEditsRequest,
   UpdateUraItemRequest,
+  UraSuggestionDraftView,
 } from '#contract/ipc-contract.ts';
 import { checkBranchName } from '#internal/git/check-branch-name.ts';
 import { countCommits } from '#internal/git/count-commits.ts';
@@ -44,7 +45,6 @@ import type { Result } from '#x/result/result.ts';
 
 import type { EditorServices } from '../editor/create-editor-services.ts';
 import type { EditorSettings } from '../editor/create-editor-settings.ts';
-import { findSessionForkPoint } from '../sessions/find-session-fork-point.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { headPathOf } from '../sessions/head-path-of.ts';
 import { loadSession } from '../sessions/load-session.ts';
@@ -55,7 +55,7 @@ import type { SessionWorktrees, WorktreeLease } from '../worktrees/create-sessio
 import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 
 import { planEditSuggestions } from './plan-edit-suggestions.ts';
-import type { EditPlan, NoteAtHead } from './plan-edit-suggestions.ts';
+import type { EditPlan, NoteAtHead, PlannedEdit } from './plan-edit-suggestions.ts';
 
 /** Review edits (ADR 0088): a writable branch per session whose edits become review suggestions. */
 export interface ReviewEditsServices {
@@ -253,10 +253,6 @@ export function createReviewEditsServices(
   ): Promise<Result<EditPlan, IpcError>> => {
     const { repository, record } = owned;
     const base = record.baseSha;
-    const changedLines = await prChangedLines(owned);
-    if (!changedLines.ok) {
-      return changedLines;
-    }
     const modified = state.files.filter((file) => file.status === 'modified' && !file.binary);
     const blobs = await readBlobs(
       repository,
@@ -290,6 +286,7 @@ export function createReviewEditsServices(
           path: item.anchor.path,
           startLine: item.anchor.startLine,
           endLine: item.anchor.endLine,
+          title: item.title,
           suggestions: item.suggestions,
         });
       }
@@ -298,55 +295,11 @@ export function createReviewEditsServices(
       planEditSuggestions({
         edits: state.files,
         headTexts,
-        changedLines: changedLines.value,
         notes,
         harvested: listEditSuggestions(db, { sessionId: record.sessionId, headSha: base }),
         branch: record.branch,
       }),
     );
-  };
-
-  /** The head lines the pull request added at the edits' base, by path. */
-  const prChangedLines = async ({
-    repository,
-    record,
-  }: OwnedBranch): Promise<Result<ReadonlyMap<string, ReadonlySet<number>>, IpcError>> => {
-    const loaded = loadSession(context, record.sessionId);
-    if (!loaded.ok) {
-      return loaded;
-    }
-    const base = record.baseSha;
-    const refreshed = await refreshSession(context, loaded.value, { headSha: base });
-    if (!refreshed.ok) {
-      return refreshed;
-    }
-    const fork = await findSessionForkPoint(context, {
-      repository,
-      range: { base: refreshed.value.baseTip, head: base },
-    });
-    if (!fork.ok) {
-      return gitFailure(logger, fork.error);
-    }
-    const diff = await diffObjects(
-      repository,
-      { from: fork.value.forkPoint, to: base },
-      { contextLines: 0 },
-    );
-    if (!diff.ok) {
-      return gitFailure(logger, diff.error);
-    }
-    const changed = new Map<string, Set<number>>();
-    for (const file of diff.value) {
-      const lines = changed.getOrInsertComputed(headPathOf(file), () => new Set<number>());
-      for (const hunk of file.hunks) {
-        for (const line of hunk.lines) {
-          if (line.kind === 'added') {
-            lines.add(line.newLine);
-          }
-        }
-      }
-    }
-    return ok(changed);
   };
 
   /** The session's recorded branch, or a refusal saying there are no review edits yet. */
@@ -463,6 +416,10 @@ export function createReviewEditsServices(
             kind: edit.kind,
             anchor: edit.anchor,
             title: edit.title,
+            suggestions: edit.suggestions.map(({ suggestion, diff }) => {
+              const { path: file, startLine, endLine } = suggestion;
+              return { path: file, startLine, endLine, diff };
+            }),
             diff: edit.diff,
           };
         }),
@@ -506,10 +463,10 @@ export function createReviewEditsServices(
             sessionId: record.sessionId,
             headSha: record.baseSha,
             anchor: edit.anchor,
-            severity: 'issue',
+            severity: edit.severity,
             title: edit.title,
             body: edit.body,
-            ...(edit.suggestions !== undefined && { suggestions: edit.suggestions }),
+            suggestions: suggestionsOf(edit),
           });
           if (!created.ok) {
             return created;
@@ -594,11 +551,15 @@ export function createReviewEditsServices(
 }
 
 /** What `ura:update` gets for an attach or an update: the suggestions, or a note's new body. */
-function updateOf(edit: EditPlan['edits'][number], itemId: string): UpdateUraItemRequest {
-  if (edit.kind === 'suggestion') {
-    return { itemId, suggestions: edit.suggestions ?? [] };
+function updateOf(edit: PlannedEdit, itemId: string): UpdateUraItemRequest {
+  if (edit.kind === 'suggestions') {
+    return { itemId, suggestions: suggestionsOf(edit) };
   }
   return { itemId, body: edit.body, suggestions: [] };
+}
+
+function suggestionsOf(edit: PlannedEdit): UraSuggestionDraftView[] {
+  return edit.suggestions.map(({ suggestion }) => suggestion);
 }
 
 function describeGitRefusal(error: GitError): string {

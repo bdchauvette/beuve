@@ -1801,13 +1801,26 @@ export interface ReviewEditsOpenedView {
   readonly created: boolean;
 }
 
-/** One edit as Turn Edits into Suggestions would stage it. */
+/**
+ * One item as Turn into Suggestions would stage it (ADR 0088, 0162): a staged note that takes
+ * suggestions (`attach`), a file's new note of suggestions, or a note with a diff.
+ */
 export interface ReviewEditPreviewView {
   readonly action: 'create' | 'attach' | 'update' | 'unchanged';
-  readonly kind: 'suggestion' | 'note';
+  readonly kind: 'suggestions' | 'note';
   readonly anchor: UraAnchorView;
   readonly title: string;
-  /** The suggested patch, or the note's diff, to preview. */
+  /** The suggestions, for `suggestions`, each with its derived patch. */
+  readonly suggestions: readonly ReviewEditSuggestionPreviewView[];
+  /** The note's diff, for `note`; `''` for `suggestions`. */
+  readonly diff: string;
+}
+
+/** One suggestion a harvest stages: its lines on the edits' base and its patch, to preview. */
+export interface ReviewEditSuggestionPreviewView {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
   readonly diff: string;
 }
 

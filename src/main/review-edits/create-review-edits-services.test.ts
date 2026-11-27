@@ -57,7 +57,7 @@ describe('createReviewEditsServices (integration: git + SQLite, no Electron)', (
     );
   });
 
-  test('turns edits into one suggestion and notes with diff blocks, once', async ({
+  test('turns every region into a suggestion of one note per file, and new files into notes, once', async ({
     expect,
     services,
     sessionId,
@@ -77,9 +77,12 @@ describe('createReviewEditsServices (integration: git + SQLite, no Electron)', (
         return [edit.action, edit.kind, edit.title];
       }),
     ).toStrictEqual([
-      ['create', 'suggestion', 'Suggested change to line 3'],
-      ['create', 'note', "Edit to line 8 (lines this change doesn't touch)"],
+      ['create', 'suggestions', 'Suggested changes to `src/a.ts`'],
       ['create', 'note', 'New file `src/new.ts`'],
+    ]);
+    expect(plan.edits[0]?.suggestions).toMatchObject([
+      { path: 'src/a.ts', startLine: 3, endLine: 3 },
+      { path: 'src/a.ts', startLine: 8, endLine: 8 },
     ]);
     await expect(services.ura.list({ sessionId })).resolves.toMatchObject({
       ok: true,
@@ -90,36 +93,32 @@ describe('createReviewEditsServices (integration: git + SQLite, no Electron)', (
       services.reviewEdits.stageSuggestions({ sessionId, digest: plan.digest }),
     ).resolves.toStrictEqual({
       ok: true,
-      value: { created: 3, attached: 0, updated: 0, unchanged: 0 },
+      value: { created: 2, attached: 0, updated: 0, unchanged: 0 },
     });
     const { items } = okValueFrom(await services.ura.list({ sessionId }));
     expect(
       items.map((item) => {
-        return [item.anchor, item.suggestions.length > 0, item.body.includes('```diff')];
+        return [item.anchor, item.severity, item.suggestions.length, item.body.includes('```diff')];
       }),
     ).toStrictEqual([
-      [{ kind: 'lines', path: 'src/a.ts', startLine: 3, endLine: 3 }, true, false],
-      [{ kind: 'lines', path: 'src/a.ts', startLine: 8, endLine: 8 }, false, true],
-      [{ kind: 'change' }, false, true],
+      [{ kind: 'lines', path: 'src/a.ts', startLine: 3, endLine: 3 }, 'suggestion', 2, false],
+      [{ kind: 'change' }, 'issue', 0, true],
     ]);
     expect(items[0]?.suggestions).toMatchObject([
       { path: 'src/a.ts', startLine: 3, endLine: 3, replacement: 'THREE' },
+      { path: 'src/a.ts', startLine: 8, endLine: 8, replacement: 'eight, edited' },
     ]);
     expect(items[0]?.suggestions[0]?.patch).toContain('-three\n+THREE\n');
 
     const second = okValueFrom(await services.reviewEdits.previewSuggestions({ sessionId }));
-    expect(second.edits.map((edit) => edit.action)).toStrictEqual([
-      'unchanged',
-      'unchanged',
-      'unchanged',
-    ]);
+    expect(second.edits.map((edit) => edit.action)).toStrictEqual(['unchanged', 'unchanged']);
     await expect(
       services.reviewEdits.stageSuggestions({ sessionId, digest: second.digest }),
     ).resolves.toStrictEqual({
       ok: true,
-      value: { created: 0, attached: 0, updated: 0, unchanged: 3 },
+      value: { created: 0, attached: 0, updated: 0, unchanged: 2 },
     });
-    expect(okValueFrom(await services.ura.list({ sessionId })).items).toHaveLength(3);
+    expect(okValueFrom(await services.ura.list({ sessionId })).items).toHaveLength(2);
     await expect(repo.git('-C', opened.path, 'status', '--porcelain')).resolves.toBe(indexBefore);
     await expect(repo.git('rev-parse', `refs/heads/${opened.branch}`)).resolves.toBe(
       await repo.git('rev-parse', 'feature'),
@@ -147,7 +146,7 @@ describe('createReviewEditsServices (integration: git + SQLite, no Electron)', (
       plan.edits.map((edit) => {
         return [edit.action, edit.kind];
       }),
-    ).toStrictEqual([['attach', 'suggestion']]);
+    ).toStrictEqual([['attach', 'suggestions']]);
     writeFileSync(path.join(opened.path, 'src/a.ts'), numberedLines({ 3: 'Three', 4: 'FOUR' }));
     await expect(
       services.reviewEdits.stageSuggestions({ sessionId, digest: plan.digest }),

@@ -1,8 +1,9 @@
 import type { ReviewEditPreviewView } from '#contract/ipc-contract.ts';
 
 /**
- * The one-line summary of what staging review edits would do (ADR 0088): how many suggestions
- * and notes it adds or changes, and how many earlier ones it leaves as they are. Pure.
+ * The one-line summary of what staging review edits would do (ADR 0088, 0162): how many
+ * suggestions it stages and in how many notes, how many notes with a diff, and how many earlier
+ * items it leaves as they are. Pure.
  */
 export function describeHarvest(edits: readonly ReviewEditPreviewView[]): string {
   if (edits.length === 0) {
@@ -10,11 +11,14 @@ export function describeHarvest(edits: readonly ReviewEditPreviewView[]): string
   }
   const changing = edits.filter((edit) => edit.action !== 'unchanged');
   const unchanged = edits.length - changing.length;
-  const suggestions = changing.filter((edit) => edit.kind === 'suggestion').length;
-  const notes = changing.length - suggestions;
+  const suggesting = changing.filter((edit) => edit.kind === 'suggestions');
+  const suggestions = suggesting.reduce((total, edit) => {
+    return total + edit.suggestions.length;
+  }, 0);
+  const notes = changing.length - suggesting.length;
   const parts: string[] = [];
-  if (suggestions > 0) {
-    parts.push(count(suggestions, 'suggestion'));
+  if (suggesting.length > 0) {
+    parts.push(`${count(suggestions, 'suggestion')} in ${count(suggesting.length, 'note')}`);
   }
   if (notes > 0) {
     parts.push(`${count(notes, 'note')} with a diff`);
