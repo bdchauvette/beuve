@@ -23,6 +23,11 @@ describe('menuStateFrom', () => {
   test.for([
     [{ focusedZone: 'diff' }, ['session', 'file', 'diff-target', 'suggestion-target']],
     [{ isActiveSuggestable: false }, ['session', 'file', 'diff-target']],
+    [
+      { isActiveRenamable: true },
+      ['session', 'file', 'diff-target', 'suggestion-target', 'rename-target'],
+    ],
+    [{ isActiveRenamable: true, focusedZone: 'ura' }, ['session', 'file']],
     [{ focusedZone: 'chat', isTextFocused: true }, ['session', 'file', 'text-focus']],
     [
       {
@@ -80,6 +85,7 @@ function idle(): MenuStateInput {
     activePath: undefined,
     isActiveReviewed: false,
     isActiveSuggestable: false,
+    isActiveRenamable: false,
     focusedZone: 'diff',
     noteListItem: undefined,
     isTextFocused: false,

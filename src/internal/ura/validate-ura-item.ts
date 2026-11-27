@@ -4,6 +4,7 @@ import type { Result } from '#x/result/result.ts';
 import { isUuid } from '#x/text/is-uuid.ts';
 
 import type { UraAnchor, UraItem, UraItemError, UraOrigin, UraSuggestion } from './ura-item.ts';
+import { checkUraPath } from './check-ura-path.ts';
 import { uraSuggestionLimits } from './ura-suggestion-limits.ts';
 
 /** An item as callers and rows describe it, not yet checked. */
@@ -61,7 +62,7 @@ function checkAnchor(anchor: UraAnchor): string | undefined {
   if (anchor.kind === 'change') {
     return undefined;
   }
-  const path = checkPath(anchor.path);
+  const path = checkUraPath(anchor.path);
   if (path !== undefined || anchor.kind === 'file') {
     return path;
   }
@@ -71,20 +72,6 @@ function checkAnchor(anchor: UraAnchor): string | undefined {
   }
   if (endLine < startLine) {
     return 'the end line comes before the start line';
-  }
-  return undefined;
-}
-
-function checkPath(path: string): string | undefined {
-  if (path === '' || hasControlCharacter(path)) {
-    return 'the path is empty or contains control characters';
-  }
-  const segments = path.split('/');
-  const hasBadSegment = segments.some((segment) => {
-    return ['', '.', '..'].includes(segment);
-  });
-  if (hasBadSegment) {
-    return 'the path must be repository-relative, without empty, . or .. segments';
   }
   return undefined;
 }
@@ -172,7 +159,7 @@ function checkSuggestion(suggestion: UraSuggestion): string | undefined {
   if (!isUuid(id)) {
     return "a suggestion's id is a UUID";
   }
-  const pathReason = checkPath(path);
+  const pathReason = checkUraPath(path);
   if (pathReason !== undefined) {
     return `a suggestion's path: ${pathReason}`;
   }

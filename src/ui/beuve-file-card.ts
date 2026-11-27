@@ -142,6 +142,11 @@ export interface TokenJumpDetail {
   readonly token: ClickedToken | undefined;
 }
 
+/** `beuve-token-click`: the reviewer clicked a head-side token of `path` (Suggest Rename…'s target). */
+export interface TokenClickDetail {
+  readonly path: string;
+}
+
 export interface DiffToggleDetail {
   readonly path: string;
   readonly expand: boolean;
@@ -811,7 +816,15 @@ export class BeuveFileCard extends LitElement {
     this.clickedToken = {
       line: props.lineNumber,
       character: props.lineCharStart + characterOffsetAt(props.tokenElement, event),
+      element: props.tokenElement,
     };
+    const path = this.file?.path;
+    if (path !== undefined) {
+      const clicked: TokenClickDetail = { path };
+      this.dispatchEvent(
+        new CustomEvent('beuve-token-click', { detail: clicked, bubbles: true, composed: true }),
+      );
+    }
     if (!event.metaKey && !event.ctrlKey) {
       return;
     }

@@ -4,7 +4,8 @@
  * wanted, whichever session it is for. A `note-draft` is superseded only by one with the same
  * `requestId`: the renderer names a note's drafting requests by the note (ADR 0125). A
  * `named-file` read (a `sheet:get-file` with a `requestId`, as each suggestion field's read of its
- * lines is, ADR 0162) is likewise superseded only by one with its own id.
+ * lines is, ADR 0162) is likewise superseded only by one with its own id. A `rename` is
+ * Suggest Rename…'s `prepareRename` or `rename` (ADR 0163): the next of either supersedes it.
  */
 export type SupersededKind =
   | 'review'
@@ -15,7 +16,8 @@ export type SupersededKind =
   | 'named-file'
   | 'sheet-head'
   | 'open-pull-request'
-  | 'note-draft';
+  | 'note-draft'
+  | 'rename';
 
 /** One request's cancellation. Disposing it when the request ends forgets it. */
 export interface RequestScope extends Disposable {

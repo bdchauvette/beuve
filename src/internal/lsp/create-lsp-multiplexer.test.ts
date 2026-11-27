@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import process from 'node:process';
@@ -14,7 +14,8 @@ import type { ServerTrustRequest } from './check-server-trust.ts';
 import { createLspMultiplexer } from './create-lsp-multiplexer.ts';
 import type { PositionRequest } from './create-lsp-multiplexer.ts';
 import type { LspError } from './lsp-error.ts';
-import type { CallHierarchyNode } from './lsp-model.ts';
+import type { CallHierarchyNode, Position } from './lsp-model.ts';
+import { positionEncodings } from './position-encodings.ts';
 import type { ServerDefinition } from './server-definition.ts';
 import { pollUntil } from './testing/poll-until.ts';
 import { test } from './testing/test.ts';
@@ -216,6 +217,60 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     expect(okValueFrom(blank)).toBeUndefined();
   });
 
+  test('renames a function across files without writing anything', async ({
+    expect,
+    signal,
+    sharedTypescriptWorkspace: { project, lsp },
+  }) => {
+    const position = { line: 3, character: 9 };
+    const [support, unsupported, prepared] = await Promise.all([
+      lsp.renameSupport({ root: project.root, path: 'src/b.ts' }),
+      lsp.renameSupport({ root: project.root, path: 'tsconfig.json' }),
+      lsp.prepareRename({ root: project.root, path: 'src/b.ts', position, signal }),
+    ]);
+    expect(okValueFrom(support)).toBe(true);
+    expect(okValueFrom(unsupported)).toBe(false);
+    expect(okValueFrom(prepared)).toMatchObject({
+      kind: 'range',
+      range: { start: { line: 3, character: 9 }, end: { line: 3, character: 10 } },
+    });
+    const before = readFileSync(path.join(project.root, 'src/c.ts'), 'utf8');
+    const renamed = okValueFrom(
+      await lsp.rename({
+        root: project.root,
+        path: 'src/b.ts',
+        position,
+        newName: 'double',
+        signal,
+      }),
+    );
+    const wideCall = "export const label = '😀😀'; export function wide(): number { return c(3); }";
+    expect(renamed).toStrictEqual({
+      encoding: 'utf-16',
+      files: [
+        {
+          path: 'src/b.ts',
+          edits: [
+            renamedToDouble({ line: 0, character: 9 }),
+            renamedToDouble({ line: 3, character: 9 }),
+          ],
+        },
+        { path: 'src/c.ts', edits: [renamedToDouble({ line: 0, character: 16 })] },
+        {
+          path: 'src/wide.ts',
+          edits: [
+            renamedToDouble({ line: 0, character: 9 }),
+            renamedToDouble({ line: 2, character: wideCall.indexOf('c(3)') }),
+          ],
+        },
+      ],
+      outside: 0,
+      resourceOperations: 0,
+      malformed: 0,
+    });
+    expect(readFileSync(path.join(project.root, 'src/c.ts'), 'utf8')).toBe(before);
+  });
+
   test('refuses paths outside the root, odd files and unknown nodes', async ({
     expect,
     tempDir,
@@ -311,6 +366,51 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     expect(report).toMatchObject({
       freshness: 'fresh',
       diagnostics: [{ severity: 'warning', message: 'version 1' }],
+    });
+  });
+
+  test('renames in the negotiated UTF-8, keeping only files inside the checkout', async ({
+    expect,
+    signal,
+    closing,
+    tempDir,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const outside = path.join(tempDir, 'outside.ts');
+    writeFileSync(outside, 'export const x = 1;\n');
+    symlinkSync(outside, path.join(project.root, 'src', 'link.ts'));
+    const lsp = createLspMultiplexer({ servers: [fakeServer(fakeServerScript, 'normal')] });
+    closing(lsp);
+    const line = "export const label = '😀😀'; export function wide(): number { return c(3); }";
+    const column = line.indexOf('wide');
+    const position = { line: 2, character: column };
+    const request = { root: project.root, path: 'src/wide.ts', position, signal };
+    expect(okValueFrom(await lsp.prepareRename(request))).toStrictEqual({
+      kind: 'range',
+      range: { start: position, end: { line: 2, character: column + 4 } },
+      placeholder: 'echo',
+    });
+    const utf8Column = column + 4;
+    expect(okValueFrom(await lsp.rename({ ...request, newName: 'wider' }))).toStrictEqual({
+      encoding: positionEncodings.utf8,
+      files: [
+        {
+          path: 'src/wide.ts',
+          edits: [
+            {
+              range: {
+                start: { line: 2, character: utf8Column },
+                end: { line: 2, character: utf8Column + 4 },
+              },
+              newText: 'wider',
+            },
+          ],
+        },
+      ],
+      outside: 2,
+      resourceOperations: 1,
+      malformed: 0,
     });
   });
 
@@ -638,6 +738,14 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     });
   });
 });
+
+/** A one-character edit at `start` that writes `double`, as renaming `c` does. */
+function renamedToDouble(start: Position): object {
+  return {
+    range: { start, end: { line: start.line, character: start.character + 1 } },
+    newText: 'double',
+  };
+}
 
 function fakeServer(script: string, mode: FakeServerMode): ServerDefinition {
   return {

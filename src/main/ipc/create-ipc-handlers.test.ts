@@ -56,6 +56,8 @@ function perHeadRequestWithoutHead(channel: PerHeadInvokeChannel): object {
     'github:preview-review': { sessionId: 's1' },
     'github:post-review': { sessionId: 's1' },
     'lsp:call-hierarchy': { sessionId: 's1', path: 'a.ts', line: 1, direction: 'incoming' },
+    'lsp:prepare-rename': { sessionId: 's1', path: 'a.ts', line: 1, character: 0 },
+    'lsp:rename': { sessionId: 's1', path: 'a.ts', line: 1, character: 0, newName: 'b' },
     'terminal:open': { sessionId: 's1', cols: 80, rows: 24 },
     'setup:status': { sessionId: 's1' },
     'setup:run': { sessionId: 's1', cols: 80, rows: 24 },
@@ -366,6 +368,9 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
           hover: notWired,
           restart: notWired,
           status: notWiredError,
+          renameSupport: notWired,
+          prepareRename: notWired,
+          rename: notWired,
         },
       },
       appInfo(),
@@ -407,6 +412,9 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
           hover: notWired,
           restart: notWired,
           status: notWiredError,
+          renameSupport: notWired,
+          prepareRename: notWired,
+          rename: notWired,
         },
       },
       appInfo(),
@@ -452,6 +460,9 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
           },
           restart: notWired,
           status: notWiredError,
+          renameSupport: notWired,
+          prepareRename: notWired,
+          rename: notWired,
         },
       },
       appInfo(),
@@ -489,6 +500,9 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
           hover: notWired,
           restart: notWired,
           status: notWiredError,
+          renameSupport: notWired,
+          prepareRename: notWired,
+          rename: notWired,
         },
       },
       appInfo(),
@@ -627,6 +641,50 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
     await expect(
       createIpcHandlers(stubServices({}), appInfo())['sheet:add-note'](note, fromSheet),
     ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
+    const rename = { ...note, endLine: 3, suggest: false, rename: { character: 2, newName: 'b' } };
+    for (const newName of ['', ' b', 'a\nb', 'x'.repeat(201)]) {
+      await expectInvalid(
+        expect,
+        handlers['sheet:add-note']({ ...rename, rename: { character: 2, newName } }, fromSheet),
+      );
+    }
+    await expectInvalid(expect, handlers['sheet:add-note']({ ...rename, endLine: 4 }, fromSheet));
+    await expect(handlers['sheet:add-note'](rename, fromSheet)).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(composed.at(-1)).toStrictEqual({ sessionId: 's1', ...rename });
+  });
+
+  test('runs Suggest Rename… requests in a scope the next one supersedes', async ({ expect }) => {
+    const seen: (AbortSignal | undefined)[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        lsp: {
+          ...stubServices({}).lsp,
+          prepareRename: async (_request, options) => {
+            seen.push(options?.signal);
+            await Promise.resolve();
+            return notWired();
+          },
+        },
+      },
+      appInfo(),
+    );
+    const request = {
+      sessionId: 's1',
+      expectedHeadSha: sha(),
+      path: 'src/a.ts',
+      line: 1,
+      character: 0,
+    };
+    const window = { webContentsId: 3 };
+    const first = handlers['lsp:prepare-rename'](request, window);
+    const second = handlers['lsp:prepare-rename'](request, window);
+    await expect(first).resolves.toMatchObject({ ok: false, error: { code: 'cancelled' } });
+    await expect(second).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
+    expect(seen.map((signal) => signal?.aborted)).toStrictEqual([true, false]);
+    await expectInvalid(expect, handlers['lsp:rename']({ ...request, newName: 'a\tb' }, window));
   });
 
   test('opens a description sheet only for a pull request main has read', async ({ expect }) => {
@@ -1471,6 +1529,9 @@ function stubServices(
       hover: notWired,
       restart: notWired,
       status: notWiredError,
+      renameSupport: notWired,
+      prepareRename: notWired,
+      rename: notWired,
     },
     sheets: {
       getFile: notWired,

@@ -18,7 +18,9 @@ export interface TypescriptServerOptions {
 /**
  * The registry entry for `typescript-language-server --stdio` (TypeScript and JavaScript).
  * Automatic type acquisition is off (it would run npm and reach the network) and tsserver logging
- * is off (it would write a `.log` directory into the workspace).
+ * is off (it would write a `.log` directory into the workspace). A rename renames the symbol, not
+ * an import's local alias (`providePrefixAndSuffixTextForRename` off, ADR 0163): asked at a use of
+ * an imported name, it renames the declaration and every use, as a review comment means.
  */
 export function typescriptServerDefinition(
   options: TypescriptServerOptions = {},
@@ -45,6 +47,7 @@ export function typescriptServerDefinition(
     initializationOptions: {
       disableAutomaticTypingAcquisition: true,
       hostInfo: 'beuve',
+      preferences: { providePrefixAndSuffixTextForRename: false },
       tsserver,
     },
     ...(options.env !== undefined && { env: options.env }),

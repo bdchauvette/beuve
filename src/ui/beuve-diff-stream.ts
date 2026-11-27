@@ -182,6 +182,12 @@ interface NoteAddDetail {
  * `beuve-peek-request`, `beuve-peek-close`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
  */
+/** A clicked token and the head file it is in. */
+export interface ClickedName {
+  readonly path: string;
+  readonly token: ClickedToken;
+}
+
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
   static override styles = [
@@ -1712,6 +1718,17 @@ export class BeuveDiffStream extends LitElement {
   /** The active card's last clicked head-side token, which Go to Definition asks about. */
   tokenClicked(): ClickedToken | undefined {
     return this.cards()[this.activeIndex]?.tokenClicked();
+  }
+
+  /** The active card's last clicked head-side token and its file, which Suggest Rename… renames. */
+  clickedName(): ClickedName | undefined {
+    const card = this.cards()[this.activeIndex];
+    const token = card?.tokenClicked();
+    const path = card?.file?.path;
+    if (token === undefined || path === undefined) {
+      return undefined;
+    }
+    return { path, token };
   }
 
   /** What Add to Chat adds to the chat (ADR 0046): the target's lines, or its file. */

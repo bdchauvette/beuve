@@ -564,6 +564,91 @@ export interface HoverView {
 }
 
 /**
+ * `lsp:rename-support` (ADR 0163): whether Suggest Rename… can run on a file of `sha` (the session
+ * head when absent): it is the session head, and a language server that handles the file
+ * advertises `renameProvider`. Asking starts the server.
+ */
+export interface RenameSupportRequest {
+  readonly sessionId: string;
+  readonly sha?: string;
+  /** Repository-relative path with `/` separators. */
+  readonly path: string;
+}
+
+export interface RenameSupportView {
+  readonly sha: string;
+  readonly supported: boolean;
+}
+
+/**
+ * A token of a file at the session head that Suggest Rename… asks about (ADR 0163): 1-based
+ * `line`, 0-based UTF-16 `character`. `expectedHeadSha` is the head shown (ADR 0078); main refuses
+ * when the session's head is no longer that one.
+ */
+export interface PrepareRenameRequest {
+  readonly sessionId: string;
+  readonly expectedHeadSha: string;
+  /** Repository-relative path with `/` separators. */
+  readonly path: string;
+  readonly line: number;
+  readonly character: number;
+}
+
+/**
+ * `lsp:prepare-rename`'s answer: the token and the name to offer (the server's placeholder, else
+ * the token's text), or the server's refusal, shown in place of the field.
+ */
+export type PrepareRenameView =
+  | {
+      readonly kind: 'ready';
+      readonly headSha: string;
+      readonly range: SheetRangeView;
+      readonly placeholder: string;
+    }
+  | { readonly kind: 'refused'; readonly headSha: string; readonly message: string };
+
+/** `lsp:rename` (ADR 0163): the server's rename of the token to `newName`, as a preview. */
+export interface RenameRequest extends PrepareRenameRequest {
+  readonly newName: string;
+}
+
+/** One file a rename suggests changes to, its suggestions in line order. */
+export interface RenameFileView {
+  readonly path: string;
+  readonly suggestions: readonly UraSuggestionDraftView[];
+}
+
+/** A file the rename edits whose edits can't be suggestions, and why. */
+export interface RenameUnusableFileView {
+  readonly path: string;
+  readonly reason: string;
+}
+
+/**
+ * What a rename would stage (ADR 0163): one note, titled `title` and anchored at `line` of `path`
+ * on `headSha`, with each file's suggestions in path then line order. The counts are what the
+ * server's answer held that is left out: resource operations (create, rename or delete a file),
+ * documents outside beuve's head checkout, files the head doesn't track, edits that are none of
+ * the protocol's shapes, and files whose edits can't be suggestions.
+ */
+export interface RenamePreviewView {
+  readonly headSha: string;
+  readonly path: string;
+  readonly line: number;
+  readonly oldName: string;
+  readonly newName: string;
+  readonly title: string;
+  readonly files: readonly RenameFileView[];
+  readonly leftOut: {
+    readonly resourceOperations: number;
+    readonly outsideCheckout: number;
+    readonly untracked: number;
+    readonly malformed: number;
+    readonly unusable: readonly RenameUnusableFileView[];
+  };
+}
+
+/**
  * The language servers' diagnostics for one file (ADR 0111), asked in a checkout of `sha`, which
  * must be the session head: diagnostics exist at the head only. The session head when absent.
  */
@@ -2403,6 +2488,17 @@ export interface SheetNoteRequest {
   readonly startLine: number;
   readonly endLine: number;
   readonly suggest: boolean;
+  /**
+   * Suggest Rename… on a token of the sheet (ADR 0163): the main window asks for the rename of the
+   * token at `character` (0-based UTF-16) of `startLine` to `newName`, and previews it there.
+   */
+  readonly rename?: SheetRenameView;
+}
+
+/** The token and the name a sheet's Suggest Rename… hands to the main window. */
+export interface SheetRenameView {
+  readonly character: number;
+  readonly newName: string;
 }
 
 /** `sheet:add-note`'s answer: the main window was asked to open its composer. */
@@ -2873,6 +2969,18 @@ export interface InvokeChannelMap {
     readonly request: DiagnosticsRequest;
     readonly response: IpcResult<DiagnosticsView>;
   };
+  'lsp:rename-support': {
+    readonly request: RenameSupportRequest;
+    readonly response: IpcResult<RenameSupportView>;
+  };
+  'lsp:prepare-rename': {
+    readonly request: PrepareRenameRequest;
+    readonly response: IpcResult<PrepareRenameView>;
+  };
+  'lsp:rename': {
+    readonly request: RenameRequest;
+    readonly response: IpcResult<RenamePreviewView>;
+  };
   'sheet:open': {
     readonly request: OpenSheetRequest;
     readonly response: IpcResult<OpenedView>;
@@ -3222,6 +3330,8 @@ export type SheetInvokeChannel =
   | 'lsp:definition'
   | 'lsp:hover'
   | 'lsp:diagnostics'
+  | 'lsp:rename-support'
+  | 'lsp:prepare-rename'
   | 'display:get'
   | 'sheet:open'
   | 'sheet:get-file'

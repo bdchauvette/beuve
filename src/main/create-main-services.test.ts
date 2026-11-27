@@ -725,6 +725,117 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
   );
 
   test(
+    'suggests a rename across files as one note’s suggestions, writing nothing',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, services, repositories, signal }) => {
+      const { sessionId, repo, headSha } = await openTypescriptSession(services, repositories);
+      const token = { sessionId, expectedHeadSha: headSha, path: 'src/handler.ts', line: 4 };
+      const support = okValueFrom(
+        await services.lsp.renameSupport({ sessionId, path: 'src/handler.ts' }),
+      );
+      expect(support).toStrictEqual({ sha: headSha, supported: true });
+      const prepared = okValueFrom(
+        await services.lsp.prepareRename({ ...token, character: 10 }, { signal }),
+      );
+      expect(prepared).toStrictEqual({
+        kind: 'ready',
+        headSha,
+        range: { startLine: 4, startCharacter: 9, endLine: 4, endCharacter: 17 },
+        placeholder: 'validate',
+      });
+      const preview = okValueFrom(
+        await services.lsp.rename({ ...token, character: 10, newName: 'isValid' }, { signal }),
+      );
+      expect(preview).toStrictEqual({
+        headSha,
+        path: 'src/handler.ts',
+        line: 4,
+        oldName: 'validate',
+        newName: 'isValid',
+        title: 'Rename `validate` to `isValid`',
+        files: [
+          {
+            path: 'src/auth.ts',
+            suggestions: [
+              lineSuggestion(
+                { path: 'src/auth.ts', startLine: 1 },
+                'export function isValid(token: string): boolean {',
+              ),
+            ],
+          },
+          {
+            path: 'src/complex.ts',
+            suggestions: [
+              lineSuggestion(
+                { path: 'src/complex.ts', startLine: 1 },
+                "import { isValid } from './auth';",
+              ),
+              lineSuggestion(
+                { path: 'src/complex.ts', startLine: 8 },
+                "          if (isValid(token) && user !== 'root') {",
+              ),
+            ],
+          },
+          {
+            path: 'src/handler.ts',
+            suggestions: [
+              lineSuggestion(
+                { path: 'src/handler.ts', startLine: 1 },
+                "import { isValid } from './auth';",
+              ),
+              lineSuggestion(
+                { path: 'src/handler.ts', startLine: 4 },
+                '  return isValid(token) ? 200 : 401;',
+              ),
+            ],
+          },
+        ],
+        leftOut: {
+          resourceOperations: 0,
+          outsideCheckout: 0,
+          untracked: 0,
+          malformed: 0,
+          unusable: [],
+        },
+      });
+      const staged = okValueFrom(
+        await services.ura.create({
+          sessionId,
+          headSha,
+          anchor: { kind: 'lines', path: preview.path, startLine: 4, endLine: 4 },
+          severity: 'suggestion',
+          title: preview.title,
+          body: '',
+          suggestions: preview.files.flatMap((file) => file.suggestions),
+        }),
+      );
+      expect(staged.suggestions.map((suggestion) => suggestion.placement.kind)).toStrictEqual([
+        'current',
+        'current',
+        'current',
+        'current',
+        'current',
+      ]);
+      await expect(
+        services.lsp.prepareRename({ ...token, character: 3 }, { signal }),
+      ).resolves.toStrictEqual({
+        ok: true,
+        value: { kind: 'refused', headSha, message: 'You cannot rename this element.' },
+      });
+      await expect(
+        services.lsp.rename({ ...token, character: 10, newName: 'validate' }, { signal }),
+      ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+      await expect(
+        services.lsp.prepareRename(
+          { ...token, expectedHeadSha: 'b'.repeat(40), character: 10 },
+          { signal },
+        ),
+      ).resolves.toMatchObject({ ok: false, error: { code: 'stale-review' } });
+      await expect(repo.git('status', '--porcelain')).resolves.toBe('');
+    },
+  );
+
+  test(
     'hovers at the head and at an older pinned commit, and refuses a line the file lacks',
     { concurrent: false, timeout: 60_000 },
     async ({ expect, services, repositories, worktreeRoot }) => {
@@ -1084,6 +1195,20 @@ async function openTypescriptSession(
   });
   const { id, headSha } = okValueFrom(created);
   return { repo, sessionId: id, headSha };
+}
+
+/** A line of a file. */
+interface FileLine {
+  readonly path: string;
+  readonly startLine: number;
+}
+
+/** A suggestion replacing one line, as a rename's preview lists it. */
+function lineSuggestion(
+  { path: file, startLine }: FileLine,
+  replacement: string,
+): Record<string, unknown> {
+  return { path: file, startLine, endLine: startLine, replacement };
 }
 
 function typescriptBranchTemplate(): RepositoryTemplate<undefined> {

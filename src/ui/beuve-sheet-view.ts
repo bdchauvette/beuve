@@ -18,6 +18,14 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 import './beuve-definition-link.ts';
 import type { BeuveDefinitionLink, DefinitionAsk } from './beuve-definition-link.ts';
 import './beuve-hover-card.ts';
+import './beuve-rename-field.ts';
+import type {
+  BeuveRenameField,
+  RenameAsked,
+  RenameFieldHost,
+  RenameNaming,
+} from './beuve-rename-field.ts';
+import { renameNamingFrom } from './rename-naming-from.ts';
 import type { BeuveHoverCard, DiagnosticsFor, HoverAsk } from './beuve-hover-card.ts';
 import { diagnosticsAt } from './diagnostics-at.ts';
 import type { DiagnosticPosition } from './diagnostics-at.ts';
@@ -207,6 +215,10 @@ export class BeuveSheetView extends LitElement {
   /** The session head when the sheet was printed, from its first read. */
   private printedHead: string | undefined;
   private readonly files = new Map<string, Promise<IpcResult<SheetFileView>>>();
+  /** Whether a file's language server can rename (ADR 0163), by path at this sheet's commit. */
+  private readonly renamable = new Map<string, boolean>();
+  /** The element of the token `column` names, for Suggest Rename…'s field. */
+  private columnElement: Element | undefined;
   private readonly printedAt = Temporal.Now.instant().toString();
   private lastMenuState: string | undefined;
 
@@ -449,8 +461,10 @@ export class BeuveSheetView extends LitElement {
             this.definitionLink()?.leave();
           }}
           @beuve-sheet-token=${(event: CustomEvent<SheetTokenDetail>): void => {
-            const { line, character, isJump } = event.detail;
+            const { line, character, isJump, element } = event.detail;
             this.column = { line, character };
+            this.columnElement = element;
+            this.askRenameSupport();
             this.cursor = { start: line, end: line };
             if (isJump) {
               void this.jump('definition');
@@ -544,6 +558,9 @@ export class BeuveSheetView extends LitElement {
     // The cursor's lines are what Add Note and Add Suggestion… ask main for (ADR 0162).
     if (this.loaded.status === 'ready' && this.cursor !== undefined) {
       conditions.push('diff-target', 'suggestion-target');
+    }
+    if (this.renameTarget() !== undefined) {
+      conditions.push('rename-target');
     }
     if (canGoBack) {
       conditions.push('back');
@@ -841,6 +858,105 @@ export class BeuveSheetView extends LitElement {
     }
   }
 
+  /** Asks once per file whether its language server can rename, at the head only (ADR 0163). */
+  private askRenameSupport(): void {
+    const { api, loaded } = this;
+    if (api === undefined || loaded.status !== 'ready' || !this.isAtHead()) {
+      return;
+    }
+    const { path } = loaded.file;
+    if (this.renamable.has(path)) {
+      return;
+    }
+    this.renamable.set(path, false);
+    void api
+      .invoke('lsp:rename-support', { sessionId: this.sessionId, sha: this.sha, path })
+      .then((answer) => {
+        if (answer.ok) {
+          this.renamable.set(path, answer.value.supported);
+        } else {
+          this.renamable.delete(path);
+        }
+        this.syncMenuState();
+      });
+  }
+
+  /** The token Suggest Rename… would rename: the clicked one on the cursor's line, at the head. */
+  private renameTarget(): SheetRenameTarget | undefined {
+    const { loaded, column, cursor } = this;
+    if (
+      column === undefined ||
+      loaded.status !== 'ready' ||
+      cursor?.start !== column.line ||
+      !this.isAtHead() ||
+      this.renamable.get(loaded.file.path) !== true
+    ) {
+      return undefined;
+    }
+    return { path: loaded.file.path, ...column };
+  }
+
+  /**
+   * Suggest Rename… (ADR 0163): the name is asked for here, at the token; the main window
+   * previews and stages the rename, as it writes a sheet's notes (`sheet:add-note`).
+   */
+  private suggestRename(): void {
+    const target = this.renameTarget();
+    if (target === undefined) {
+      this.note('Click a name first, in a file at the session head.', false);
+      return;
+    }
+    this.renderRoot.querySelector<BeuveRenameField>('beuve-rename-field')?.open({
+      anchor: this.columnElement,
+      host: this.renameHost(target),
+    });
+  }
+
+  private renameHost(target: SheetRenameTarget): RenameFieldHost {
+    const bridge = this.api;
+    const { path, line, character } = target;
+    return {
+      prepare: async (): Promise<RenameNaming> => {
+        if (bridge === undefined) {
+          return { kind: 'refused', message: 'Suggest Rename… needs the app.' };
+        }
+        return renameNamingFrom(
+          await bridge.invoke('lsp:prepare-rename', {
+            sessionId: this.sessionId,
+            expectedHeadSha: this.sha,
+            path,
+            line,
+            character,
+          }),
+        );
+      },
+      rename: async (newName): Promise<RenameAsked> => {
+        if (bridge === undefined) {
+          return { kind: 'failed', message: 'Suggest Rename… needs the app.' };
+        }
+        const sent = await bridge.invoke('sheet:add-note', {
+          headSha: this.sha,
+          path,
+          startLine: line,
+          endLine: line,
+          suggest: false,
+          rename: { character, newName },
+        });
+        if (sent.ok) {
+          return {
+            kind: 'handed',
+            message: 'The rename opens in the main window, to preview and stage.',
+          };
+        }
+        return { kind: 'failed', message: sent.error.message };
+      },
+      stage: async (): Promise<string> => {
+        await Promise.resolve();
+        return 'A sheet stages nothing; the main window does.';
+      },
+    };
+  }
+
   private async permalink(isOpening: boolean): Promise<void> {
     const { api } = this;
     const place = this.current();
@@ -1000,6 +1116,10 @@ export class BeuveSheetView extends LitElement {
         void this.addNote(id === 'add-suggestion');
         return true;
       }
+      case 'suggest-rename': {
+        this.suggestRename();
+        return true;
+      }
       default: {
         return false;
       }
@@ -1039,6 +1159,7 @@ export class BeuveSheetView extends LitElement {
     }
 
     this.files.clear();
+    this.renamable.clear();
     this.printedHead = undefined;
     this.history = { places: [this.place], index: 0 };
     this.movedHead = undefined;
@@ -1135,8 +1256,20 @@ export class BeuveSheetView extends LitElement {
         .sessionId=${this.sessionId}
         .sha=${this.sha}
       ></beuve-definition-link>
+      <beuve-rename-field
+        @beuve-rename-closed=${(): void => {
+          this.focus();
+        }}
+      ></beuve-rename-field>
     `;
   }
+}
+
+/** A sheet token Suggest Rename… asks about: 1-based line, 0-based UTF-16 column. */
+interface SheetRenameTarget {
+  readonly path: string;
+  readonly line: number;
+  readonly character: number;
 }
 
 /** `⚠️ issue`, after 🛑 and with `(blocking)` when the note blocks (ADR 0131). */

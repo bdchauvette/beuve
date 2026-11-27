@@ -19,6 +19,8 @@ export interface MenuStateInput {
   readonly isActiveReviewed: boolean;
   /** Whether the file under the cursor has head lines to suggest on (`unsuggestableReasonFrom`, ADR 0162). */
   readonly isActiveSuggestable: boolean;
+  /** Whether the diff's clicked head-side token is in a file whose server can rename it (ADR 0163). */
+  readonly isActiveRenamable: boolean;
   readonly focusedZone: ZoneId;
   /** The notes list's selected notes (or the one under its cursor), while the notes list has the focus. */
   readonly noteListItem: NoteListSelectionFacts | undefined;
@@ -57,6 +59,7 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ...has('file', isFile),
     ...has('diff-target', isDiffTarget),
     ...has('suggestion-target', isDiffTarget && input.isActiveSuggestable),
+    ...has('rename-target', isDiffTarget && input.isActiveRenamable),
     ...has('note-item', input.hasSession && input.noteListItem !== undefined),
     ...has('busy', input.isBusy),
     ...has('pull-request', input.isPullRequest),

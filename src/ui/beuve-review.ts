@@ -26,6 +26,14 @@ import './beuve-chat-drawer.ts';
 import './beuve-definition-link.ts';
 import type { BeuveDefinitionLink, DefinitionAsk } from './beuve-definition-link.ts';
 import './beuve-hover-card.ts';
+import './beuve-rename-field.ts';
+import type {
+  BeuveRenameField,
+  RenameAsked,
+  RenameFieldHost,
+  RenameNaming,
+} from './beuve-rename-field.ts';
+import { renameNamingFrom } from './rename-naming-from.ts';
 import type { BeuveHoverCard, DiagnosticsFor, HoverAsk } from './beuve-hover-card.ts';
 import type { HoverPoint } from './hover-point.ts';
 import './beuve-command-palette.ts';
@@ -61,7 +69,7 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 import type { PaletteAction } from './plan-palette.ts';
 import type { FileJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { OpenCommitDetail } from './beuve-status-bar.ts';
-import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
+import type { FilePairLoader, TokenClickDetail, TokenJumpDetail } from './beuve-file-card.ts';
 import type { ChatController } from './chat-controller.ts';
 import type { GithubController } from './github-controller.ts';
 import type { ReviewEditsController } from './review-edits-controller.ts';
@@ -268,6 +276,8 @@ export class BeuveReview extends LitElement {
 
   /** Commits read for commit hashes' cards (ADR 0116), per session and hash. */
   private readonly commitInfos = new Map<string, Promise<CommitInfoView | undefined>>();
+  /** Whether a file's language server can rename (ADR 0163), by head and path; `false` while asking. */
+  private readonly renameSupport = new Map<string, boolean>();
 
   /** `beuve-commit-info` from a commit hash anywhere in the review: its commit, read once. */
   private readonly onCommitInfo = (event: CustomEvent<CommitInfoRequestDetail>): void => {
@@ -411,6 +421,35 @@ export class BeuveReview extends LitElement {
   private readonly onTokenHoverEnd = (): void => {
     this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.leave();
     this.renderRoot.querySelector<BeuveDefinitionLink>('beuve-definition-link')?.leave();
+  };
+
+  /**
+   * A head-side token was clicked: Suggest Rename… is offered once the file's language server
+   * says it can rename (ADR 0163), asked once per head and file.
+   */
+  private readonly onTokenClick = (event: CustomEvent<TokenClickDetail>): void => {
+    this.actions?.scheduleMenuSync();
+    const { review } = this;
+    const bridge = beuveBridge();
+    if (review === undefined || bridge === undefined) {
+      return;
+    }
+    const { path } = event.detail;
+    const key = `${review.headSha}\0${path}`;
+    if (this.renameSupport.has(key)) {
+      return;
+    }
+    this.renameSupport.set(key, false);
+    void bridge
+      .invoke('lsp:rename-support', { sessionId: review.session.id, sha: review.headSha, path })
+      .then((answer) => {
+        if (answer.ok) {
+          this.renameSupport.set(key, answer.value.supported);
+        } else {
+          this.renameSupport.delete(key);
+        }
+        this.actions?.scheduleMenuSync();
+      });
   };
 
   /** ⌘/Ctrl-click on a token: Go to Definition on it, as the menu command does. */
@@ -1253,6 +1292,89 @@ export class BeuveReview extends LitElement {
     return this.insightCache.insights;
   }
 
+  /** Whether the diff's clicked token is in a file whose language server can rename (ADR 0163). */
+  private isRenamable(): boolean {
+    const clicked = this.stream()?.clickedName();
+    if (clicked === undefined || this.review === undefined) {
+      return false;
+    }
+    return this.renameSupport.get(`${this.review.headSha}\0${clicked.path}`) === true;
+  }
+
+  /** Suggest Rename… on the diff's last clicked head-side token (ADR 0163). */
+  private suggestRename(): void {
+    const clicked = this.stream()?.clickedName();
+    if (clicked === undefined || this.review === undefined) {
+      this.showNotice({ tone: 'info', text: 'Click a name on the head side first.' });
+      return;
+    }
+    const { path, token } = clicked;
+    this.renameField()?.open({
+      anchor: token.element,
+      host: this.renameHost({ path, line: token.line, character: token.character }),
+    });
+  }
+
+  private renameField(): BeuveRenameField | undefined {
+    return this.renderRoot.querySelector<BeuveRenameField>('beuve-rename-field') ?? undefined;
+  }
+
+  /** Suggest Rename…'s requests for a token of the head shown, and staging its note. */
+  private renameHost(token: RenameToken): RenameFieldHost {
+    const { review } = this;
+    const bridge = beuveBridge();
+    const target = {
+      sessionId: review?.session.id ?? '',
+      expectedHeadSha: review?.headSha ?? '',
+      ...token,
+    };
+    return {
+      prepare: async (): Promise<RenameNaming> => {
+        if (bridge === undefined) {
+          return { kind: 'refused', message: 'Suggest Rename… needs the app.' };
+        }
+        return renameNamingFrom(await bridge.invoke('lsp:prepare-rename', target));
+      },
+      rename: async (newName): Promise<RenameAsked> => {
+        if (bridge === undefined) {
+          return { kind: 'failed', message: 'Suggest Rename… needs the app.' };
+        }
+        const answer = await bridge.invoke('lsp:rename', { ...target, newName });
+        if (answer.ok) {
+          return { kind: 'preview', preview: answer.value };
+        }
+        if (answer.error.code === 'cancelled') {
+          return { kind: 'cancelled' };
+        }
+        return { kind: 'failed', message: answer.error.message };
+      },
+      stage: async (preview): Promise<string | undefined> => {
+        if (bridge === undefined) {
+          return 'Suggest Rename… needs the app.';
+        }
+        const created = await bridge.invoke('ura:create', {
+          sessionId: target.sessionId,
+          headSha: preview.headSha,
+          anchor: {
+            kind: 'lines',
+            path: preview.path,
+            startLine: preview.line,
+            endLine: preview.line,
+          },
+          severity: 'suggestion',
+          title: preview.title,
+          body: '',
+          suggestions: preview.files.flatMap((file) => file.suggestions),
+        });
+        if (!created.ok) {
+          return created.error.message;
+        }
+        this.showNotice({ tone: 'info', text: `Staged “${created.value.title}”.` });
+        return;
+      },
+    };
+  }
+
   private stream(): BeuveDiffStream | undefined {
     return this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream') ?? undefined;
   }
@@ -1465,6 +1587,7 @@ export class BeuveReview extends LitElement {
       @beuve-token-hover=${this.onTokenHover}
       @beuve-token-hover-end=${this.onTokenHoverEnd}
       @beuve-token-jump=${this.onTokenJump}
+      @beuve-token-click=${this.onTokenClick}
       @beuve-diagnostics-wanted=${this.onDiagnosticsWanted}
     ></beuve-diff-stream>`;
   }
@@ -1857,6 +1980,34 @@ export class BeuveReview extends LitElement {
     });
   }
 
+  /**
+   * A sheet's Suggest Rename… (ADR 0163): the sheet asked for the name; the rename is previewed
+   * and staged here, on the head this review shows, as a sheet's notes are.
+   */
+  renameFromSheet(request: ComposeNoteView): void {
+    const { review } = this;
+    const { rename } = request;
+    if (rename === undefined || review?.session.id !== request.sessionId) {
+      return;
+    }
+    if (request.headSha !== review.headSha) {
+      this.showNotice({
+        tone: 'info',
+        text: `That sheet is at ${request.headSha.slice(0, 7)}, not the head this review shows (${review.headSha.slice(0, 7)}): renames are suggested on the head shown.`,
+      });
+      return;
+    }
+    this.renameField()?.open({
+      anchor: undefined,
+      host: this.renameHost({
+        path: request.path,
+        line: request.startLine,
+        character: rename.character,
+      }),
+      newName: rename.newName,
+    });
+  }
+
   /** Puts focus back in the focused zone after an overlay closes. */
   refocusZone(): void {
     void this.updateComplete.then(() => {
@@ -2011,6 +2162,10 @@ export class BeuveReview extends LitElement {
         if (target !== undefined) {
           void this.sheetAction(sheetActionFrom(id, target, this.stream()?.tokenClicked()));
         }
+        return true;
+      }
+      case 'suggest-rename': {
+        this.suggestRename();
         return true;
       }
       case 'toggle-reviewed': {
@@ -2180,6 +2335,7 @@ export class BeuveReview extends LitElement {
       isActiveReviewed: markedPath !== undefined && this.reviewData.marks.get(markedPath) === 'yes',
       isActiveSuggestable:
         activeFile !== undefined && unsuggestableReasonFrom(activeFile) === undefined,
+      isActiveRenamable: this.isRenamable(),
       focusedZone: this.focusedZone,
       noteListItem: noteListItemOf(noteList),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
@@ -2235,6 +2391,15 @@ export class BeuveReview extends LitElement {
               .sessionId=${this.review.session.id}
               .sha=${this.review.headSha}
             ></beuve-definition-link>`
+      }
+      ${
+        this.review === undefined
+          ? nothing
+          : html`<beuve-rename-field
+              @beuve-rename-closed=${(): void => {
+                this.refocusZone();
+              }}
+            ></beuve-rename-field>`
       }
       ${this.renderSetupDialog()}
     `;
@@ -2305,6 +2470,7 @@ export type ReviewMenuFacts = Pick<
   | 'activePath'
   | 'isActiveReviewed'
   | 'isActiveSuggestable'
+  | 'isActiveRenamable'
   | 'focusedZone'
   | 'noteListItem'
   | 'isSidebarShown'
@@ -2314,6 +2480,13 @@ export type ReviewMenuFacts = Pick<
   | 'isFindCaseSensitive'
   | 'reviewRange'
 >;
+
+/** A head token Suggest Rename… asks about: 1-based line, 0-based UTF-16 column. */
+interface RenameToken {
+  readonly path: string;
+  readonly line: number;
+  readonly character: number;
+}
 
 /** What the open command palette points at, when Add to Chat runs from it. */
 export interface PaletteSelection {

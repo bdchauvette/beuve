@@ -33,6 +33,7 @@ export type MenuCondition =
   | 'file'
   | 'diff-target'
   | 'suggestion-target'
+  | 'rename-target'
   | 'note-item'
   | 'busy'
   | 'pull-request'
@@ -709,6 +710,16 @@ const entries = Object.freeze([
     when: ['file'],
     textConflict: true,
     windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'suggest-rename',
+    title: 'Suggest Rename…',
+    menu: { menu: 'analyze', group: 1 },
+    keys: { mac: 'F2', linux: 'F2' },
+    context: ['line', 'sheet'],
+    when: ['rename-target'],
+    windows: ['main', 'sheet'],
     handler: 'window',
   },
   {

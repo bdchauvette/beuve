@@ -5,7 +5,9 @@ import { test } from '#testing/test.ts';
 import { typescriptServerDefinition } from './typescript-server-definition.ts';
 
 describe('typescriptServerDefinition', () => {
-  test('runs over stdio with type acquisition and logging off', ({ expect }) => {
+  test('runs over stdio with type acquisition and logging off, renaming symbols not aliases', ({
+    expect,
+  }) => {
     const definition = typescriptServerDefinition();
     expect(definition).toMatchObject({
       id: 'typescript',
@@ -16,6 +18,7 @@ describe('typescriptServerDefinition', () => {
     expect(definition.initializationOptions).toStrictEqual({
       disableAutomaticTypingAcquisition: true,
       hostInfo: 'beuve',
+      preferences: { providePrefixAndSuffixTextForRename: false },
       tsserver: { logVerbosity: 'off', trace: 'off' },
     });
   });

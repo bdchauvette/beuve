@@ -560,17 +560,28 @@ export class BeuveApp extends LitElement {
     void this.loadInitialState();
   }
 
-  /** A sheet's Add Note (ADR 0162): the review composes it, when it is that sheet's session's. */
+  /**
+   * A sheet's Add Note (ADR 0162) or Suggest Rename… (ADR 0163): the review composes the note, or
+   * previews the rename, when it is that sheet's session's.
+   */
   private composeFromSheet(request: ComposeNoteView): void {
     const review = this.reviewElement();
     if (review === undefined || this.shownReview?.session.id !== request.sessionId) {
+      let again = 'add the note again';
+      if (request.rename !== undefined) {
+        again = 'suggest the rename again';
+      }
       this.showNotice({
         tone: 'info',
-        text: 'Open the review that sheet belongs to in this window, then add the note again.',
+        text: `Open the review that sheet belongs to in this window, then ${again}.`,
       });
       return;
     }
-    review.composeFromSheet(request);
+    if (request.rename === undefined) {
+      review.composeFromSheet(request);
+    } else {
+      review.renameFromSheet(request);
+    }
   }
 
   private disconnect(): void {

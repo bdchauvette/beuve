@@ -23,6 +23,8 @@ export interface SheetTokenDetail {
   readonly character: number;
   /** ⌘ (Ctrl elsewhere) was held: jump to its definition at once. */
   readonly isJump: boolean;
+  /** The token's element, which Suggest Rename… opens its field under. */
+  readonly element: Element;
 }
 
 /** A token the pointer entered: what `HoverPoint` says, without the path (the sheet knows it). */
@@ -135,6 +137,7 @@ export class BeuveSheetCode extends LitElement {
           line: props.lineNumber,
           character: props.lineCharStart + characterOffsetAt(props.tokenElement, event),
           isJump: event.metaKey || event.ctrlKey,
+          element: props.tokenElement,
         };
         this.dispatchEvent(new CustomEvent('beuve-sheet-token', { detail, bubbles: true }));
       },

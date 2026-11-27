@@ -1,9 +1,11 @@
 import { positionEncodings } from './position-encodings.ts';
 
 /**
- * What beuve tells servers it can do. Deliberately read-only: no `workspace.applyEdit`, no
- * `workspaceEdit`, no rename, code actions, formatting, completion or file operations, so a
- * well-behaved server never proposes a change. Full-text document sync only; UTF-16 positions are
+ * What beuve tells servers it can do. Deliberately read-only: no `workspace.applyEdit`, no code
+ * actions, formatting, completion or file operations, so a well-behaved server never proposes a
+ * change it would apply. Rename (ADR 0163) is asked for, but its `WorkspaceEdit` only becomes a
+ * note's suggestions: `workspaceEdit` announces text edits in `documentChanges` and no resource
+ * operations, and nothing is ever applied. Full-text document sync only; UTF-16 positions are
  * preferred but UTF-8 and UTF-32 are accepted and converted.
  */
 export const clientCapabilities = Object.freeze({
@@ -15,6 +17,7 @@ export const clientCapabilities = Object.freeze({
     configuration: true,
     workspaceFolders: true,
     didChangeConfiguration: { dynamicRegistration: false },
+    workspaceEdit: { documentChanges: true, resourceOperations: [] },
   },
   window: {
     workDoneProgress: true,
@@ -39,6 +42,7 @@ export const clientCapabilities = Object.freeze({
     typeDefinition: { dynamicRegistration: false, linkSupport: true },
     references: { dynamicRegistration: false },
     hover: { dynamicRegistration: false, contentFormat: ['markdown', 'plaintext'] },
+    rename: { dynamicRegistration: false, prepareSupport: true },
     documentSymbol: {
       dynamicRegistration: false,
       hierarchicalDocumentSymbolSupport: true,

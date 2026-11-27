@@ -511,6 +511,14 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "id": "flow",
         "label": "&Show Control Flow",
       },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "F2",
+        "id": "suggest-rename",
+        "label": "Suggest &Rename…",
+      },
     ],
   },
   {
@@ -1449,6 +1457,14 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Shift+Cmd+I",
         "id": "flow",
         "label": "Show Control Flow",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "F2",
+        "id": "suggest-rename",
+        "label": "Suggest Rename…",
       },
     ],
   },

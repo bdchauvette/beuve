@@ -44,6 +44,9 @@ import type {
   GithubReviewPreviewView,
   HoverRequest,
   HoverView,
+  PrepareRenameView,
+  RenamePreviewView,
+  RenameSupportView,
   InvokeChannel,
   InvokeResponse,
   IpcError,
@@ -317,6 +320,15 @@ const openSheetRequest = z.strictObject({
 const sheetFileRequest = z.strictObject({ sessionId, sha: fullSha, path: sheetPath });
 
 const sheetLine = z.number().int().min(1).max(10_000_000);
+/** A name the reviewer types for Suggest Rename… (ADR 0163): one line, no control characters. */
+const newName = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((value) => {
+    return !hasControlCharacters(value) && value.trim() === value;
+  }, 'expected a name on one line, without surrounding spaces');
+const sheetRename = z.strictObject({ character, newName });
 const sheetNoteRequest = z
   .strictObject({
     headSha: fullSha,
@@ -324,10 +336,34 @@ const sheetNoteRequest = z
     startLine: sheetLine,
     endLine: sheetLine,
     suggest: z.boolean(),
+    rename: sheetRename.optional(),
   })
   .refine((request) => {
     return request.endLine >= request.startLine;
-  }, 'endLine comes before startLine');
+  }, 'endLine comes before startLine')
+  .refine((request) => {
+    return request.rename === undefined || request.endLine === request.startLine;
+  }, 'a rename names one line');
+const renameSupportRequest = z.strictObject({
+  sessionId,
+  sha: fullSha.optional(),
+  path: sheetPath,
+});
+const prepareRenameRequest = z.strictObject({
+  sessionId,
+  expectedHeadSha,
+  path: sheetPath,
+  line: sheetLine,
+  character,
+});
+const renameRequest = z.strictObject({
+  sessionId,
+  expectedHeadSha,
+  path: sheetPath,
+  line: sheetLine,
+  character,
+  newName,
+});
 
 const permalinkRequest = z
   .strictObject({
@@ -848,6 +884,32 @@ export function createIpcHandlers(
       const diagnostics: DiagnosticsRequest = { ...required, ...(sha !== undefined && { sha }) };
       return services.lsp.diagnostics(diagnostics);
     },
+    'lsp:rename-support': async (request): Promise<IpcResult<RenameSupportView>> => {
+      const parsed = renameSupportRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sha, ...required } = parsed.data;
+      return services.lsp.renameSupport({ ...required, ...(sha !== undefined && { sha }) });
+    },
+    'lsp:prepare-rename': async (request, sender): Promise<IpcResult<PrepareRenameView>> => {
+      const parsed = prepareRenameRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      return scoped({ sender, kind: 'rename' }, async (options) => {
+        return services.lsp.prepareRename(parsed.data, options);
+      });
+    },
+    'lsp:rename': async (request, sender): Promise<IpcResult<RenamePreviewView>> => {
+      const parsed = renameRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      return scoped({ sender, kind: 'rename' }, async (options) => {
+        return services.lsp.rename(parsed.data, options);
+      });
+    },
     'sheet:open': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = openSheetRequest.safeParse(request);
       if (!parsed.success) {
@@ -897,7 +959,7 @@ export function createIpcHandlers(
       if (sheet === undefined) {
         return err({ code: 'invalid-request', message: 'only a file sheet can ask for a note' });
       }
-      const { headSha, path, startLine, endLine, suggest } = parsed.data;
+      const { headSha, path, startLine, endLine, suggest, rename } = parsed.data;
       if (headSha !== sheet.sha) {
         return err({ code: 'invalid-request', message: 'headSha is not the sheet’s commit' });
       }
@@ -912,7 +974,15 @@ export function createIpcHandlers(
       if (!checked.ok) {
         return checked;
       }
-      composeNote({ sessionId, headSha, path, startLine, endLine, suggest });
+      composeNote({
+        sessionId,
+        headSha,
+        path,
+        startLine,
+        endLine,
+        suggest,
+        ...(rename !== undefined && { rename }),
+      });
       return ok({ sent: true });
     },
     'sheet:open-description': async (request): Promise<IpcResult<OpenedView>> => {

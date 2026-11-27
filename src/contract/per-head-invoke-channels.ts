@@ -14,6 +14,8 @@ export const perHeadInvokeChannels = Object.freeze([
   'github:preview-review',
   'github:post-review',
   'lsp:call-hierarchy',
+  'lsp:prepare-rename',
+  'lsp:rename',
   'terminal:open',
   'setup:status',
   'setup:run',

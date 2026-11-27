@@ -125,6 +125,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     stage: diff,
     'add-suggestion': diff,
     peek: diff,
+    'suggest-rename': app,
     flow: diff,
     stop: app,
     'open-in-editor': app,

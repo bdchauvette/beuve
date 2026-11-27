@@ -27,6 +27,8 @@ export function parseServerCapabilities(result: unknown): LspServerCapabilities 
     references: isEnabled('referencesProvider'),
     hover: isEnabled('hoverProvider'),
     documentSymbol: isEnabled('documentSymbolProvider'),
+    rename: isEnabled('renameProvider'),
+    prepareRename: hasPrepareProvider(raw['renameProvider']),
     raw,
   };
 }
@@ -36,4 +38,14 @@ function encodingFrom(value: unknown): PositionEncoding {
     return value;
   }
   return positionEncodings.utf16;
+}
+
+/** `RenameOptions.prepareProvider`: only the options object can say it. */
+function hasPrepareProvider(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'prepareProvider' in value &&
+    value.prepareProvider === true
+  );
 }
