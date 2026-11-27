@@ -1,5 +1,7 @@
 import { errorFrom } from '#x/error/error-from.ts';
 
+import { createSanitizerInputPolicy } from './create-sanitizer-input-policy.ts';
+
 /** The only script URL the renderer creates: the `@pierre/diffs` highlighting worker (ADR 0050). */
 const highlighterWorker = 'diff-worker/worker.js';
 const svgNamespace = 'http://www.w3.org/2000/svg';
@@ -43,10 +45,11 @@ const selfTestHtml = '<b>b</b><script>0</script><a href="#">a</a>';
  * policy parses with `parseHTMLUnsafe` and a configuration that removes the unsafe set
  * (`removeUnsafe()`: scripts, frames, event handler attributes), every navigating element and SVG
  * animation, then keeps a `<use>` only when it points into the document (`#id`). The unsafe parse
- * is itself a Trusted Types sink, so it receives the input through a pass-through policy,
- * `beuve-sanitizer-input`, that only the parser's closure holds; the CSP's `trusted-types` list
- * has no `'allow-duplicates'`, so nothing can create either name again. The one script URL
- * allowed is the highlighting worker's; any other throws.
+ * is itself a Trusted Types sink (from Chromium 158, for its options too), so it receives its
+ * input and options through a pass-through policy, `beuve-sanitizer-input`, that only the
+ * parser's closure holds; the CSP's `trusted-types` list has no `'allow-duplicates'`, so nothing
+ * can create either name again. The one script URL allowed is the highlighting worker's; any
+ * other throws.
  *
  * It fails closed: without Trusted Types or a Sanitizer API that honors a configuration, it
  * claims `default` with a policy that throws, replaces the page with the error, and throws.
@@ -97,7 +100,7 @@ function failClosed(factory: TrustedTypePolicyFactory | undefined, reason: strin
 
 /**
  * Parses through `beuve-sanitizer-input`, which only the returned closure holds, with the library
- * sanitizer, after a self-test parse shows the sanitizer is honored. Fails closed if any of it
+ * sanitizer (admitted by the same policy where the parser's options are a sink), after a self-test parse shows the sanitizer is honored. Fails closed if any of it
  * throws or the self-test fails.
  */
 function sanitizingParser(
@@ -105,15 +108,11 @@ function sanitizingParser(
   parser: DocumentParsers,
 ): (html: string) => Document {
   try {
-    const input = factory.createPolicy('beuve-sanitizer-input', {
-      createHTML: (html: string): string => {
-        return html;
-      },
-    });
-    const sanitizer = librarySanitizer();
+    const input = createSanitizerInputPolicy(factory);
+    const options = input.createParserOptions({ sanitizer: librarySanitizer() });
     const parse = (html: string): Document => {
       // eslint-disable-next-line no-restricted-syntax -- the sanctioned parse: a sanitizer, a pass-through input policy, then `withoutForeignUses`.
-      return parser.parseHTMLUnsafe(input.createHTML(html), { sanitizer });
+      return parser.parseHTMLUnsafe(input.createHTML(html), options);
     };
     if (!isSanitized(parse(selfTestHtml))) {
       throw new TypeError('its parseHTMLUnsafe ignores the sanitizer');
