@@ -14,6 +14,7 @@ import type {
   UraOrigin,
   UraStatus,
   UraStoreError,
+  UraSuggestion,
 } from './ura-item.ts';
 import { uraSeverities } from './ura-severities.ts';
 import type { UraSeverity } from './ura-severities.ts';
@@ -23,15 +24,18 @@ type CorruptRow = Extract<UraStoreError, { kind: 'corrupt-row' }>;
 type Row = Record<string, SQLOutputValue>;
 
 /**
- * Validates a `ura_items` row and maps it to an item, re-checking it with the same rules as the
- * constructors (including re-parsing the patch), so a row no build could have written is a
- * `corrupt-row` error rather than a cast.
+ * Validates a `ura_items` row and its `ura_item_suggestions` rows (in position order) and maps them
+ * to an item, re-checking it with the same rules as the constructors, so a row no build could have
+ * written is a `corrupt-row` error rather than a cast.
  */
-export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
+export function uraItemFromRow(
+  row: Row,
+  suggestionRows: readonly Row[],
+): Result<UraItem, CorruptRow> {
   const corrupt = (reason: string): Result<UraItem, CorruptRow> => {
     return err({ kind: 'corrupt-row', table: 'ura_items', id: String(row['id']), reason });
   };
-  const { id, session_id, head_sha, severity, blocking, title, body, patch } = row;
+  const { id, session_id, head_sha, severity, blocking, title, body } = row;
   const { created_at, updated_at } = row;
   if (!isUuid(id) || !isUuid(session_id)) {
     return corrupt('id or session_id is not a UUID');
@@ -48,9 +52,6 @@ export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
   if (typeof title !== 'string' || typeof body !== 'string') {
     return corrupt('title or body is not text');
   }
-  if (patch !== null && typeof patch !== 'string') {
-    return corrupt('patch is not text');
-  }
   if (!isIsoTimestamp(created_at) || !isIsoTimestamp(updated_at)) {
     return corrupt('created_at or updated_at is not an ISO-8601 UTC timestamp');
   }
@@ -59,6 +60,15 @@ export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
   const status = statusFrom(row);
   if (typeof anchor === 'string' || typeof origin === 'string' || typeof status === 'string') {
     return corrupt([anchor, origin, status].filter((part) => typeof part === 'string').join('; '));
+  }
+  const suggestions = suggestionsFrom(suggestionRows);
+  if (typeof suggestions === 'string') {
+    return err({
+      kind: 'corrupt-row',
+      table: 'ura_item_suggestions',
+      id,
+      reason: suggestions,
+    });
   }
   const item = validateUraItem({
     id: id as UraItemId,
@@ -70,7 +80,7 @@ export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
     origin,
     title,
     body,
-    suggestion: patch ?? undefined,
+    suggestions,
     status,
     createdAt: created_at,
     updatedAt: updated_at,
@@ -165,6 +175,27 @@ function statusFrom(row: Row): UraStatus | string {
       return 'status is unknown';
     }
   }
+}
+
+function suggestionsFrom(rows: readonly Row[]): UraSuggestion[] | string {
+  const suggestions: UraSuggestion[] = [];
+  for (const { path, start_line, end_line, replacement } of rows) {
+    if (
+      typeof path !== 'string' ||
+      typeof replacement !== 'string' ||
+      !isInteger(start_line) ||
+      !isInteger(end_line)
+    ) {
+      return 'path, start_line, end_line or replacement is missing';
+    }
+    suggestions.push({
+      path,
+      startLine: Number(start_line),
+      endLine: Number(end_line),
+      replacement,
+    });
+  }
+  return suggestions;
 }
 
 function isInteger(value: unknown): value is number | bigint {

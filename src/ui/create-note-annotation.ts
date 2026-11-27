@@ -3,6 +3,7 @@ import type { UraItemView } from '#contract/ipc-contract.ts';
 import { createAnnotationHead } from './create-annotation-head.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { noteMarksFrom } from './note-marks-from.ts';
+import { suggestionPreviewFrom } from './suggestion-preview-from.ts';
 import './primitives/beuve-agent-mark.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 
@@ -76,10 +77,11 @@ function noteText(item: UraItemView): NoteText {
     return { text: item.title, isBodyText: false };
   }
   const [line = ''] = item.body.trim().split('\n', 1);
-  if (line !== '' || item.suggestedPatch === undefined) {
+  const preview = suggestionPreviewFrom(item);
+  if (line !== '' || preview === undefined) {
     return { text: line, isBodyText: true };
   }
-  const added = item.suggestedPatch
+  const added = preview
     .split('\n')
     .find((patchLine) => patchLine.startsWith('+') && !patchLine.startsWith('+++'));
   if (added === undefined) {

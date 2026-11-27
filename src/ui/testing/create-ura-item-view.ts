@@ -19,6 +19,7 @@ export function createUraItemView(overrides: Partial<UraItemView> = {}): UraItem
     origin: { kind: 'human' },
     title: 'Handle the empty list',
     body: '',
+    suggestions: [],
     status: { kind: 'staged' },
     createdAt: '2026-10-28T12:00:00.000Z',
     updatedAt: '2026-10-28T12:00:00.000Z',

@@ -4,6 +4,7 @@ import { test as baseTest } from '#testing/test.ts';
 import type { UraDeps } from '../ura-item.ts';
 import { uraFindingConfidenceMigration } from '../ura-finding-confidence-migration.ts';
 import { uraMigrations } from '../ura-migrations.ts';
+import { uraSuggestionsMigration } from '../ura-suggestions-migration.ts';
 import { fixedUraDeps } from './fixed-ura-deps.ts';
 import { testUraIds } from './test-ura-ids.ts';
 
@@ -19,6 +20,7 @@ export const test = baseTest
       { id: 'test-0000-sessions-stub', up: 'CREATE TABLE sessions (id TEXT PRIMARY KEY) STRICT;' },
       ...uraMigrations,
       uraFindingConfidenceMigration,
+      uraSuggestionsMigration,
     ]);
     const insert = db.prepare('INSERT INTO sessions (id) VALUES (?);');
     insert.run(testUraIds.sessionId);

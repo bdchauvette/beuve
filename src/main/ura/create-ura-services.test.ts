@@ -49,9 +49,19 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
         sessionId,
         anchor: { kind: 'change' },
         severity: 'nitpick',
-        title: 'Patch on the whole change',
+        title: 'Past the end',
         body: '',
-        suggestedPatch: '@@ -1 +1 @@\n-a\n+b\n',
+        suggestions: [{ path: 'src/app.ts', startLine: 8, endLine: 8, replacement: 'x' }],
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+    await expect(
+      services.ura.create({
+        sessionId,
+        anchor: { kind: 'change' },
+        severity: 'nitpick',
+        title: 'No such file',
+        body: '',
+        suggestions: [{ path: 'src/none.ts', startLine: 1, endLine: 0, replacement: 'x' }],
       }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 
@@ -59,23 +69,53 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(listed.items.map((item) => item.id)).toStrictEqual([first.id, second.id]);
     expect(listed.derivedVerdict).toBe('request-changes');
 
-    const patch = '@@ -2 +2 @@\n-const answer = 1;\n+const answer = 2;\n';
+    const suggestion = {
+      path: 'src/app.ts',
+      startLine: 2,
+      endLine: 2,
+      replacement: '  const answer = 2;',
+    };
     const edited = okValueFrom(
-      await services.ura.update({ itemId: first.id, severity: 'nitpick', suggestedPatch: patch }),
+      await services.ura.update({
+        itemId: first.id,
+        severity: 'nitpick',
+        suggestions: [suggestion],
+      }),
     );
     expect(edited).toMatchObject({
       severity: 'nitpick',
       blocking: false,
       title: 'Name the constant',
     });
-    expect(edited.suggestedPatch).toBe(`--- a/src/app.ts\n+++ b/src/app.ts\n${patch}`);
+    expect(edited.suggestions).toStrictEqual([
+      {
+        ...suggestion,
+        patch: [
+          '--- a/src/app.ts',
+          '+++ b/src/app.ts',
+          '@@ -1,5 +1,5 @@',
+          ' export function answer(): number {',
+          '-  const answer = 1;',
+          '+  const answer = 2;',
+          '   return answer;',
+          ' }',
+          ' export function other(): number {',
+          '',
+        ].join('\n'),
+      },
+    ]);
+    expect(okValueFrom(await services.ura.list({ sessionId })).items[0]?.suggestions).toStrictEqual(
+      edited.suggestions,
+    );
     await expect(
-      services.ura.update({ itemId: first.id, suggestedPatch: '@@ -9 +9 @@\n-x\n+y\n' }),
+      services.ura.update({
+        itemId: first.id,
+        suggestions: [{ ...suggestion, startLine: 9, endLine: 9 }],
+      }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
     expect(
-      okValueFrom(await services.ura.update({ itemId: first.id, suggestedPatch: '' }))
-        .suggestedPatch,
-    ).toBeUndefined();
+      okValueFrom(await services.ura.update({ itemId: first.id, suggestions: [] })).suggestions,
+    ).toStrictEqual([]);
 
     expect(
       okValueFrom(

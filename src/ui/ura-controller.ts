@@ -8,6 +8,7 @@ import type {
   UraItemView,
   UraSeverityView,
   UraStagedView,
+  UraSuggestionDraftView,
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
@@ -23,7 +24,8 @@ export interface UraUpdateDetail {
   readonly title?: string;
   readonly body?: string;
   readonly severity?: UraSeverityView;
-  readonly suggestedPatch?: string;
+  /** Replaces the note's suggestions; `[]` removes them. */
+  readonly suggestions?: readonly UraSuggestionDraftView[];
 }
 
 /** One change to the notes list's selected notes (ADR 0144). */
@@ -231,7 +233,7 @@ export class UraController implements ReactiveController {
       blocking: request.draft.blocking,
       title: request.draft.title,
       body: request.draft.body,
-      ...(request.suggestedPatch !== undefined && { suggestedPatch: request.suggestedPatch }),
+      ...(request.suggestion !== undefined && { suggestions: [request.suggestion] }),
     });
     if (!created.ok) {
       request.settle(created.error.message);

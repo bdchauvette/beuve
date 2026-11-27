@@ -14,7 +14,6 @@ export function withUraStatus(
 ): Result<UraItem, UraItemError> {
   return validateUraItem({
     ...item,
-    suggestion: item.suggestion?.text,
     status,
     updatedAt: now.toString({ fractionalSecondDigits: 3 }),
   });

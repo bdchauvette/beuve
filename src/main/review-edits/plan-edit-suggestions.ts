@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { UraAnchorView } from '#contract/ipc-contract.ts';
+import type { UraAnchorView, UraSuggestionDraftView } from '#contract/ipc-contract.ts';
 import type { DiffFile, DiffHunk } from '#internal/git/diff-model.ts';
 import { fenceCodeBlock } from '#internal/ura/fence-code-block.ts';
 import { parseSuggestedPatch } from '#internal/ura/parse-suggested-patch.ts';
@@ -11,8 +11,8 @@ export interface NoteAtHead {
   readonly path: string;
   readonly startLine: number;
   readonly endLine: number;
-  /** Its suggested patch, if it has one. */
-  readonly suggestion: string | undefined;
+  /** Its suggestions; none when it has none. */
+  readonly suggestions: readonly UraSuggestionDraftView[];
 }
 
 /** What an earlier harvest made of a target: the item, and the content it carried. */
@@ -53,6 +53,8 @@ export interface PlannedEdit {
   readonly body: string;
   /** The suggested patch, for `suggestion`. */
   readonly patch?: string;
+  /** The patch as the note's suggestions (ADR 0162), for `suggestion`. */
+  readonly suggestions?: readonly UraSuggestionDraftView[];
   /** The edit as a unified diff, to preview: the patch, or the diff a note's block holds. */
   readonly diff: string;
   readonly fingerprint: string;
@@ -101,6 +103,7 @@ interface Draft {
   readonly title: string;
   readonly body: string;
   readonly patch?: string;
+  readonly suggestions?: readonly UraSuggestionDraftView[];
   readonly diff: string;
   /** The note this suggestion attaches to, when one covers it. */
   readonly attachTo?: NoteAtHead;
@@ -229,7 +232,7 @@ function lineDrafts(file: DiffFile, head: HeadFile, input: EditPlanInput): reado
 
 /** A note can take a harvested patch when it has none, or only one an earlier harvest gave it. */
 function isAttachable(note: NoteAtHead, input: EditPlanInput): boolean {
-  if (note.suggestion === undefined) {
+  if (note.suggestions.length === 0) {
     return true;
   }
   return input.harvested.values().some((harvest) => harvest.itemId === note.itemId);
@@ -324,9 +327,29 @@ function suggestionDraft({ region, head, input, note }: SuggestionSource): Draft
     title: `Suggested change to ${describeLines(region)}`,
     body: `From review edits on \`${input.branch}\`.`,
     patch: parsed.value.text,
+    suggestions: [suggestionOf(region, head)],
     diff: parsed.value.text,
     ...(note !== undefined && { attachTo: note }),
   };
+}
+
+/**
+ * The region as a suggestion. A replacement of `''` is no lines, so a region replaced by one empty
+ * line takes a head line next to it along (the one after, else the one before).
+ */
+function suggestionOf(region: Region, head: HeadFile): UraSuggestionDraftView {
+  const { path, lines } = head;
+  const replacement = region.replacement.join('\n');
+  const isOneEmptyLine = region.replacement.length === 1 && replacement === '';
+  if (isOneEmptyLine && region.end < lines.length) {
+    const after = lines[region.end] ?? '';
+    return { path, startLine: region.start, endLine: region.end + 1, replacement: `\n${after}` };
+  }
+  if (isOneEmptyLine && region.start > 1) {
+    const before = lines[region.start - 2] ?? '';
+    return { path, startLine: region.start - 1, endLine: region.end, replacement: `${before}\n` };
+  }
+  return { path, startLine: region.start, endLine: region.end, replacement };
 }
 
 function lineNote(region: Region, head: HeadFile, input: EditPlanInput): Draft {
@@ -414,7 +437,7 @@ function decide(draft: Draft, input: EditPlanInput): PlannedEdit {
   }
   if (attachTo !== undefined) {
     let action: EditAction = 'attach';
-    if (attachTo.suggestion === draft.patch) {
+    if (JSON.stringify(attachTo.suggestions) === JSON.stringify(draft.suggestions ?? [])) {
       action = 'unchanged';
     }
     return { ...planned, fingerprint, action, itemId: attachTo.itemId };

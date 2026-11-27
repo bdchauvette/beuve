@@ -2,17 +2,24 @@ import { describe } from 'vitest';
 
 import { buildGithubReview } from './build-github-review.ts';
 import { createSampleArtifact } from './testing/create-sample-artifact.ts';
+import { createTestEntry } from './testing/create-test-entry.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
 import type { UraArtifact } from './ura-artifact.ts';
 import type { UraItemCandidate } from './validate-ura-item.ts';
 import { test } from './testing/test.ts';
 
-function withItem(overrides: Partial<UraItemCandidate>): UraArtifact {
+/** Overrides of the test item, and a patch its suggestions come from. */
+interface ItemOverrides extends Partial<UraItemCandidate> {
+  readonly patch?: string;
+}
+
+function withItem({ patch, ...overrides }: ItemOverrides): UraArtifact {
   const item = createTestUraItem({ headSha: testUraIds.laterHeadSha, ...overrides });
+  const placement = { kind: 'current', anchor: item.anchor } as const;
   return {
     ...createSampleArtifact({ value: 'comment', source: 'derived' }),
-    entries: [{ item, placement: { kind: 'current', anchor: item.anchor } }],
+    entries: [createTestEntry({ item, placement, ...(patch !== undefined && { patch }) })],
   };
 }
 
@@ -103,7 +110,7 @@ describe('buildGithubReview', () => {
     const review = buildGithubReview(
       withItem({
         anchor: { kind: 'lines', path: 'src/app.ts', startLine: 11, endLine: 11 },
-        suggestion: '@@ -10,3 +10,4 @@\n a\n-b\n+B\n+B2\n c\n',
+        patch: '@@ -10,3 +10,4 @@\n a\n-b\n+B\n+B2\n c\n',
       }),
     );
     expect(review.comments).toStrictEqual([
@@ -132,8 +139,7 @@ describe('buildGithubReview', () => {
     const review = buildGithubReview(
       withItem({
         anchor: { kind: 'lines', path: 'src/app.ts', startLine: 10, endLine: 12 },
-        suggestion:
-          '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -9,5 +9,4 @@\n z\n-a\n-b\n-c\n+a\n+B\n y\n',
+        patch: '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -9,5 +9,4 @@\n z\n-a\n-b\n-c\n+a\n+B\n y\n',
       }),
     );
     expect(review.comments).toStrictEqual([
@@ -143,10 +149,10 @@ describe('buildGithubReview', () => {
   });
 
   test('suggests a deletion as an empty block, and insertions at the edges', ({ expect }) => {
-    const deletion = buildGithubReview(withItem({ suggestion: '@@ -10,3 +9,0 @@\n-a\n-b\n-c\n' }));
+    const deletion = buildGithubReview(withItem({ patch: '@@ -10,3 +9,0 @@\n-a\n-b\n-c\n' }));
     expect(deletion.comments[0]?.body).toContain('```suggestion\n```');
     const inserted = buildGithubReview(
-      withItem({ suggestion: '@@ -9,5 +9,6 @@\n z\n+top\n a\n b\n c\n y\n' }),
+      withItem({ patch: '@@ -9,5 +9,6 @@\n z\n+top\n a\n b\n c\n y\n' }),
     );
     expect(inserted.comments[0]?.body).toContain('```suggestion\ntop\na\nb\nc\n```');
   });
@@ -154,7 +160,7 @@ describe('buildGithubReview', () => {
   test('falls back to a diff block when the patch does not show every anchored line', ({
     expect,
   }) => {
-    const review = buildGithubReview(withItem({ suggestion: '@@ -11 +11 @@\n-b\n+B\n' }));
+    const review = buildGithubReview(withItem({ patch: '@@ -11 +11 @@\n-b\n+B\n' }));
     expect(review.comments[0]?.body).toContain(
       '```diff\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -11 +11 @@\n-b\n+B\n```',
     );
@@ -165,7 +171,7 @@ describe('buildGithubReview', () => {
     const review = buildGithubReview(
       withItem({
         anchor: { kind: 'lines', path: 'src/app.ts', startLine: 10, endLine: 10 },
-        suggestion: '@@ -10 +10 @@\n-a\n+const s = ```;\n',
+        patch: '@@ -10 +10 @@\n-a\n+const s = ```;\n',
       }),
     );
     expect(review.comments[0]?.body).toContain('````suggestion\nconst s = ```;\n````');
@@ -222,7 +228,7 @@ describe('buildGithubReview', () => {
       withItem({
         origin: { kind: 'chat-answer', messageId: 'm1', finding: 0, confidence: 0.876 },
         body: 'Edited by the reviewer.',
-        suggestion: '@@ -10,3 +10,3 @@\n a\n-b\n+c\n d\n',
+        patch: '@@ -10,3 +10,3 @@\n a\n-b\n+c\n d\n',
       }),
     );
     expect(

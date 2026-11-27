@@ -95,14 +95,17 @@ describe('createReviewEditsServices (integration: git + SQLite, no Electron)', (
     const { items } = okValueFrom(await services.ura.list({ sessionId }));
     expect(
       items.map((item) => {
-        return [item.anchor, item.suggestedPatch !== undefined, item.body.includes('```diff')];
+        return [item.anchor, item.suggestions.length > 0, item.body.includes('```diff')];
       }),
     ).toStrictEqual([
       [{ kind: 'lines', path: 'src/a.ts', startLine: 3, endLine: 3 }, true, false],
       [{ kind: 'lines', path: 'src/a.ts', startLine: 8, endLine: 8 }, false, true],
       [{ kind: 'change' }, false, true],
     ]);
-    expect(items[0]?.suggestedPatch).toContain('-three\n+THREE\n');
+    expect(items[0]?.suggestions).toMatchObject([
+      { path: 'src/a.ts', startLine: 3, endLine: 3, replacement: 'THREE' },
+    ]);
+    expect(items[0]?.suggestions[0]?.patch).toContain('-three\n+THREE\n');
 
     const second = okValueFrom(await services.reviewEdits.previewSuggestions({ sessionId }));
     expect(second.edits.map((edit) => edit.action)).toStrictEqual([
@@ -159,7 +162,7 @@ describe('createReviewEditsServices (integration: git + SQLite, no Electron)', (
     });
     const [item] = okValueFrom(await services.ura.list({ sessionId })).items;
     expect(item).toMatchObject({ id: note.id, title: 'These names', body: 'Capitalize?' });
-    expect(item?.suggestedPatch).toContain('-three\n-four\n+Three\n+FOUR\n');
+    expect(item?.suggestions[0]?.patch).toContain('-three\n-four\n+Three\n+FOUR\n');
   });
 
   test('discards only what the confirmation showed, then the branch and worktree are gone', async ({

@@ -14,6 +14,7 @@ import type {
   UpdateUraItemRequest,
   UraAnchorView,
   UraItemView,
+  UraSuggestionDraftView,
 } from '#contract/ipc-contract.ts';
 
 import type { CommandId } from '#contract/command-catalog.ts';
@@ -66,6 +67,7 @@ import { cardIndexAtLine } from './card-index-at-line.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
+import { editedPatchFrom } from './edited-patch-from.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
 import './primitives/beuve-commit.ts';
@@ -94,8 +96,8 @@ export interface UraCreateRequest {
   readonly anchor: UraAnchorView;
   readonly headSha: string;
   readonly draft: UraDraft;
-  /** The suggestion an Add Suggestion edit produced (ADR 0043), staged with the note. */
-  readonly suggestedPatch?: string;
+  /** The suggestion an Add Suggestion edit produced (ADR 0043, 0162), staged with the note. */
+  readonly suggestion?: UraSuggestionDraftView;
   readonly settle: (error: string | undefined) => void;
 }
 
@@ -103,6 +105,7 @@ export interface UraCreateRequest {
 interface ComposerOptions {
   readonly anchor?: UraAnchorView;
   readonly suggestedPatch?: string;
+  readonly suggestion?: UraSuggestionDraftView;
   readonly edit?: NoteEdit;
 }
 
@@ -354,7 +357,7 @@ export class BeuveDiffStream extends LitElement {
       anchor: composer.anchor,
       headSha: review.headSha,
       draft: event.detail,
-      ...(composer.suggestedPatch !== undefined && { suggestedPatch: composer.suggestedPatch }),
+      ...(composer.suggestion !== undefined && { suggestion: composer.suggestion }),
       settle: (error): void => {
         if (this.composer?.path !== composer.path) {
           return;
@@ -389,7 +392,7 @@ export class BeuveDiffStream extends LitElement {
 
   /** An Add Suggestion edit saved: onto the note it was made for, else into a new note's composer. */
   private readonly onSuggestionSave = (event: CustomEvent<SuggestionSaveDetail>): void => {
-    const { target, patch } = event.detail;
+    const { target, patch, suggestion } = event.detail;
     if (target.itemId === undefined) {
       this.openComposer({
         anchor: {
@@ -399,12 +402,13 @@ export class BeuveDiffStream extends LitElement {
           endLine: target.endLine,
         },
         suggestedPatch: patch,
+        suggestion,
       });
       return;
     }
     this.dispatchEvent(
       new CustomEvent('beuve-ura-update', {
-        detail: { itemId: target.itemId, suggestedPatch: patch },
+        detail: { itemId: target.itemId, suggestions: [suggestion] },
         bubbles: true,
         composed: true,
       }),
@@ -1014,12 +1018,13 @@ export class BeuveDiffStream extends LitElement {
     this.activeIndex = index;
     this.activeHunk = -1;
     const card = await this.loadedCard(index);
+    const patch = editedPatchFrom(item);
     const target: EditTarget = {
       path: anchor.path,
       startLine: anchor.startLine,
       endLine: anchor.endLine,
       itemId,
-      ...(item.suggestedPatch !== undefined && { patch: item.suggestedPatch }),
+      ...(patch !== undefined && { patch }),
     };
     await card?.startEdit(target);
   }
@@ -1029,7 +1034,7 @@ export class BeuveDiffStream extends LitElement {
    * with the suggestion an Add Suggestion edit produced, or the staged note it edits.
    */
   private openComposer(options: ComposerOptions = {}): void {
-    const { anchor: given, suggestedPatch, edit } = options;
+    const { anchor: given, suggestedPatch, suggestion, edit } = options;
     const { review } = this;
     const files = this.shownFiles();
     if (given !== undefined && given.kind !== 'change') {
@@ -1054,6 +1059,7 @@ export class BeuveDiffStream extends LitElement {
       origin: { kind: 'human' },
       title: '',
       body: '',
+      suggestions: [],
       status: { kind: 'staged' },
       createdAt: '',
       updatedAt: '',
@@ -1065,6 +1071,7 @@ export class BeuveDiffStream extends LitElement {
       saving: false,
       error: '',
       ...(suggestedPatch !== undefined && { suggestedPatch }),
+      ...(suggestion !== undefined && { suggestion }),
       ...(edit !== undefined && { edit }),
     };
     void this.revealComposer(anchor);

@@ -290,7 +290,7 @@ export function createReviewEditsServices(
           path: item.anchor.path,
           startLine: item.anchor.startLine,
           endLine: item.anchor.endLine,
-          suggestion: item.suggestion?.text,
+          suggestions: item.suggestions,
         });
       }
     }
@@ -509,7 +509,7 @@ export function createReviewEditsServices(
             severity: 'issue',
             title: edit.title,
             body: edit.body,
-            ...(edit.patch !== undefined && { suggestedPatch: edit.patch }),
+            ...(edit.suggestions !== undefined && { suggestions: edit.suggestions }),
           });
           if (!created.ok) {
             return created;
@@ -593,12 +593,12 @@ export function createReviewEditsServices(
   };
 }
 
-/** What `ura:update` gets for an attach or an update: the patch, or a note's new body. */
+/** What `ura:update` gets for an attach or an update: the suggestions, or a note's new body. */
 function updateOf(edit: EditPlan['edits'][number], itemId: string): UpdateUraItemRequest {
   if (edit.kind === 'suggestion') {
-    return { itemId, suggestedPatch: edit.patch ?? '' };
+    return { itemId, suggestions: edit.suggestions ?? [] };
   }
-  return { itemId, body: edit.body, suggestedPatch: '' };
+  return { itemId, body: edit.body, suggestions: [] };
 }
 
 function describeGitRefusal(error: GitError): string {

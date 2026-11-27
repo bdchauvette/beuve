@@ -23,6 +23,7 @@ import type {
   UraAnchorView,
   ReviewThreadView,
   UraItemView,
+  UraSuggestionDraftView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-flow-portal.ts';
@@ -122,8 +123,10 @@ export interface ComposerState {
   readonly where: string;
   readonly saving: boolean;
   readonly error: string;
-  /** The suggestion an Add Suggestion edit produced, staged with the note (ADR 0043). */
+  /** The suggestion an Add Suggestion edit produced, staged with the note (ADR 0043), as a patch to preview. */
   readonly suggestedPatch?: string;
+  /** That suggestion as the note will carry it (ADR 0162). */
+  readonly suggestion?: UraSuggestionDraftView;
   /** The staged note this composer edits in place of its marker (ADR 0129); absent for a new one. */
   readonly edit?: NoteEdit;
 }
@@ -171,6 +174,8 @@ export interface SideLines {
 export interface SuggestionSaveDetail {
   readonly target: EditTarget;
   readonly patch: string;
+  /** The same edit as the note's suggestion (ADR 0162). */
+  readonly suggestion: UraSuggestionDraftView;
 }
 
 /** What a card annotates under a head line (or above the diff, at line 0). */
@@ -1984,7 +1989,11 @@ ${splitPatch(file.patch).map((line) => {
       }
       case 'patch': {
         this.endEdit();
-        const detail: SuggestionSaveDetail = { target: edit.target, patch: plan.text };
+        const detail: SuggestionSaveDetail = {
+          target: edit.target,
+          patch: plan.text,
+          suggestion: plan.suggestion,
+        };
         this.dispatchEvent(
           new CustomEvent('beuve-suggestion-save', { detail, bubbles: true, composed: true }),
         );

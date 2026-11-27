@@ -51,6 +51,7 @@ import { fieldStyles } from './primitives/field-styles.ts';
 import { completionListStyles } from './completion-list-styles.ts';
 import { EmojiCompletion } from './emoji-completion.ts';
 import { emojiCompletionStyles } from './emoji-completion-styles.ts';
+import { suggestionPreviewFrom } from './suggestion-preview-from.ts';
 
 /** A status line under the export buttons; `tone` colors it. */
 export interface NoteListNotice {
@@ -739,7 +740,7 @@ export class BeuveNoteList extends LitElement {
             },
             (found, event): void => {
               event.stopPropagation();
-              this.emit('beuve-ura-update', { itemId: found.id, suggestedPatch: '' });
+              this.emit('beuve-ura-update', { itemId: found.id, suggestions: [] });
             },
           ),
           export: withPayload(
@@ -1144,7 +1145,7 @@ export class BeuveNoteList extends LitElement {
       return '';
     };
     const title = field('title').trim();
-    if (title === '' && field('body').trim() === '' && item.suggestedPatch === undefined) {
+    if (title === '' && field('body').trim() === '' && item.suggestions.length === 0) {
       form.querySelector('input')?.focus();
       return;
     }
@@ -1217,10 +1218,12 @@ export class BeuveNoteList extends LitElement {
       <div class="note-content">
         ${this.renderNoteText(item)}
         ${
-          item.suggestedPatch !== undefined &&
+          item.suggestions.length > 0 &&
           hasNoteText(item) &&
           (isCursor || this.editingId === item.id)
-            ? html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`
+            ? html`<beuve-patch-preview
+                .patch=${suggestionPreviewFrom(item) ?? ''}
+              ></beuve-patch-preview>`
             : nothing
         }
         ${
@@ -1244,12 +1247,13 @@ export class BeuveNoteList extends LitElement {
       >`;
     }
     const body = item.body.trim();
-    if (body !== '' || item.suggestedPatch === undefined) {
+    const preview = suggestionPreviewFrom(item);
+    if (body !== '' || preview === undefined) {
       return html`<span class="note-text"
         >${parseInlineTitle(body.replaceAll(/\s+/gu, ' ')).map((span) => renderInlineSpan(span))}</span
       >`;
     }
-    return html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`;
+    return html`<beuve-patch-preview .patch=${preview}></beuve-patch-preview>`;
   }
 
   /** The words for what is marked, then ✨ for an agent's note, the least of them; nothing when nothing is. */
@@ -1366,7 +1370,8 @@ export class BeuveNoteList extends LitElement {
       item.status.kind === 'staged' &&
       item.anchor.kind === 'lines' &&
       item.placement.kind === 'current';
-    if (!isEditable && item.suggestedPatch === undefined) {
+    const hasSuggestion = item.suggestions.length > 0;
+    if (!isEditable && !hasSuggestion) {
       return nothing;
     }
     return html`<div class="suggestion-actions">
@@ -1378,14 +1383,13 @@ export class BeuveNoteList extends LitElement {
               data-action="edit-suggestion"
               data-item-id=${item.id}
             >
-              ${item.suggestedPatch === undefined ? 'Add suggestion…' : 'Edit suggestion…'}
+              ${hasSuggestion ? 'Edit suggestion…' : 'Add suggestion…'}
             </button>`
           : nothing
       }
       ${
-        item.suggestedPatch === undefined
-          ? nothing
-          : html`<button
+        hasSuggestion
+          ? html`<button
               class="button"
               type="button"
               data-action="remove-suggestion"
@@ -1393,6 +1397,7 @@ export class BeuveNoteList extends LitElement {
             >
               Remove suggestion
             </button>`
+          : nothing
       }
     </div>`;
   }

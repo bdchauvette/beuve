@@ -1,9 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { uraItemFromRow } from './ura-item-from-row.ts';
+import { uraItemsFromRows } from './ura-items-from-rows.ts';
 import type { UraItem, UraItemId, UraStoreError } from './ura-item.ts';
 
 /** One item by id, whatever its status. */
@@ -15,5 +16,13 @@ export function findUraItem(
   if (row === undefined) {
     return err({ kind: 'item-not-found', id });
   }
-  return uraItemFromRow(row);
+  const items = uraItemsFromRows(db, [row]);
+  if (!items.ok) {
+    return items;
+  }
+  const [item] = items.value;
+  if (item === undefined) {
+    return err({ kind: 'item-not-found', id });
+  }
+  return ok(item);
 }

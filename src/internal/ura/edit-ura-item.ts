@@ -1,16 +1,16 @@
 import type { Result } from '#x/result/result.ts';
 
-import type { UraItem, UraItemError } from './ura-item.ts';
+import type { UraItem, UraItemError, UraSuggestion } from './ura-item.ts';
 import type { UraSeverity } from './ura-severities.ts';
 import { validateUraItem } from './validate-ura-item.ts';
 
-/** Fields a reviewer can change in the notes list. An empty `suggestion` removes the patch. */
+/** Fields a reviewer can change in the notes list. `suggestions` replaces them all; `[]` removes them. */
 export interface UraItemEdit {
   readonly severity?: UraSeverity;
   readonly blocking?: boolean;
   readonly title?: string;
   readonly body?: string;
-  readonly suggestion?: string;
+  readonly suggestions?: readonly UraSuggestion[];
 }
 
 /**
@@ -22,17 +22,13 @@ export function editUraItem(
   edit: UraItemEdit,
   now: Temporal.Instant,
 ): Result<UraItem, UraItemError> {
-  let suggestion = edit.suggestion ?? item.suggestion?.text;
-  if (suggestion === '') {
-    suggestion = undefined;
-  }
   return validateUraItem({
     ...item,
     severity: edit.severity ?? item.severity,
     blocking: edit.blocking ?? item.blocking,
     title: edit.title?.trim() ?? item.title,
     body: edit.body ?? item.body,
-    suggestion,
+    suggestions: edit.suggestions ?? item.suggestions,
     updatedAt: now.toString({ fractionalSecondDigits: 3 }),
   });
 }

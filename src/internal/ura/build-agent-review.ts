@@ -47,7 +47,10 @@ export interface AgentReviewItem {
   readonly title: string;
   /** Markdown. */
   readonly body: string;
-  /** A unified diff for the anchored path, against the head the item was written against. */
+  /**
+   * The unified diffs of the item's suggestions, joined, against the head the item was written
+   * against (`beuve.ura/1` carries one patch; `/2` will carry each suggestion, ADR 0162).
+   */
   readonly suggestedPatch?: string;
 }
 
@@ -130,7 +133,10 @@ export function buildAgentReview(
   };
 }
 
-function itemFrom({ item, placement }: UraEntry): AgentReviewItem {
+function itemFrom({ item, placement, suggestions }: UraEntry): AgentReviewItem {
+  const patches = suggestions.flatMap((placed) => {
+    return placed.patch ?? [];
+  });
   return {
     id: item.id,
     severity: item.severity,
@@ -139,7 +145,7 @@ function itemFrom({ item, placement }: UraEntry): AgentReviewItem {
     ...placementFrom({ item, placement }),
     title: item.title,
     body: item.body,
-    ...(item.suggestion !== undefined && { suggestedPatch: item.suggestion.text }),
+    ...(patches.length > 0 && { suggestedPatch: patches.join('') }),
   };
 }
 
@@ -179,7 +185,7 @@ function repositoryFrom(
 function placementFrom({
   item,
   placement,
-}: UraEntry): Pick<AgentReviewItem, 'anchor' | 'outdated'> {
+}: Pick<UraEntry, 'item' | 'placement'>): Pick<AgentReviewItem, 'anchor' | 'outdated'> {
   if (placement.kind === 'current') {
     return { anchor: anchorFrom(placement.anchor) };
   }

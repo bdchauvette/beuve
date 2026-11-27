@@ -82,7 +82,7 @@ describe('renderAgentReviewXml', () => {
     });
     const artifact = {
       ...createSampleArtifact(),
-      entries: [{ item, placement: { kind: 'current', anchor: item.anchor } }],
+      entries: [{ item, placement: { kind: 'current', anchor: item.anchor }, suggestions: [] }],
     } as const;
     const xml = renderAgentReviewXml(artifact);
     expect(xml).toContain('<title>a &amp; b &lt;c&gt;</title>');

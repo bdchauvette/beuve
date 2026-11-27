@@ -23,7 +23,7 @@ describe('uraMigrations', () => {
   test('accepts valid rows of every anchor, origin and status shape', ({ expect, db }) => {
     const rows = [
       valid(),
-      { ...valid(), anchor_kind: "'file'", line_start: 'NULL', line_end: 'NULL', patch: "'p'" },
+      { ...valid(), anchor_kind: "'file'", line_start: 'NULL', line_end: 'NULL' },
       { ...valid(), anchor_kind: "'change'", path: 'NULL', line_start: 'NULL', line_end: 'NULL' },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'", chat_finding: '0' },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m2'", chat_proposal: '0' },
@@ -59,11 +59,13 @@ describe('uraMigrations', () => {
     }).toThrow(/CHECK/u);
   });
 
-  test('allows an empty title only when the body says something', ({ expect, db }) => {
+  test('leaves whether a note says something to the domain, since suggestions are rows of their own', ({
+    expect,
+    db,
+  }) => {
     insertRow(db, { ...valid(), title: "''", body: "'Nice.'" });
-    expect(() => {
-      insertRow(db, { ...valid(), title: "''", body: "' '" }, 1);
-    }).toThrow(/CHECK/u);
+    insertRow(db, { ...valid(), title: "''", body: "' '" }, 1);
+    expect(db.prepare('SELECT count(*) AS n FROM ura_items;').get()?.['n']).toBe(2);
   });
 
   test.for<[string, Record<string, string>]>([
@@ -71,10 +73,6 @@ describe('uraMigrations', () => {
     [
       'a whole-change anchor with a path',
       { anchor_kind: "'change'", line_start: 'NULL', line_end: 'NULL' },
-    ],
-    [
-      'a patch on the whole change',
-      { anchor_kind: "'change'", path: 'NULL', line_start: 'NULL', line_end: 'NULL', patch: "'p'" },
     ],
     ['a human note with a finding index', { chat_finding: '0' }],
     [

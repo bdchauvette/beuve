@@ -1,3 +1,5 @@
+import type { UraSuggestionDraftView } from '#contract/ipc-contract.ts';
+
 import type { HunkSpan } from './first-hunk-line.ts';
 
 /** Head lines a suggestion replaces, 1-based and inclusive. */
@@ -7,11 +9,16 @@ export interface EditedRange {
 }
 
 /**
- * What an edit of the head file amounts to: a unified diff for the edited range, no change at
- * all, or a change outside the range (which a suggestion anchored there can't carry).
+ * What an edit of the head file amounts to: a unified diff for the edited range and the same
+ * change as the note's suggestion (ADR 0162), no change at all, or a change outside the range
+ * (which a suggestion anchored there can't carry).
  */
 export type SuggestedPatchPlan =
-  | { readonly kind: 'patch'; readonly text: string }
+  | {
+      readonly kind: 'patch';
+      readonly text: string;
+      readonly suggestion: UraSuggestionDraftView;
+    }
   | { readonly kind: 'unchanged' }
   | { readonly kind: 'outside'; readonly message: string };
 
@@ -69,7 +76,8 @@ export function buildSuggestedPatch({
   }
   const removed = before.lines.slice(prefix, range.endLine);
   const added = after.lines.slice(prefix, replacementEnd);
-  if (isSameLines(removed, added) && before.endsWithNewline === after.endsWithNewline) {
+  // A suggestion keeps the file's final newline as it is, so changing only that is no change.
+  if (isSameLines(removed, added)) {
     return { kind: 'unchanged' };
   }
   const leading = before.lines.slice(Math.max(0, prefix - contextLines), prefix);
@@ -93,6 +101,7 @@ export function buildSuggestedPatch({
   }
   return {
     kind: 'patch',
+    suggestion: suggestionFrom({ path, range, added, head: before.lines }),
     text: [
       `--- a/${path}`,
       `+++ b/${path}`,
@@ -101,6 +110,32 @@ export function buildSuggestedPatch({
       '',
     ].join('\n'),
   };
+}
+
+/** The edit as a suggestion over the range, and what it is made from. */
+interface SuggestionSource {
+  readonly path: string;
+  readonly range: EditedRange;
+  readonly added: readonly string[];
+  readonly head: readonly string[];
+}
+
+/**
+ * The range's new lines as a suggestion. A replacement of `''` is no lines, so a range replaced by
+ * one empty line takes a head line next to it along (the one after, else the one before).
+ */
+function suggestionFrom({ path, range, added, head }: SuggestionSource): UraSuggestionDraftView {
+  const { startLine, endLine } = range;
+  const replacement = added.join('\n');
+  const isOneEmptyLine = added.length === 1 && replacement === '';
+  if (isOneEmptyLine && endLine < head.length) {
+    return { path, startLine, endLine: endLine + 1, replacement: `\n${head[endLine] ?? ''}` };
+  }
+  if (isOneEmptyLine && startLine > 1) {
+    const before = head[startLine - 2] ?? '';
+    return { path, startLine: startLine - 1, endLine, replacement: `${before}\n` };
+  }
+  return { path, startLine, endLine, replacement };
 }
 
 function splitText(text: string): SplitText {

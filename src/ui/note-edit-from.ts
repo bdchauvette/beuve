@@ -1,13 +1,14 @@
 import type { UraAnchorView, UraItemView } from '#contract/ipc-contract.ts';
 
 import type { UraDraft } from './beuve-ura-composer.ts';
+import { suggestionPreviewFrom } from './suggestion-preview-from.ts';
 
 /** A staged note opened for editing in the diff: where its composer goes and what it starts with. */
 export interface NoteEdit {
   readonly itemId: string;
   readonly anchor: Exclude<UraAnchorView, { readonly kind: 'change' }>;
   readonly draft: UraDraft;
-  /** The note's suggestion, previewed in the composer and left as it is by saving. */
+  /** The note's suggestions as a patch, previewed in the composer and left as they are by saving. */
   readonly suggestedPatch?: string;
 }
 
@@ -24,10 +25,11 @@ export function noteEditFrom(item: UraItemView): NoteEdit | undefined {
   if (anchor.kind === 'change') {
     return undefined;
   }
+  const suggestedPatch = suggestionPreviewFrom(item);
   return {
     itemId: item.id,
     anchor,
     draft: { severity: item.severity, blocking: item.blocking, title: item.title, body: item.body },
-    ...(item.suggestedPatch !== undefined && { suggestedPatch: item.suggestedPatch }),
+    ...(suggestedPatch !== undefined && { suggestedPatch }),
   };
 }

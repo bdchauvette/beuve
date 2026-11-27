@@ -81,7 +81,15 @@ describe('editTargetFrom', () => {
     const item = createUraItemView({
       headSha: head(),
       anchor,
-      suggestedPatch: '@@ -2 +2 @@\n-two\n+2\n',
+      suggestions: [
+        {
+          path: 'src/a.ts',
+          startLine: 2,
+          endLine: 2,
+          replacement: '2',
+          patch: '@@ -2 +2 @@\n-two\n+2\n',
+        },
+      ],
     });
     expect(planned({ hunk: 0 }, [item])).toStrictEqual({
       path: 'src/a.ts',

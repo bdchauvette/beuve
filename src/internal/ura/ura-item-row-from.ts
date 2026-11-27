@@ -3,7 +3,7 @@ import type { SQLInputValue } from 'node:sqlite';
 import type { UraItem } from './ura-item.ts';
 
 /**
- * An item's columns (all but `position`) as named parameters for `node:sqlite`. Columns that are
+ * An item's `ura_items` columns (all but `position`; its suggestions are rows of their own) as named parameters for `node:sqlite`. Columns that are
  * NULL for this item's anchor, origin or status are left out: SQLite binds unset parameters as
  * NULL.
  */
@@ -18,7 +18,6 @@ export function uraItemRowFrom(item: UraItem): Record<string, SQLInputValue> {
     ...originColumns(item.origin),
     title: item.title,
     body: item.body,
-    ...(item.suggestion !== undefined && { patch: item.suggestion.text }),
     status: item.status.kind,
     ...(item.status.kind === 'addressed' && {
       addressed_sha: item.status.atSha,

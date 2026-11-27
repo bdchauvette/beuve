@@ -31,7 +31,15 @@ describe('noteEditFrom', () => {
     const item = createUraItemView({
       anchor,
       placement: { kind: 'current', anchor },
-      suggestedPatch: '@@ -1 +1 @@\n-a\n+b\n',
+      suggestions: [
+        {
+          path: 'src/a.ts',
+          startLine: 1,
+          endLine: 1,
+          replacement: 'b',
+          patch: '@@ -1 +1 @@\n-a\n+b\n',
+        },
+      ],
     });
     expect(noteEditFrom(item)).toMatchObject({
       anchor,

@@ -1369,6 +1369,24 @@ export type UraPlacementView =
   | { readonly kind: 'outdated'; readonly reason: UraOutdatedReasonView };
 
 /**
+ * A replacement of head lines a note suggests (ADR 0162), on the head side of its item's head.
+ * Lines are 1-based and inclusive; `endLine` is `startLine - 1` for an insertion before
+ * `startLine`. `replacement` is the new lines, `\n`-joined, without a final newline (`''` is none).
+ */
+export interface UraSuggestionDraftView {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly replacement: string;
+}
+
+/** A stored suggestion, with the unified diff main derives for it from the head's file. */
+export interface UraSuggestionView extends UraSuggestionDraftView {
+  /** Absent when the file can't be read at the item's head, or the suggestion changes nothing. */
+  readonly patch?: string;
+}
+
+/**
  * One item of the notes list (Zone 3). `anchor` is on `headSha`, the head it was written
  * against; `placement` is where it sits on the session's current head. `body` is Markdown.
  */
@@ -1384,8 +1402,8 @@ export interface UraItemView {
   readonly origin: UraOriginView;
   readonly title: string;
   readonly body: string;
-  /** A unified diff for the anchored path, against `headSha`. */
-  readonly suggestedPatch?: string;
+  /** In order, on `headSha`; may be on any path of that head. */
+  readonly suggestions: readonly UraSuggestionView[];
   readonly status: UraStatusView;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -1442,7 +1460,8 @@ export interface UraVerdictStateView {
 
 /**
  * A reviewer's note. `headSha` is the head the reviewer was shown, which `anchor` refers to; it
- * defaults to the session's current head. An empty `suggestedPatch` means none.
+ * defaults to the session's current head. Main checks each suggestion's lines against that
+ * head's file.
  */
 export interface CreateUraItemRequest {
   readonly sessionId: string;
@@ -1453,17 +1472,17 @@ export interface CreateUraItemRequest {
   readonly blocking?: boolean;
   readonly title: string;
   readonly body: string;
-  readonly suggestedPatch?: string;
+  readonly suggestions?: readonly UraSuggestionDraftView[];
 }
 
-/** Edits an item's text, label, blocking or patch; an empty `suggestedPatch` removes the patch. */
+/** Edits an item's text, label, blocking or suggestions; `suggestions` replaces them all, `[]` removes them. */
 export interface UpdateUraItemRequest {
   readonly itemId: string;
   readonly severity?: UraSeverityView;
   readonly blocking?: boolean;
   readonly title?: string;
   readonly body?: string;
-  readonly suggestedPatch?: string;
+  readonly suggestions?: readonly UraSuggestionDraftView[];
 }
 
 /**

@@ -2,7 +2,7 @@ import { describe } from 'vitest';
 
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
-import type { UraAnchor, UraItem, UraItemError, UraOrigin } from './ura-item.ts';
+import type { UraAnchor, UraItem, UraItemError, UraOrigin, UraSuggestion } from './ura-item.ts';
 import { validateUraItem } from './validate-ura-item.ts';
 import type { UraItemCandidate } from './validate-ura-item.ts';
 import { test } from './testing/test.ts';
@@ -16,10 +16,18 @@ function errorOf(overrides: Partial<UraItemCandidate>): UraItemError | undefined
 }
 
 describe('validateUraItem', () => {
-  test('accepts a valid item and parses its patch', ({ expect }) => {
+  test('accepts a valid item, with suggestions anywhere on the head', ({ expect }) => {
     expect(validateUraItem(candidate())).toStrictEqual({ ok: true, value: valid() });
-    const result = validateUraItem({ ...candidate(), suggestion: '@@ -11 +11 @@\n-a\n+b\n' });
-    expect(result.ok && result.value.suggestion?.path).toBe('src/app.ts');
+    const suggestions = [
+      suggestion({ path: 'lib/other.ts', startLine: 400, endLine: 401 }),
+      suggestion({ startLine: 1, endLine: 0 }),
+      suggestion({ startLine: 1, endLine: 3, replacement: '' }),
+      suggestion({ startLine: 4, endLine: 3 }),
+    ];
+    expect(errorOf({ suggestions })).toBeUndefined();
+    expect(
+      errorOf({ anchor: { kind: 'change' }, title: '', body: '', suggestions }),
+    ).toBeUndefined();
   });
 
   test.for<[string, UraAnchor]>([
@@ -117,21 +125,88 @@ describe('validateUraItem', () => {
     ).toBeUndefined();
   });
 
-  test('refuses a patch that does not fit the anchor', ({ expect }) => {
-    expect(errorOf({ suggestion: '@@ -1 +1 @@\n-a\n+b\n' })).toStrictEqual({
-      kind: 'invalid-patch',
-      reason: 'the patch changes lines outside 10–12',
-    });
-    expect(errorOf({ anchor: { kind: 'change' }, suggestion: '@@ -1 +1 @@\n-a\n+b\n' })?.kind).toBe(
-      'invalid-patch',
-    );
+  test.for<[string, readonly UraSuggestion[], string]>([
+    ['a bad path', [suggestion({ path: 'src/../x' })], "a suggestion's path: "],
+    ['line zero', [suggestion({ startLine: 0, endLine: 0 })], 'must be positive integers'],
+    ['a fractional line', [suggestion({ endLine: 2.5 })], 'must be positive integers'],
+    [
+      'an end before the insertion point',
+      [suggestion({ startLine: 5, endLine: 3 })],
+      'comes before',
+    ],
+    [
+      'an empty insertion',
+      [suggestion({ startLine: 5, endLine: 4, replacement: '' })],
+      'adds at least',
+    ],
+    [
+      'shared lines',
+      [suggestion({ startLine: 1, endLine: 5 }), suggestion({ startLine: 5, endLine: 6 })],
+      'must not overlap',
+    ],
+    [
+      'a line inside a longer range',
+      [
+        suggestion({ startLine: 1, endLine: 10 }),
+        suggestion({ startLine: 2, endLine: 3 }),
+        suggestion({ startLine: 7, endLine: 7 }),
+      ],
+      'must not overlap',
+    ],
+    [
+      'an insertion between a range’s lines',
+      [suggestion({ startLine: 1, endLine: 5 }), suggestion({ startLine: 3, endLine: 2 })],
+      'must not overlap',
+    ],
+    [
+      'two insertions at one place',
+      [
+        suggestion({ startLine: 3, endLine: 2 }),
+        suggestion({ startLine: 3, endLine: 2, replacement: 'y' }),
+      ],
+      'must not overlap',
+    ],
+    [
+      'a replacement over 64 KiB',
+      [suggestion({ replacement: 'é'.repeat(32 * 1024 + 1) })],
+      'at most 64 KiB',
+    ],
+    ['more than 500', suggestionsOnLines(501), 'at most 500 suggestions'],
+  ])('refuses suggestions with %s', ([, suggestions, reason], { expect }) => {
+    const error = errorOf({ suggestions });
+    expect(error?.kind).toBe('invalid-suggestion');
+    expect(error?.reason).toContain(reason);
+  });
+
+  test('lets suggestions touch: an insertion right before or after, the same lines on another path', ({
+    expect,
+  }) => {
+    const suggestions = [
+      suggestion({ startLine: 3, endLine: 2 }),
+      suggestion({ startLine: 3, endLine: 5 }),
+      suggestion({ startLine: 6, endLine: 5 }),
+      suggestion({ startLine: 6, endLine: 6 }),
+      suggestion({ path: 'src/b.ts', startLine: 3, endLine: 5 }),
+    ];
+    expect(errorOf({ suggestions })).toBeUndefined();
+    expect(errorOf({ suggestions: suggestionsOnLines(500) })).toBeUndefined();
   });
 });
+
+function suggestion(overrides: Partial<UraSuggestion>): UraSuggestion {
+  return { path: 'src/app.ts', startLine: 1, endLine: 1, replacement: 'x', ...overrides };
+}
+
+function suggestionsOnLines(count: number): UraSuggestion[] {
+  return Array.from({ length: count }, (_, index) => {
+    return suggestion({ startLine: index + 1, endLine: index + 1 });
+  });
+}
 
 function valid(): UraItem {
   return createTestUraItem();
 }
 
 function candidate(): UraItemCandidate {
-  return { ...valid(), suggestion: undefined };
+  return valid();
 }

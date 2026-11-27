@@ -32,18 +32,66 @@ describe('compileUraArtifact', () => {
       value: {
         summary: summary(),
         entries: [
-          { item: current, placement: { kind: 'current', anchor: current.anchor } },
+          {
+            item: current,
+            placement: { kind: 'current', anchor: current.anchor },
+            suggestions: [],
+          },
           {
             item: older,
             placement: {
               kind: 'current',
               anchor: { kind: 'lines', path: 'src/app.ts', startLine: 12, endLine: 14 },
             },
+            suggestions: [],
           },
         ],
         verdict: { value: 'comment', source: 'derived' },
       },
     });
+  });
+
+  test('places each suggestion on its own and derives its patch from the head texts', ({
+    expect,
+  }) => {
+    const moved = { path: 'src/app.ts', startLine: 4, endLine: 4, replacement: 'D' };
+    const touched = { path: 'src/app.ts', startLine: 1, endLine: 1, replacement: 'A' };
+    const inserted = { path: 'src/app.ts', startLine: 3, endLine: 2, replacement: 'new' };
+    const unread = { path: 'lib/x.ts', startLine: 1, endLine: 1, replacement: 'y' };
+    const item = createTestUraItem({ suggestions: [moved, touched, inserted, unread] });
+    const changed: LineMapping = {
+      ...mapping(),
+      files: [
+        {
+          kind: 'modified',
+          path: 'src/app.ts',
+          hunks: [{ oldStart: 1, oldCount: 1, newStart: 1, newCount: 3 }],
+        },
+      ],
+    };
+    const headTexts = new Map([[testUraIds.headSha, new Map([['src/app.ts', 'a\nb\nc\nd\n']])]]);
+    const result = compileUraArtifact(input({ items: [item], lineMappings: [changed], headTexts }));
+    expect(result.ok && result.value.entries[0]?.suggestions).toStrictEqual([
+      {
+        suggestion: moved,
+        placement: { kind: 'current', suggestion: { ...moved, startLine: 6, endLine: 6 } },
+        patch: '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,4 +1,4 @@\n a\n b\n c\n-d\n+D\n',
+      },
+      {
+        suggestion: touched,
+        placement: { kind: 'outdated', reason: 'lines-changed' },
+        patch: '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,4 +1,4 @@\n-a\n+A\n b\n c\n d\n',
+      },
+      {
+        suggestion: inserted,
+        placement: { kind: 'current', suggestion: { ...inserted, startLine: 5, endLine: 4 } },
+        patch: '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,4 +1,5 @@\n a\n b\n+new\n c\n d\n',
+      },
+      {
+        suggestion: unread,
+        placement: { kind: 'current', suggestion: unread },
+      },
+    ]);
   });
 
   test('marks items outdated without a mapping to this head', ({ expect }) => {

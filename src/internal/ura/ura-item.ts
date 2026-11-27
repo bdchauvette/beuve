@@ -61,6 +61,20 @@ export type UraStatus =
       readonly by: 'reviewer' | 'agent';
     };
 
+/**
+ * A replacement of head lines a note suggests (ADR 0162), on the head side of its item's
+ * `headSha`, on any path of that head's tree. Lines are 1-based and inclusive; `endLine` is
+ * `startLine - 1` for an insertion before `startLine` (after the last line when `startLine` is one
+ * past it). `replacement` is the new lines, `\n`-joined, without a final newline: `''` is no
+ * lines, so a suggestion with it deletes its lines.
+ */
+export interface UraSuggestion {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly replacement: string;
+}
+
 /** One line of a suggested patch's hunk, without its prefix. */
 export interface PatchLine {
   readonly kind: 'context' | 'added' | 'removed';
@@ -76,8 +90,8 @@ export interface PatchHunk {
 }
 
 /**
- * A unified diff that touches only its item's anchored path (and, for a line anchor, only the
- * anchored lines). Built by `parseSuggestedPatch`. `text` is normalized: `--- a/` and
+ * A unified diff that touches only one path (and, checked against a line anchor, only the
+ * anchored lines). Built by `parseSuggestedPatch`; nothing stores one (ADR 0162). `text` is normalized: `--- a/` and
  * `+++ b/` headers for `path`, then the hunks, newline-terminated.
  */
 export interface SuggestedPatch {
@@ -104,7 +118,8 @@ export interface UraItem {
   readonly title: string;
   /** Markdown; may be empty. */
   readonly body: string;
-  readonly suggestion: SuggestedPatch | undefined;
+  /** In the order they were added, never overlapping; at most 500 (`validateUraItem`). */
+  readonly suggestions: readonly UraSuggestion[];
   readonly status: UraStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -124,6 +139,7 @@ export type UraItemError =
   | { readonly kind: 'invalid-origin'; readonly reason: string }
   | { readonly kind: 'invalid-text'; readonly reason: string }
   | { readonly kind: 'invalid-patch'; readonly reason: string }
+  | { readonly kind: 'invalid-suggestion'; readonly reason: string }
   | {
       readonly kind: 'invalid-transition';
       readonly from: UraStatus['kind'];
@@ -143,7 +159,7 @@ export type UraStoreError =
   | { readonly kind: 'order-mismatch'; readonly sessionId: SessionId }
   | {
       readonly kind: 'corrupt-row';
-      readonly table: 'ura_items';
+      readonly table: 'ura_items' | 'ura_item_suggestions';
       readonly id: string;
       readonly reason: string;
     };

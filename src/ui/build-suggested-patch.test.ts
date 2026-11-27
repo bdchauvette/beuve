@@ -20,6 +20,7 @@ describe('buildSuggestedPatch', () => {
       }),
     ).toStrictEqual({
       kind: 'patch',
+      suggestion: { path: 'src/x.ts', startLine: 4, endLine: 5, replacement: 'D\nE\nE2' },
       text: [
         '--- a/src/x.ts',
         '+++ b/src/x.ts',
@@ -51,6 +52,7 @@ describe('buildSuggestedPatch', () => {
     });
     expect(plan).toStrictEqual({
       kind: 'patch',
+      suggestion: { path: 'x', startLine: 4, endLine: 6, replacement: 'd\nE\nf' },
       text: '--- a/x\n+++ b/x\n@@ -4,3 +4,3 @@\n-d\n-e\n-f\n+d\n+E\n+f\n',
     });
   });
@@ -67,6 +69,7 @@ describe('buildSuggestedPatch', () => {
       }),
     ).toStrictEqual({
       kind: 'patch',
+      suggestion: { path: 'x', startLine: 1, endLine: 2, replacement: '' },
       text: '--- a/x\n+++ b/x\n@@ -1,3 +1,1 @@\n-a\n-b\n c\n',
     });
     const all = buildSuggestedPatch({
@@ -77,6 +80,7 @@ describe('buildSuggestedPatch', () => {
     });
     expect(all).toStrictEqual({
       kind: 'patch',
+      suggestion: { path: 'x', startLine: 1, endLine: 1, replacement: '' },
       text: '--- a/x\n+++ b/x\n@@ -1,1 +0,0 @@\n-only\n',
     });
   });
@@ -124,6 +128,7 @@ describe('buildSuggestedPatch', () => {
     });
     expect(plan).toStrictEqual({
       kind: 'patch',
+      suggestion: { path: 'x', startLine: 2, endLine: 2, replacement: 'B' },
       text: [
         '--- a/x',
         '+++ b/x',
@@ -143,5 +148,34 @@ describe('buildSuggestedPatch', () => {
       range: { startLine: 1, endLine: 1 },
     });
     expect(context.kind === 'patch' && context.text).toContain(' c\n\\ No newline');
+  });
+
+  test('suggests a line emptied together with the line after it, else the line before', ({
+    expect,
+  }) => {
+    const emptied = buildSuggestedPatch({
+      path: 'x',
+      head: head(),
+      edited: head().replace('d\n', '\n'),
+      range: { startLine: 4, endLine: 4 },
+    });
+    expect(emptied.kind === 'patch' && emptied.suggestion).toStrictEqual({
+      path: 'x',
+      startLine: 4,
+      endLine: 5,
+      replacement: '\ne',
+    });
+    const last = buildSuggestedPatch({
+      path: 'x',
+      head: 'a\nb\n',
+      edited: 'a\n\n',
+      range: { startLine: 2, endLine: 2 },
+    });
+    expect(last.kind === 'patch' && last.suggestion).toStrictEqual({
+      path: 'x',
+      startLine: 1,
+      endLine: 2,
+      replacement: 'a\n',
+    });
   });
 });

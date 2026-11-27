@@ -37,9 +37,10 @@ describe('openAppDatabase', () => {
     expect(ids.findIndex((id) => id.startsWith('chat-'))).toBeGreaterThanOrEqual(
       sessionMigrations.length,
     );
-    expect(ids.slice(-2)).toStrictEqual([
+    expect(ids.slice(-3)).toStrictEqual([
       'ura-0003-finding-confidence',
       'session-0002-review-ranges',
+      'ura-0004-suggestions',
     ]);
     expect(
       db.prepare("SELECT name FROM sqlite_schema WHERE name = 'chat_messages';").get(),

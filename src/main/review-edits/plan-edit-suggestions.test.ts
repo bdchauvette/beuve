@@ -22,6 +22,22 @@ describe('planEditSuggestions', () => {
     expect(plan.edits[0]?.patch).toBe(
       '--- a/a.ts\n+++ b/a.ts\n@@ -1,5 +1,6 @@\n one\n-two\n+two\n+inserted\n three\n four\n five\n',
     );
+    expect(plan.edits[0]?.suggestions).toStrictEqual([
+      { path: 'a.ts', startLine: 2, endLine: 2, replacement: 'two\ninserted' },
+    ]);
+  });
+
+  test('a line emptied becomes a suggestion taking the line after it along, else the one before', ({
+    expect,
+  }) => {
+    const middle = planEditSuggestions(input(['@@ -2 +2 @@', '-two', '+'], { changed: [2] }));
+    expect(middle.edits[0]?.suggestions).toStrictEqual([
+      { path: 'a.ts', startLine: 2, endLine: 3, replacement: '\nthree' },
+    ]);
+    const last = planEditSuggestions(input(['@@ -5 +5 @@', '-five', '+'], { changed: [5] }));
+    expect(last.edits[0]?.suggestions).toStrictEqual([
+      { path: 'a.ts', startLine: 4, endLine: 5, replacement: 'four\n' },
+    ]);
   });
 
   test('an insertion at the top replaces line 1; an edit spanning unchanged lines is a note', ({
@@ -49,15 +65,26 @@ describe('planEditSuggestions', () => {
     const diff = ['@@ -1 +1 @@', '-one', '+ONE', '@@ -3 +3 @@', '-three', '+THREE'];
     const attached = planEditSuggestions({
       ...input(diff, { changed: [1, 2, 3] }),
-      notes: [{ itemId: 'n1', path: 'a.ts', startLine: 1, endLine: 3, suggestion: undefined }],
+      notes: [{ itemId: 'n1', path: 'a.ts', startLine: 1, endLine: 3, suggestions: [] }],
     });
     expect(attached.edits).toMatchObject([
       { action: 'attach', itemId: 'n1', anchor: { startLine: 1, endLine: 3 } },
     ]);
     expect(attached.edits[0]?.patch).toContain('-one\n-two\n-three\n+ONE\n+two\n+THREE\n');
+    expect(attached.edits[0]?.suggestions).toStrictEqual([
+      { path: 'a.ts', startLine: 1, endLine: 3, replacement: 'ONE\ntwo\nTHREE' },
+    ]);
     const kept = planEditSuggestions({
       ...input(diff, { changed: [1, 2, 3] }),
-      notes: [{ itemId: 'n1', path: 'a.ts', startLine: 1, endLine: 3, suggestion: 'theirs' }],
+      notes: [
+        {
+          itemId: 'n1',
+          path: 'a.ts',
+          startLine: 1,
+          endLine: 3,
+          suggestions: [{ path: 'a.ts', startLine: 2, endLine: 2, replacement: 'theirs' }],
+        },
+      ],
     });
     expect(
       kept.edits.map((edit) => {

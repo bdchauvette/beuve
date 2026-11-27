@@ -1,6 +1,7 @@
 import type { UraItemView } from '#contract/ipc-contract.ts';
 
 import { anchorFromTarget } from './anchor-from-target.ts';
+import { editedPatchFrom } from './edited-patch-from.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import type { ReviewTarget } from './target-from.ts';
 import { uneditableReasonFrom } from './uneditable-reason-from.ts';
@@ -51,12 +52,13 @@ export function editTargetFrom(
     );
   });
   if (item?.anchor.kind === 'lines') {
+    const patch = editedPatchFrom(item);
     return {
       path,
       startLine: item.anchor.startLine,
       endLine: item.anchor.endLine,
       itemId: item.id,
-      ...(item.suggestedPatch !== undefined && { patch: item.suggestedPatch }),
+      ...(patch !== undefined && { patch }),
     };
   }
   return { path, startLine: anchor.startLine, endLine: anchor.endLine };

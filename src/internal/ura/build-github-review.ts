@@ -3,9 +3,16 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 import { escapeMarkdownHtml } from './escape-markdown-html.ts';
 import { fenceCodeBlock } from './fence-code-block.ts';
 import { formatUraAnchor } from './format-ura-anchor.ts';
+import { parseSuggestedPatch } from './parse-suggested-patch.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
-import type { OutdatedReason, UraArtifact, UraEntry, UraVerdict } from './ura-artifact.ts';
-import type { PatchHunk, SuggestedPatch, UraAnchor, UraItem, UraOrigin } from './ura-item.ts';
+import type {
+  OutdatedReason,
+  UraArtifact,
+  UraEntry,
+  UraPlacedSuggestion,
+  UraVerdict,
+} from './ura-artifact.ts';
+import type { PatchHunk, UraAnchor, UraItem, UraOrigin } from './ura-item.ts';
 
 /** One inline comment of a review; `start_*` are present only for multi-line ranges. */
 export type GithubReviewComment = {
@@ -65,8 +72,9 @@ const shortSha = 12;
 
 /**
  * The GitHub pull request review for an artifact. Line items become inline comments on the
- * head (`side: 'RIGHT'`); a patch that replaces exactly the anchored lines becomes a
- * ```` ```suggestion ```` block, any other patch a ```` ```diff ```` block. Whole-file,
+ * head (`side: 'RIGHT'`); a note's one suggestion that replaces its anchored lines becomes a
+ * ```` ```suggestion ```` block, any other suggestion a ```` ```diff ```` block of its derived
+ * patch (until ADR 0162's placement of each suggestion on its own lands). Whole-file,
  * whole-change and outdated items, and lines outside `commentableRanges`, go into the body,
  * under the reviewer's summary when there is one. GitHub refuses a comment or a change request
  * that says nothing, so such a review's body falls back to the verdict's name. A note the agent
@@ -109,9 +117,10 @@ export function buildGithubReview(
 }
 
 function commentFrom(
-  { item, placement }: UraEntry,
+  entry: UraEntry,
   ranges: GithubReviewOptions['commentableRanges'],
 ): GithubReviewComment | undefined {
+  const { item, placement } = entry;
   if (placement.kind === 'outdated' || placement.anchor.kind !== 'lines') {
     return undefined;
   }
@@ -119,7 +128,7 @@ function commentFrom(
   if (!isCommentable(placement.anchor, ranges)) {
     return undefined;
   }
-  const body = [headline(item, 'comment'), ...details(item, true)].join('\n\n');
+  const body = [headline(item, 'comment'), ...details(entry, true)].join('\n\n');
   if (startLine === endLine) {
     return { path, line: endLine, side: 'RIGHT', body };
   }
@@ -159,14 +168,12 @@ function isCommentable(
   );
 }
 
-function generalSection(
-  { item, placement }: UraEntry,
-  ranges: GithubReviewOptions['commentableRanges'],
-): string {
+function generalSection(entry: UraEntry, ranges: GithubReviewOptions['commentableRanges']): string {
+  const { item, placement } = entry;
   return [
     headline(item, 'section'),
     location(item, placement, ranges),
-    ...details(item, false),
+    ...details(entry, false),
   ].join('\n\n');
 }
 
@@ -197,47 +204,80 @@ function location(
   }
 }
 
-function details(item: UraItem, isInline: boolean): string[] {
+function details(entry: UraEntry, isInline: boolean): string[] {
+  const { item } = entry;
   const parts: string[] = [];
   const body = item.body.trim();
   if (body !== '') {
     parts.push(body);
   }
-  if (item.suggestion !== undefined) {
-    parts.push(patchBlock(item, item.suggestion, isInline));
-  }
+  parts.push(...suggestionBlocks(entry, isInline));
   if (item.origin.kind === 'chat-answer') {
     parts.push('---', agentFooter(item.origin));
   }
   return parts;
 }
 
-function patchBlock(item: UraItem, suggestion: SuggestedPatch, isInline: boolean): string {
-  let replacement: string[] | undefined;
+function suggestionBlocks(entry: UraEntry, isInline: boolean): string[] {
   if (isInline) {
-    replacement = replacementLines(item);
+    const replacement = replacementLines(entry);
+    if (replacement !== undefined) {
+      return [fenceCodeBlock({ info: 'suggestion', content: replacement.join('\n') })];
+    }
   }
-  if (replacement === undefined) {
-    return fenceCodeBlock({ info: 'diff', content: suggestion.text });
+  return entry.suggestions.map((placed) => diffBlock(placed));
+}
+
+/** A suggestion's derived patch, or its replacement when there is none to show. */
+function diffBlock({ suggestion, patch }: UraPlacedSuggestion): string {
+  if (patch !== undefined) {
+    return fenceCodeBlock({ info: 'diff', content: patch });
   }
-  return fenceCodeBlock({ info: 'suggestion', content: replacement.join('\n') });
+  const { path, startLine, endLine } = suggestion;
+  const lines = formatUraAnchor({ kind: 'lines', path, startLine, endLine });
+  return `Replace \`${lines}\` with:\n\n${fenceCodeBlock({ info: '', content: suggestion.replacement })}`;
 }
 
 /**
- * The new text of the anchored lines, when the patch is one hunk whose changes stay inside the
+ * The new text of the anchored lines, when the note has one suggestion, current on the head, that
+ * either replaces exactly those lines or whose patch is one hunk whose changes stay inside the
  * anchor and which shows every anchored line, so the lines can be replaced wholesale.
  */
-function replacementLines(item: UraItem): string[] | undefined {
-  const { suggestion, anchor } = item;
-  const [hunk, ...others] = suggestion?.hunks ?? [];
+function replacementLines({ item, suggestions }: UraEntry): string[] | undefined {
+  const { anchor } = item;
+  const [only, ...others] = suggestions;
   if (
-    hunk === undefined ||
+    only === undefined ||
     others.length > 0 ||
+    only.placement.kind !== 'current' ||
     anchor.kind !== 'lines' ||
-    !isCovering(hunk, anchor)
+    only.suggestion.path !== anchor.path
   ) {
     return undefined;
   }
+  const { suggestion } = only;
+  if (suggestion.startLine === anchor.startLine && suggestion.endLine === anchor.endLine) {
+    if (suggestion.replacement === '') {
+      return [];
+    }
+    return suggestion.replacement.split('\n');
+  }
+  if (only.patch === undefined) {
+    return undefined;
+  }
+  const parsed = parseSuggestedPatch(only.patch, anchor);
+  if (!parsed.ok) {
+    return undefined;
+  }
+  const [hunk, ...rest] = parsed.value.hunks;
+  if (hunk === undefined || rest.length > 0 || !isCovering(hunk, anchor)) {
+    return undefined;
+  }
+  return anchoredLines(hunk, anchor);
+}
+
+/** The new side of a hunk's anchored lines, with insertions directly before or after them. */
+function anchoredLines(hunk: PatchHunk, anchor: Extract<UraAnchor, { kind: 'lines' }>): string[] {
   const { startLine, endLine } = anchor;
   const lines: string[] = [];
   let nextOld = hunk.oldStart;

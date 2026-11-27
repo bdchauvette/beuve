@@ -384,7 +384,18 @@ const uraSeverity = z.enum([
 const uraVerdict = z.enum(['approve', 'request-changes', 'comment']);
 const uraTitle = z.string().max(1000);
 const uraBody = z.string().max(100_000);
-const uraPatch = z.string().max(1_000_000);
+/** A suggestion's lines may be an insertion (`endLine = startLine - 1`); the domain checks the rest. */
+const uraSuggestion = z
+  .strictObject({
+    path: repositoryPath,
+    startLine: line,
+    endLine: z.number().int().min(0).max(10_000_000),
+    replacement: z.string().max(1_000_000),
+  })
+  .refine((suggestion) => {
+    return suggestion.endLine >= suggestion.startLine - 1;
+  }, 'endLine comes before startLine - 1');
+const uraSuggestions = z.array(uraSuggestion).max(500);
 
 const uraAnchor = z.discriminatedUnion('kind', [
   z
@@ -409,7 +420,7 @@ const uraCreateRequest = z.strictObject({
   blocking: z.boolean().optional(),
   title: uraTitle,
   body: uraBody,
-  suggestedPatch: uraPatch.optional(),
+  suggestions: uraSuggestions.optional(),
 });
 
 const uraUpdateRequest = z.strictObject({
@@ -418,7 +429,7 @@ const uraUpdateRequest = z.strictObject({
   blocking: z.boolean().optional(),
   title: uraTitle.optional(),
   body: uraBody.optional(),
-  suggestedPatch: uraPatch.optional(),
+  suggestions: uraSuggestions.optional(),
 });
 
 /** At most this many items in one `ura:edit-many` or `ura:delete` (ADR 0144). */
@@ -984,12 +995,12 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { headSha, blocking, suggestedPatch, ...required } = parsed.data;
+      const { headSha, blocking, suggestions, ...required } = parsed.data;
       return services.ura.create({
         ...required,
         ...(headSha !== undefined && { headSha }),
         ...(blocking !== undefined && { blocking }),
-        ...(suggestedPatch !== undefined && { suggestedPatch }),
+        ...(suggestions !== undefined && { suggestions }),
       });
     },
     'ura:update': async (request): Promise<IpcResult<UraItemView>> => {
@@ -997,14 +1008,14 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { itemId, severity, blocking, title, body, suggestedPatch } = parsed.data;
+      const { itemId, severity, blocking, title, body, suggestions } = parsed.data;
       return services.ura.update({
         itemId,
         ...(severity !== undefined && { severity }),
         ...(blocking !== undefined && { blocking }),
         ...(title !== undefined && { title }),
         ...(body !== undefined && { body }),
-        ...(suggestedPatch !== undefined && { suggestedPatch }),
+        ...(suggestions !== undefined && { suggestions }),
       });
     },
     'ura:edit-many': async (request): Promise<IpcResult<UraItemsEditedView>> => {
