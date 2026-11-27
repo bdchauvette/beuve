@@ -2,6 +2,7 @@ import type { UraItemView } from '#contract/ipc-contract.ts';
 
 import { anchorFromTarget } from './anchor-from-target.ts';
 import { lineFromTarget } from './line-from-target.ts';
+import { stagedNoteAt } from './staged-note-at.ts';
 import type { SuggestionLines } from './suggestion-field-view.ts';
 import type { ReviewTarget } from './target-from.ts';
 import { unsuggestableReasonFrom } from './unsuggestable-reason-from.ts';
@@ -40,17 +41,7 @@ export function suggestionTargetFrom(
   }
   const { path, startLine, endLine } = anchor;
   const lines: SuggestionLines = { path, startLine, endLine };
-  const item = items.find(({ status, headSha: itemHead, anchor: own, placement }) => {
-    return (
-      status.kind === 'staged' &&
-      itemHead === headSha &&
-      placement.kind === 'current' &&
-      own.kind === 'lines' &&
-      own.path === path &&
-      own.startLine <= cursor &&
-      cursor <= own.endLine
-    );
-  });
+  const item = stagedNoteAt(items, { path, line: cursor, headSha });
   if (item === undefined) {
     return { kind: 'lines', lines };
   }

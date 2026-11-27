@@ -50,6 +50,7 @@ import { targetFrom } from './target-from.ts';
 import type { ReviewTarget, SelectedLines } from './target-from.ts';
 import { splitPatch } from './split-patch.ts';
 import { headSideAnnotationsFrom } from './head-side-annotations-from.ts';
+import type { HeadSideAnnotation } from './head-side-annotations-from.ts';
 import type { PlacedNote } from './head-side-annotations-from.ts';
 import { placeNoteOnDiff } from './place-note-on-diff.ts';
 import type {
@@ -121,6 +122,11 @@ export interface ComposerState {
   readonly suggestions: readonly SuggestionFieldView[];
   /** The staged note this composer edits in place of its marker (ADR 0129); absent for a new one. */
   readonly edit?: NoteEdit;
+  /**
+   * Shown above the cards, not under its lines on a card (ADR 0162): a sheet's lines that no
+   * card can be counted on to show. A composer on a path no card shows is there too.
+   */
+  readonly isAboveCards?: boolean;
 }
 
 /** `beuve-note-edit`: the reviewer asked to edit staged note `itemId` from its marker. */
@@ -1075,7 +1081,10 @@ export class BeuveFileCard extends LitElement {
   ): void {
     const isNew = this.diff === undefined;
     this.diff ??= this.createDiff(library);
-    const annotations = headSideAnnotationsFrom(this.shownLines(), this.notes());
+    let annotations = headSideAnnotationsFrom(this.shownLines(), this.notes());
+    if (!isNew && !changed.has('file') && !changed.has('library')) {
+      annotations = this.underExpandedLines(annotations);
+    }
     const isNewInput = [
       'file',
       'mounted',
@@ -1122,6 +1131,33 @@ export class BeuveFileCard extends LitElement {
     this.lineSelection = undefined;
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
     this.diff.setSelectedLines(step ?? null, planStepHighlight(this.diffStyle, step));
+  }
+
+  /**
+   * Notes on lines the reviewer expanded with the separators' own buttons sit under those lines
+   * too, not above the gap they came from: the composer of Add Note on expanded lines among them
+   * (ADR 0162). Only a diff already on screen knows what is expanded.
+   */
+  private underExpandedLines(
+    annotations: readonly HeadSideAnnotation<CardSlot>[],
+  ): HeadSideAnnotation<CardSlot>[] {
+    const { diff } = this;
+    return annotations.map((annotation) => {
+      const { note, placement } = annotation.metadata;
+      if (
+        diff === undefined ||
+        placement.kind !== 'hidden' ||
+        diff.isLineInCollapsedContext(note.lineEnd, 'additions')
+      ) {
+        return annotation;
+      }
+      const after = note.lineEnd;
+      return {
+        ...annotation,
+        lineNumber: after,
+        metadata: { note, placement: { kind: 'shown', after } },
+      };
+    });
   }
 
   /** The head lines the diff shows: its hunks, and the context revealed for notes. */

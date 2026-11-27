@@ -3,6 +3,7 @@ import type { ExpectStatic } from 'vitest';
 
 import type {
   AppInfo,
+  ComposeNoteView,
   DescriptionSheetView,
   ExpandedNoteView,
   IpcError,
@@ -19,6 +20,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Err, Ok } from '#x/result/result.ts';
 
 import type { MainServices, SessionServices } from '../main-services.ts';
+import type { SheetLinesRequest } from '../sheets/create-sheet-services.ts';
 
 import { test } from '../testing/test.ts';
 import { createIpcHandlers } from './create-ipc-handlers.ts';
@@ -523,6 +525,7 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
             }
             return notFound();
           },
+          checkLines: notWired,
         },
       },
       appInfo(),
@@ -551,6 +554,78 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
         sha,
         path: 'src/a.ts',
       }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
+  });
+
+  test('asks the main window for a note only for a file sheet’s own commit and lines', async ({
+    expect,
+  }) => {
+    const composed: ComposeNoteView[] = [];
+    const checked: SheetLinesRequest[] = [];
+    const sha = 'c'.repeat(40);
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        sheets: {
+          getFile: notWired,
+          getHead: notWired,
+          getImage: notWired,
+          checkOpen: notWired,
+          checkLines: async (request): Promise<IpcResult<OpenedView>> => {
+            checked.push(request);
+            if (request.endLine <= 10) {
+              return sheetChecked();
+            }
+            return err({ code: 'invalid-request', message: 'src/a.ts has 10 lines' });
+          },
+        },
+      },
+      appInfo(),
+      {
+        sheetOf: (webContentsId) => {
+          if (webContentsId === 7) {
+            return { sessionId: 's1', sha };
+          }
+          return;
+        },
+        composeNote: (view): void => {
+          composed.push(view);
+        },
+      },
+    );
+    const note = { headSha: sha, path: 'src/a.ts', startLine: 3, endLine: 4, suggest: true };
+    const fromSheet = { webContentsId: 7 };
+    await expectInvalid(expect, handlers['sheet:add-note']({ ...note, path: '../a' }, fromSheet));
+    await expectInvalid(expect, handlers['sheet:add-note']({ ...note, endLine: 2 }, fromSheet));
+    await expectInvalid(
+      expect,
+      handlers['sheet:add-note']({ ...note, sessionId: 's2' }, fromSheet),
+    );
+    await expect(handlers['sheet:add-note'](note, { webContentsId: 1 })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'invalid-request' },
+    });
+    await expect(
+      handlers['sheet:add-note']({ ...note, headSha: 'd'.repeat(40) }, fromSheet),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+    await expect(
+      handlers['sheet:add-note']({ ...note, endLine: 11 }, fromSheet),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+    expect(composed).toStrictEqual([]);
+    await expect(handlers['sheet:add-note'](note, fromSheet)).resolves.toStrictEqual({
+      ok: true,
+      value: { sent: true },
+    });
+    expect(composed).toStrictEqual([{ sessionId: 's1', ...note }]);
+    expect(checked.at(-1)).toStrictEqual({
+      sessionId: 's1',
+      sha,
+      path: 'src/a.ts',
+      startLine: 3,
+      endLine: 4,
+    });
+    await expect(
+      createIpcHandlers(stubServices({}), appInfo())['sheet:add-note'](note, fromSheet),
     ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
   });
 
@@ -1397,7 +1472,13 @@ function stubServices(
       restart: notWired,
       status: notWiredError,
     },
-    sheets: { getFile: notWired, getHead: notWired, getImage: notWired, checkOpen: notWired },
+    sheets: {
+      getFile: notWired,
+      getHead: notWired,
+      getImage: notWired,
+      checkOpen: notWired,
+      checkLines: notWired,
+    },
     remote: { permalink: notWired, openPermalink: notWired, openCommit: notWired },
     commits: { getCommit: notWired },
     shell: { openUrl: notWired },

@@ -8,6 +8,7 @@ import type {
   ChatMentionView,
   ChatMessageView,
   CommitInfoView,
+  ComposeNoteView,
   DiffDisplayView,
   DiffFileView,
   FileAttributesView,
@@ -1815,6 +1816,29 @@ export class BeuveReview extends LitElement {
     if ((await this.setDisplay({ sidebarSide: side })) !== undefined) {
       this.showNotice({ tone: 'info', text: `Sidebar on the ${side}` });
     }
+  }
+
+  /**
+   * A sheet's Add Note or Add Suggestion… (ADR 0162): the stream's composer opens on those lines.
+   * The composer writes on the head the review shows, so a sheet of another commit (an older
+   * head, a commit of the stack, or a head the review hasn't moved to) gets a notice instead.
+   */
+  composeFromSheet(request: ComposeNoteView): void {
+    const { review } = this;
+    if (review?.session.id !== request.sessionId) {
+      return;
+    }
+    if (request.headSha !== review.headSha) {
+      this.showNotice({
+        tone: 'info',
+        text: `That sheet is at ${request.headSha.slice(0, 7)}, not the head this review shows (${review.headSha.slice(0, 7)}): notes are written on the head shown. Open the file at the head to add one.`,
+      });
+      return;
+    }
+    this.focusedZone = 'diff';
+    void this.updateComplete.then(() => {
+      this.stream()?.composeOn(request);
+    });
   }
 
   /** Puts focus back in the focused zone after an overlay closes. */

@@ -2391,6 +2391,33 @@ export interface OpenedView {
   readonly opened: true;
 }
 
+/**
+ * `sheet:add-note` (ADR 0162): Add Note or Add Suggestion… on a sheet's lines. A sheet writes no
+ * notes: main checks the request against the sheet that sent it (its session, and `headSha` is
+ * its commit) and has the main window open its composer on those lines (`ura:compose`), with a
+ * suggestion field on them when `suggest`.
+ */
+export interface SheetNoteRequest {
+  readonly headSha: string;
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly suggest: boolean;
+}
+
+/** `sheet:add-note`'s answer: the main window was asked to open its composer. */
+export interface SheetNoteSentView {
+  readonly sent: true;
+}
+
+/**
+ * `ura:compose` (main to a main window, ADR 0162): open the note composer on these lines of
+ * `sessionId` at `headSha`, as a sheet asked with `sheet:add-note`.
+ */
+export interface ComposeNoteView extends SheetNoteRequest {
+  readonly sessionId: string;
+}
+
 export interface OpenUrlRequest {
   readonly url: string;
 }
@@ -2866,6 +2893,10 @@ export interface InvokeChannelMap {
     readonly request: DescriptionSheetRequest;
     readonly response: IpcResult<DescriptionSheetView>;
   };
+  'sheet:add-note': {
+    readonly request: SheetNoteRequest;
+    readonly response: IpcResult<SheetNoteSentView>;
+  };
   'media:get-image': {
     readonly request: ImageFileRequest;
     readonly response: IpcResult<ImageFileView>;
@@ -3176,6 +3207,8 @@ export interface EventChannelMap {
   'link:open-branch': OpenRemoteBranchLinkView;
   /** Preferences changed in another window (the Settings window); read them again. */
   'settings:changed': Readonly<Record<string, never>>;
+  /** Open the note composer on a sheet's lines (ADR 0162). */
+  'ura:compose': ComposeNoteView;
 }
 
 export type EventChannel = keyof EventChannelMap;
@@ -3199,7 +3232,14 @@ export type SheetInvokeChannel =
   | 'remote:open-permalink'
   | 'clipboard:write-text'
   | 'menu:set-state'
-  | 'menu:context';
+  | 'menu:context'
+  | SheetOnlyInvokeChannel;
+
+/**
+ * The channels only a sheet may invoke (ADR 0162): main checks them against the sheet that sent
+ * them, so the main window, whose own composer writes notes, has no use for them.
+ */
+export type SheetOnlyInvokeChannel = 'sheet:add-note';
 
 /** The API the sheet preload exposes as `window.beuve`: sheet channels, and `menu:run` only. */
 export interface SheetApi {

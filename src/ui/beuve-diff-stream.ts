@@ -1,11 +1,13 @@
 import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type {
   DiffDisplayView,
   DiffFileView,
+  DiffHunkView,
   FileReviewProgressView,
   FileReviewStateView,
   ReviewOrderView,
@@ -53,6 +55,8 @@ import { planReviewStream } from './plan-review-stream.ts';
 import type { ReviewStreamPlan } from './plan-review-stream.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { suggestionTargetFrom } from './suggestion-target-from.ts';
+import { stagedNoteAt } from './staged-note-at.ts';
+import { isOutsideHunks } from './is-outside-hunks.ts';
 import type { SuggestionFieldView, SuggestionLines } from './suggestion-field-view.ts';
 import { withSuggestionField } from './with-suggestion-field.ts';
 import type { PeekState } from './peek-state.ts';
@@ -100,6 +104,19 @@ interface ComposerOptions {
   readonly edit?: NoteEdit;
   /** `false` when the caller reveals the composer itself, at a field. */
   readonly isRevealed?: boolean;
+  /** Opens it above the cards rather than under its lines (ADR 0162). */
+  readonly isAboveCards?: boolean;
+}
+
+/**
+ * Lines a sheet asked for a note on (ADR 0162), on the head the stream shows; with `suggest`, the
+ * composer opens with a suggestion field on them.
+ */
+export interface LinesNoteRequest {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly suggest: boolean;
 }
 
 const defaultDisplay: DiffDisplayView = {
@@ -224,6 +241,10 @@ export class BeuveDiffStream extends LitElement {
         display: flex;
         flex-wrap: wrap;
         gap: var(--beuve-space-2);
+      }
+
+      .above-cards {
+        margin-block-end: var(--beuve-space-3);
       }
 
       .cards {
@@ -473,6 +494,9 @@ export class BeuveDiffStream extends LitElement {
 
   /** Numbers new suggestion fields, for their keys. */
   private fieldCount = 0;
+
+  /** Numbers composers, so the one above the cards starts afresh for each note. */
+  private composerCount = 0;
 
   /** What `beuve-split-narrow` last said, so it is said only when it changes. */
   private isNarrowReported = false;
@@ -964,20 +988,32 @@ export class BeuveDiffStream extends LitElement {
       return;
     }
     if (composer !== undefined) {
-      this.addTargetField();
+      this.addField({ lines: target.lines, headSha: review.headSha });
       return;
     }
-    const item = this.uraItems.find((candidate) => candidate.id === target.itemId);
+    this.suggestOn({ lines: target.lines, itemId: target.itemId, isAboveCards: false });
+  }
+
+  /**
+   * A field for `lines` on the head shown, in a composer opened for them: the staged note
+   * `itemId` when there is one, else a new note on the lines.
+   */
+  private suggestOn({ lines, itemId, isAboveCards }: SuggestionPlace): void {
+    const { review } = this;
+    if (review === undefined) {
+      return;
+    }
+    const item = this.uraItems.find((candidate) => candidate.id === itemId);
     let edit: NoteEdit | undefined;
     if (item !== undefined) {
       edit = noteEditFrom(item);
     }
     if (edit === undefined) {
-      this.openComposer({ anchor: { kind: 'lines', ...target.lines }, isRevealed: false });
+      this.openComposer({ anchor: { kind: 'lines', ...lines }, isRevealed: false, isAboveCards });
     } else {
-      this.openComposer({ anchor: edit.anchor, edit, isRevealed: false });
+      this.openComposer({ anchor: edit.anchor, edit, isRevealed: false, isAboveCards });
     }
-    this.addField({ lines: target.lines, headSha: review.headSha });
+    this.addField({ lines, headSha: review.headSha });
   }
 
   /** A field for the diff's target lines in the open composer, when they are on its head. */
@@ -1048,17 +1084,19 @@ export class BeuveDiffStream extends LitElement {
    * `anchor`, or editing a staged note.
    */
   private openComposer(options: ComposerOptions = {}): void {
-    const { anchor: given, edit, isRevealed = true } = options;
+    const { anchor: given, edit, isRevealed = true, isAboveCards = false } = options;
     const { review } = this;
     const files = this.shownFiles();
+    let path: string | undefined;
     if (given !== undefined && given.kind !== 'change') {
+      path = given.path;
       const index = files.findIndex((candidate) => candidate.path === given.path);
       if (index !== -1) {
         this.activeIndex = index;
       }
     }
-    const file = files[this.activeIndex];
-    if (review === undefined || file === undefined) {
+    path ??= files[this.activeIndex]?.path;
+    if (review === undefined || path === undefined) {
       return;
     }
     const anchor = given ?? anchorFromTarget(this.target());
@@ -1078,8 +1116,9 @@ export class BeuveDiffStream extends LitElement {
       createdAt: '',
       updatedAt: '',
     }).anchor;
+    this.composerCount += 1;
     this.composer = {
-      path: file.path,
+      path,
       anchor,
       where,
       saving: false,
@@ -1087,6 +1126,7 @@ export class BeuveDiffStream extends LitElement {
       headSha: edit?.headSha ?? review.headSha,
       suggestions: edit?.suggestions ?? [],
       ...(edit !== undefined && { edit }),
+      ...(isAboveCards && { isAboveCards }),
     };
     if (isRevealed) {
       void this.revealComposer(anchor);
@@ -1134,8 +1174,24 @@ export class BeuveDiffStream extends LitElement {
     }
   }
 
-  /** Scrolls to the composer on the active card and focuses its title, or field `fieldKey`. */
+  /**
+   * Scrolls to the composer, on the active card or above the cards, and focuses its title, or
+   * field `fieldKey`.
+   */
   private async revealComposer(anchor: UraAnchorView, fieldKey?: string): Promise<void> {
+    if (this.composer !== undefined && this.composerCardPath() === undefined) {
+      await this.updateComplete;
+      const above = this.renderRoot.querySelector<BeuveUraComposer>(
+        '.above-cards beuve-ura-composer',
+      );
+      above?.scrollIntoView({ block: 'nearest' });
+      if (fieldKey === undefined) {
+        above?.focus();
+      } else {
+        await above?.focusSuggestion(fieldKey);
+      }
+      return;
+    }
     const index = this.shownFiles().findIndex((file) => file.path === this.composer?.path);
     if (index !== -1) {
       this.activeIndex = index;
@@ -1157,6 +1213,18 @@ export class BeuveDiffStream extends LitElement {
   private closeComposer(): void {
     this.composer = undefined;
     this.focus();
+  }
+
+  /** The path of the card the composer shows on; `undefined` when it is above the cards or closed. */
+  private composerCardPath(): string | undefined {
+    const { composer } = this;
+    if (composer === undefined || composer.isAboveCards === true) {
+      return undefined;
+    }
+    if (this.shownFiles().some((file) => file.path === composer.path)) {
+      return composer.path;
+    }
+    return undefined;
   }
 
   /**
@@ -1308,6 +1376,7 @@ export class BeuveDiffStream extends LitElement {
     const { uraItemsByPath, insightsByPath, threadsByPath } = this.slices;
     const plan = this.plan();
     const isUpToDate = review.scope.kind === 'up-to-date';
+    const composerPath = this.composerCardPath();
     return html`
       ${
         this.isFindOpen
@@ -1332,6 +1401,7 @@ export class BeuveDiffStream extends LitElement {
         @pointerdown=${this.onBodyPointerDown}
         @scrollend=${this.onScrollEnd}
       >
+        ${this.renderComposerAboveCards()}
         ${
           isUpToDate
             ? html`<div class="empty-screen up-to-date">
@@ -1373,7 +1443,7 @@ export class BeuveDiffStream extends LitElement {
                           .reviewThreads=${threadsByPath.get(file.path) ?? noThreads}
                           .headSha=${review.headSha}
                           .diagnostics=${this.diagnostics.get(file.path)}
-                          .composer=${this.composer?.path === file.path ? this.composer : undefined}
+                          .composer=${composerPath === file.path ? this.composer : undefined}
                           .deferral=${this.deferrals.get(file.path)}
                           ?collapsed=${this.isCollapsed(file)}
                           .reviewed=${this.reviewMarks.get(file.path) ?? 'no'}
@@ -1388,6 +1458,35 @@ export class BeuveDiffStream extends LitElement {
         }
       </div>
     `;
+  }
+
+  /**
+   * The composer when no card shows it (ADR 0162): a sheet's lines outside the diff's hunks, or
+   * a path the stream doesn't show. One element per composer, so a new note starts empty.
+   */
+  private renderComposerAboveCards(): TemplateResult | typeof nothing {
+    const { composer } = this;
+    if (composer === undefined || this.composerCardPath() !== undefined) {
+      return nothing;
+    }
+    const file = this.shownFiles().find((candidate) => candidate.path === composer.path);
+    let where = `${composer.where} · not in this diff: on GitHub it goes in the review body`;
+    if (file !== undefined && !isOutsideHunks(composer.anchor, file.hunks)) {
+      where = composer.where;
+    }
+    return html`<section class="above-cards" aria-label="Note">
+      ${keyed(
+        this.composerCount,
+        html`<beuve-ura-composer
+          .draft=${composer.edit?.draft}
+          .where=${where}
+          .anchor=${composer.anchor}
+          .suggestions=${composer.suggestions}
+          ?saving=${composer.saving}
+          .error=${composer.error}
+        ></beuve-ura-composer>`,
+      )}
+    </section>`;
   }
 
   /** A sort button whose menu lists Path / Imports / Calls (ADR 0065, 0107). */
@@ -1457,6 +1556,32 @@ export class BeuveDiffStream extends LitElement {
     this.activeHunk = -1;
   }
 
+  /**
+   * A sheet's Add Note or Add Suggestion… (ADR 0162), on lines of the head shown: on the card
+   * when a hunk of a file shown holds the lines' end, where the composer can show under them,
+   * else above the cards. Add Suggestion… adds the field to the note being composed, else to
+   * the staged note under the lines' first line, else to a new note, as it does from the diff.
+   */
+  composeOn(request: LinesNoteRequest): void {
+    const { review, composer } = this;
+    if (review === undefined) {
+      return;
+    }
+    const { path, startLine, endLine, suggest } = request;
+    const lines: SuggestionLines = { path, startLine, endLine };
+    const file = this.shownFiles().find((candidate) => candidate.path === path);
+    const isAboveCards = file === undefined || !isLineInHunks(endLine, file.hunks);
+    if (!suggest) {
+      this.openComposer({ anchor: { kind: 'lines', ...lines }, isAboveCards });
+      return;
+    }
+    if (composer !== undefined) {
+      this.addField({ lines, headSha: review.headSha });
+      return;
+    }
+    const item = stagedNoteAt(this.uraItems, { path, line: startLine, headSha: review.headSha });
+    this.suggestOn({ lines, itemId: item?.id, isAboveCards });
+  }
   /** Opens the commit pairs and focuses their list (the palette's command). */
   async openCommitPairs(): Promise<boolean> {
     if ((this.review?.commitPairs ?? []).length === 0) {
@@ -1628,8 +1753,8 @@ export class BeuveDiffStream extends LitElement {
     if (this.isFindOpen) {
       this.runFind();
     }
-    const path = this.composer?.path;
-    if (this.shownFiles().every((file) => file.path !== path)) {
+    // A composer whose file leaves the stream moves above the cards; another session's goes.
+    if (previous?.session.id !== this.review?.session.id) {
       this.composer = undefined;
     }
   }
@@ -1660,6 +1785,20 @@ export class BeuveDiffStream extends LitElement {
       this.focusFile(fileJump);
     }
   }
+}
+
+/** Where a suggestion field goes: its lines, the staged note it joins, and where it shows. */
+interface SuggestionPlace {
+  readonly lines: SuggestionLines;
+  readonly itemId: string | undefined;
+  readonly isAboveCards: boolean;
+}
+
+/** Whether head line `line` is in a hunk's head lines, where a card shows it. */
+function isLineInHunks(line: number, hunks: readonly DiffHunkView[]): boolean {
+  return hunks.some((hunk) => {
+    return hunk.newCount > 0 && hunk.newStart <= line && line < hunk.newStart + hunk.newCount;
+  });
 }
 
 function isGenerated(deferral: DiffDeferral | undefined): boolean {

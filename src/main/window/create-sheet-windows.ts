@@ -25,6 +25,18 @@ export interface SheetWindows {
   readonly openDescription: (view: DescriptionSheetView) => void;
   /** Closes every open sheet (File ▸ Close All Sheets). */
   readonly closeAll: () => void;
+  /**
+   * The session and commit of the open file sheet whose web contents are `webContentsId`, so main
+   * can check what a sheet asks for (ADR 0162); `undefined` for a description sheet or any other
+   * page.
+   */
+  readonly originOf: (webContentsId: number) => SheetOrigin | undefined;
+}
+
+/** The session and commit a file sheet shows; Back, Forward and definitions stay at its commit. */
+export interface SheetOrigin {
+  readonly sessionId: string;
+  readonly sha: string;
 }
 
 /** One window to open: whose session it is, its title, and the query its page reads. */
@@ -32,6 +44,8 @@ interface SheetWindowRequest {
   readonly sessionId: string;
   readonly title: string;
   readonly query: Readonly<Record<string, string>>;
+  /** What a file sheet shows; absent for a description sheet. */
+  readonly origin?: SheetOrigin;
 }
 
 /**
@@ -47,6 +61,7 @@ interface SheetWindowRequest {
 export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
   const remembered = new Map<string, WindowBounds>();
   const open = new Map<string, Set<BrowserWindow>>();
+  const origins = new Map<number, SheetOrigin>();
   const openWindow = (sheet: SheetWindowRequest): void => {
     const siblings = open.getOrInsertComputed(sheet.sessionId, () => new Set<BrowserWindow>());
     const near = BrowserWindow.getFocusedWindow()?.getBounds();
@@ -81,6 +96,11 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
       },
     });
     siblings.add(window);
+    // `window.webContents` throws once the window is destroyed, so its id is read now.
+    const contentsId = window.webContents.id;
+    if (sheet.origin !== undefined) {
+      origins.set(contentsId, sheet.origin);
+    }
     options.onCreated(window);
     const remember = (): void => {
       if (!window.isDestroyed() && !window.isMinimized() && !window.isFullScreen()) {
@@ -91,6 +111,7 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
     window.on('moved', remember);
     window.on('closed', () => {
       siblings.delete(window);
+      origins.delete(contentsId);
     });
     window.once('ready-to-show', () => {
       window.show();
@@ -103,6 +124,7 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
         sessionId: request.sessionId,
         title: titleOf(request),
         query: queryFrom(request),
+        origin: { sessionId: request.sessionId, sha: request.sha },
       });
     },
     openDescription: ({ sessionId, pullRequest }): void => {
@@ -111,6 +133,9 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
         title: descriptionSheetTitleFrom(pullRequest),
         query: { kind: 'description', session: sessionId },
       });
+    },
+    originOf: (webContentsId): SheetOrigin | undefined => {
+      return origins.get(webContentsId);
     },
     closeAll: (): void => {
       const windows = Array.from(open.values(), (siblings) => {

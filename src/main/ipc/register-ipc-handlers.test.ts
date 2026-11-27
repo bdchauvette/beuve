@@ -5,6 +5,7 @@ import { invokeChannels } from '#contract/invoke-channels.ts';
 import type { InvokeChannel } from '#contract/ipc-contract.ts';
 import { mainWindowInvokeChannels } from '#contract/main-window-invoke-channels.ts';
 import { settingsOnlyInvokeChannels } from '#contract/settings-only-invoke-channels.ts';
+import { sheetOnlyInvokeChannels } from '#contract/sheet-only-invoke-channels.ts';
 import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 import { ok } from '#x/result/ok.ts';
@@ -59,7 +60,10 @@ function parentFrame(isTopLevel: boolean): object | null {
 }
 
 describe('registerIpcHandlers', () => {
-  test('keeps the model registry out of the main window', async ({ expect, logger }) => {
+  test('keeps the model registry and the sheets’ own channels out of the main window', async ({
+    expect,
+    logger,
+  }) => {
     const registered = new Map<string, Registered>();
     const main = 'file:///app/dist/ui/index.html';
     registerIpcHandlers(fakeIpcMain(registered), handlersAnsweringOk(), {
@@ -71,7 +75,7 @@ describe('registerIpcHandlers', () => {
     };
     const refused = { ok: false, error: { code: 'invalid-request', message: 'untrusted sender' } };
     await expect(call('chat:ask')).resolves.toStrictEqual(ok('chat:ask'));
-    for (const channel of settingsOnlyInvokeChannels) {
+    for (const channel of [...settingsOnlyInvokeChannels, ...sheetOnlyInvokeChannels]) {
       await expect(call(channel)).resolves.toStrictEqual(refused);
     }
   });

@@ -4,6 +4,7 @@ import { customElement, state } from 'lit/decorators.js';
 
 import type {
   AppInfo,
+  ComposeNoteView,
   CreateLocalSessionRequest,
   DiffDisplayView,
   LspServerView,
@@ -552,8 +553,24 @@ export class BeuveApp extends LitElement {
       bridge.on('link:open-branch', ({ ref }) => {
         void this.github.open({ ref });
       }),
+      bridge.on('ura:compose', (request) => {
+        this.composeFromSheet(request);
+      }),
     ];
     void this.loadInitialState();
+  }
+
+  /** A sheet's Add Note (ADR 0162): the review composes it, when it is that sheet's session's. */
+  private composeFromSheet(request: ComposeNoteView): void {
+    const review = this.reviewElement();
+    if (review === undefined || this.shownReview?.session.id !== request.sessionId) {
+      this.showNotice({
+        tone: 'info',
+        text: 'Open the review that sheet belongs to in this window, then add the note again.',
+      });
+      return;
+    }
+    review.composeFromSheet(request);
   }
 
   private disconnect(): void {

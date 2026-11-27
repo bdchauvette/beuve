@@ -10,7 +10,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 import { isEventChannel } from '#contract/is-event-channel.ts';
 import { isInvokeChannel } from '#contract/is-invoke-channel.ts';
-import { settingsOnlyInvokeChannels } from '#contract/settings-only-invoke-channels.ts';
+import { mainWindowInvokeChannels } from '#contract/main-window-invoke-channels.ts';
 
 /**
  * The renderer's only door to main: contract channels, allow-listed at runtime because the
@@ -21,10 +21,7 @@ const api: BeuveApi = {
     channel: C,
     ...request: unknown[]
   ): Promise<InvokeResponse<C>> => {
-    if (
-      !isInvokeChannel(channel) ||
-      (settingsOnlyInvokeChannels as readonly string[]).includes(channel)
-    ) {
+    if (!isInvokeChannel(channel) || !mainWindowInvokeChannels.includes(channel)) {
       throw new TypeError(`unknown invoke channel: ${channel}`);
     }
     return ipcRenderer.invoke(channel, ...request.slice(0, 1)) as Promise<InvokeResponse<C>>;

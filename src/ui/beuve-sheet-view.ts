@@ -541,6 +541,10 @@ export class BeuveSheetView extends LitElement {
     if (this.loaded.status === 'ready') {
       conditions.push('file');
     }
+    // The cursor's lines are what Add Note and Add Suggestion… ask main for (ADR 0162).
+    if (this.loaded.status === 'ready' && this.cursor !== undefined) {
+      conditions.push('diff-target', 'suggestion-target');
+    }
     if (canGoBack) {
       conditions.push('back');
     }
@@ -813,6 +817,30 @@ export class BeuveSheetView extends LitElement {
     await this.show(this.current() ?? next);
   }
 
+  /**
+   * Add Note and Add Suggestion… (ADR 0162): a sheet writes no notes, so it asks main to open the
+   * main window's composer on the cursor's lines at this sheet's commit.
+   */
+  private async addNote(isSuggesting: boolean): Promise<void> {
+    const { api, cursor, loaded } = this;
+    if (api === undefined || cursor === undefined || loaded.status !== 'ready') {
+      this.note('Put the cursor on a line first (click a line, or use the arrow keys).', false);
+      return;
+    }
+    const sent = await api.invoke('sheet:add-note', {
+      headSha: this.sha,
+      path: loaded.file.path,
+      startLine: cursor.start,
+      endLine: cursor.end,
+      suggest: isSuggesting,
+    });
+    if (sent.ok) {
+      this.note('The note opens in the main window.', false);
+    } else {
+      this.note(sent.error.message, true);
+    }
+  }
+
   private async permalink(isOpening: boolean): Promise<void> {
     const { api } = this;
     const place = this.current();
@@ -965,6 +993,11 @@ export class BeuveSheetView extends LitElement {
       case 'copy-permalink':
       case 'open-permalink': {
         void this.permalink(id === 'open-permalink');
+        return true;
+      }
+      case 'stage':
+      case 'add-suggestion': {
+        void this.addNote(id === 'add-suggestion');
         return true;
       }
       default: {

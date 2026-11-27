@@ -15,4 +15,5 @@ export const eventChannels = Object.freeze([
   'link:open-pr',
   'link:open-branch',
   'settings:changed',
+  'ura:compose',
 ] as const satisfies readonly EventChannel[]);

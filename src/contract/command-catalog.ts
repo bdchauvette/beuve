@@ -685,9 +685,9 @@ const entries = Object.freeze([
     title: 'Add Note',
     menu: { menu: 'note', group: 0 },
     keys: { mac: 'Cmd+N', linux: 'Ctrl+N' },
-    context: ['line', 'file'],
+    context: ['line', 'file', 'sheet'],
     when: ['diff-target'],
-    windows: ['main'],
+    windows: ['main', 'sheet'],
     handler: 'window',
   },
   {
@@ -695,9 +695,9 @@ const entries = Object.freeze([
     title: 'Add Suggestion…',
     menu: { menu: 'review', group: 2 },
     keys: { mac: 'Alt+Cmd+E', linux: 'Ctrl+Shift+E' },
-    context: ['line'],
+    context: ['line', 'sheet'],
     when: ['diff-target', 'suggestion-target'],
-    windows: ['main'],
+    windows: ['main', 'sheet'],
     handler: 'window',
   },
   {

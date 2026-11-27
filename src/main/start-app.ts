@@ -8,7 +8,7 @@ import { errorFrom } from '#x/error/error-from.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 
 import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
-import type { AppInfo, ChooseFolderRequest } from '#contract/ipc-contract.ts';
+import type { AppInfo, ChooseFolderRequest, ComposeNoteView } from '#contract/ipc-contract.ts';
 import { mainWindowInvokeChannels } from '#contract/main-window-invoke-channels.ts';
 import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
@@ -128,6 +128,8 @@ export function startApp(app: App, options: StartAppOptions): void {
   });
   /** Terminal output goes to main windows only, never to sheets or Settings (ADR 0095). */
   const mainWindowContents = new Set<WebContents>();
+  /** The main window that last had the focus, which a sheet's Add Note goes to (ADR 0162). */
+  let lastFocusedMain: BrowserWindow | undefined;
   const openWindow = (): BrowserWindow => {
     const window = createMainWindow(options);
     menus.track(window, 'main');
@@ -136,9 +138,13 @@ export function startApp(app: App, options: StartAppOptions): void {
     window.once('closed', () => {
       // `window.webContents` throws once the window is destroyed.
       mainWindowContents.delete(webContents);
+      if (lastFocusedMain === window) {
+        lastFocusedMain = undefined;
+      }
     });
     // Poll GitHub on the interval while beuve has focus, less often otherwise (ADR 0038).
     window.on('focus', () => {
+      lastFocusedMain = window;
       services.github.setForeground(true);
       services.queue.setForeground(true);
     });
@@ -147,6 +153,30 @@ export function startApp(app: App, options: StartAppOptions): void {
       services.queue.setForeground(false);
     });
     return window;
+  };
+  /**
+   * Brings a main window forward (the one focused last, else any, else a new one) and sends it
+   * an event once its page has loaded.
+   */
+  const sendToMainWindow = (send: (contents: WebContents) => void): void => {
+    const window =
+      lastFocusedMain ??
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
+      BrowserWindow.getAllWindows().find((candidate) => isMainWindow(candidate, options)) ??
+      openWindow();
+    if (window.isMinimized()) {
+      window.restore();
+    }
+    window.show();
+    window.focus();
+    const { webContents } = window;
+    if (webContents.isLoading()) {
+      webContents.once('did-finish-load', () => {
+        send(webContents);
+      });
+      return;
+    }
+    send(webContents);
   };
 
   services.chat.onStream((event) => {
@@ -232,6 +262,12 @@ export function startApp(app: App, options: StartAppOptions): void {
     ...platform,
     openSheet: sheets.open,
     openDescriptionSheet: sheets.openDescription,
+    sheetOf: sheets.originOf,
+    composeNote: (view: ComposeNoteView): void => {
+      sendToMainWindow((contents) => {
+        sendEvent(contents, 'ura:compose', view);
+      });
+    },
     menus,
     scopes,
   });
@@ -247,28 +283,13 @@ export function startApp(app: App, options: StartAppOptions): void {
   });
 
   const showInMainWindow = (target: GithubLinkTarget): void => {
-    const window =
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-class-instance-assignment -- Electron's typings declare the exported class as a subclass of Electron.X, so the base class its own APIs return is not an instance of it nominally.
-      BrowserWindow.getAllWindows().find((candidate) => isMainWindow(candidate, options)) ??
-      openWindow();
-    if (window.isMinimized()) {
-      window.restore();
-    }
-    window.show();
-    window.focus();
-    const { webContents } = window;
-    const send = (): void => {
+    sendToMainWindow((contents) => {
       if (target.kind === 'branch') {
-        sendEvent(webContents, 'link:open-branch', { ref: target.text });
+        sendEvent(contents, 'link:open-branch', { ref: target.text });
       } else {
-        sendEvent(webContents, 'link:open-pr', { ref: target.text });
+        sendEvent(contents, 'link:open-pr', { ref: target.text });
       }
-    };
-    if (webContents.isLoading()) {
-      webContents.once('did-finish-load', send);
-      return;
-    }
-    send();
+    });
   };
 
   openWindow();

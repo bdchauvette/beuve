@@ -29,6 +29,7 @@ import type {
   DefinitionRequest,
   DefinitionView,
   DescriptionSheetView,
+  ComposeNoteView,
   DiagnosticsRequest,
   DiagnosticsView,
   DiffDisplayView,
@@ -57,6 +58,7 @@ import type {
   ModelTestView,
   OpenedConfigView,
   OpenedView,
+  SheetNoteSentView,
   OpenPullRequestResponse,
   OpenRemoteBranchResponse,
   OpenSheetRequest,
@@ -141,12 +143,26 @@ export interface IpcPlatform {
    * Electron, where `sheet:open-description` answers `not-wired`.
    */
   readonly openDescriptionSheet?: (view: DescriptionSheetView) => void;
+  /**
+   * The session and commit of the file sheet whose web contents are `webContentsId` (ADR 0067), or
+   * `undefined` for any other page; absent outside Electron, where `sheet:add-note` answers
+   * `not-wired`.
+   */
+  readonly sheetOf?: (webContentsId: number) => SheetOrigin | undefined;
+  /** Has a main window open its note composer on a sheet's lines (ADR 0162). */
+  readonly composeNote?: (view: ComposeNoteView) => void;
   /** Menu state, context menus and main-run commands (ADR 0068); absent outside Electron. */
   readonly menus?: {
     readonly setState: (webContentsId: number, state: MenuStateRequest) => void;
     readonly popup: (webContentsId: number, request: MenuContextRequest) => boolean;
     readonly runMainCommand: (webContentsId: number, id: string) => boolean;
   };
+}
+
+/** The session and commit a file sheet shows. */
+export interface SheetOrigin {
+  readonly sessionId: string;
+  readonly sha: string;
 }
 
 /** Who called: the web contents of the page, as `registerIpcHandlers` saw it. */
@@ -299,6 +315,19 @@ const openSheetRequest = z.strictObject({
 });
 
 const sheetFileRequest = z.strictObject({ sessionId, sha: fullSha, path: sheetPath });
+
+const sheetLine = z.number().int().min(1).max(10_000_000);
+const sheetNoteRequest = z
+  .strictObject({
+    headSha: fullSha,
+    path: sheetPath,
+    startLine: sheetLine,
+    endLine: sheetLine,
+    suggest: z.boolean(),
+  })
+  .refine((request) => {
+    return request.endLine >= request.startLine;
+  }, 'endLine comes before startLine');
 
 const permalinkRequest = z
   .strictObject({
@@ -851,6 +880,40 @@ export function createIpcHandlers(
       return scoped({ sender, kind, id }, async (options) => {
         return services.sheets.getFile(file, options);
       });
+    },
+    'sheet:add-note': async (request, sender): Promise<IpcResult<SheetNoteSentView>> => {
+      const parsed = sheetNoteRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sheetOf, composeNote } = platform;
+      if (sheetOf === undefined || composeNote === undefined) {
+        return err({ code: 'not-wired', message: 'no main window outside Electron' });
+      }
+      let sheet: SheetOrigin | undefined;
+      if (sender !== undefined) {
+        sheet = sheetOf(sender.webContentsId);
+      }
+      if (sheet === undefined) {
+        return err({ code: 'invalid-request', message: 'only a file sheet can ask for a note' });
+      }
+      const { headSha, path, startLine, endLine, suggest } = parsed.data;
+      if (headSha !== sheet.sha) {
+        return err({ code: 'invalid-request', message: 'headSha is not the sheet’s commit' });
+      }
+      const { sessionId } = sheet;
+      const checked = await services.sheets.checkLines({
+        sessionId,
+        sha: headSha,
+        path,
+        startLine,
+        endLine,
+      });
+      if (!checked.ok) {
+        return checked;
+      }
+      composeNote({ sessionId, headSha, path, startLine, endLine, suggest });
+      return ok({ sent: true });
     },
     'sheet:open-description': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = sessionRequest.safeParse(request);

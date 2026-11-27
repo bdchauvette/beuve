@@ -27,6 +27,7 @@ export const invokeChannels = Object.freeze([
   'sheet:get-head',
   'sheet:open-description',
   'sheet:get-description',
+  'sheet:add-note',
   'media:get-image',
   'remote:permalink',
   'remote:open-permalink',
