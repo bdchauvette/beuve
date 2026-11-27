@@ -158,6 +158,67 @@ describe('planEditSuggestions', () => {
     expect(plan.edits[0]?.body).toContain('```diff\n--- a/a.ts');
   });
 
+  test('a file with more than 500 regions splits into notes of at most 500', ({ expect }) => {
+    const plan = planEditSuggestions(many(1201));
+    expect(
+      plan.edits.map((edit) => {
+        return [edit.target, edit.title, edit.suggestions.length, edit.anchor];
+      }),
+    ).toStrictEqual([
+      [
+        'suggestions:b.ts',
+        'Suggested changes to `b.ts` (1 of 3)',
+        500,
+        { kind: 'lines', path: 'b.ts', startLine: 1, endLine: 1 },
+      ],
+      [
+        'suggestions:b.ts#2',
+        'Suggested changes to `b.ts` (2 of 3)',
+        500,
+        { kind: 'lines', path: 'b.ts', startLine: 1001, endLine: 1001 },
+      ],
+      [
+        'suggestions:b.ts#3',
+        'Suggested changes to `b.ts` (3 of 3)',
+        201,
+        { kind: 'lines', path: 'b.ts', startLine: 2001, endLine: 2001 },
+      ],
+    ]);
+  });
+
+  test('a staged note takes at most 500 regions; the rest go to the file’s new note', ({
+    expect,
+  }) => {
+    const plan = planEditSuggestions({
+      ...many(502),
+      notes: [note({ path: 'b.ts', startLine: 1, endLine: 1003 })],
+    });
+    expect(
+      plan.edits.map((edit) => {
+        return [edit.action, edit.target, edit.suggestions.length];
+      }),
+    ).toStrictEqual([
+      ['attach', 'note:n1', 500],
+      ['create', 'suggestions:b.ts', 2],
+    ]);
+  });
+
+  test('a region replaced with over 64 KiB is a note with a diff', ({ expect }) => {
+    const long = 'x'.repeat(64 * 1024 + 1);
+    const plan = planEditSuggestions(
+      input(['@@ -2 +2 @@', '-two', `+${long}`, '@@ -4 +4 @@', '-four', '+FOUR']),
+    );
+    expect(
+      plan.edits.map((edit) => {
+        return [edit.kind, edit.target, edit.title];
+      }),
+    ).toStrictEqual([
+      ['note', 'lines:a.ts:2-2', 'Edit to line 2 (too large for a suggestion)'],
+      ['suggestions', 'suggestions:a.ts', 'Suggested changes to `a.ts`'],
+    ]);
+    expect(plan.edits[0]?.diff).toContain(`+${long}\n`);
+  });
+
   test('new, deleted, renamed and binary files become notes', ({ expect }) => {
     const files = okValueFrom(
       parseUnifiedDiff(
@@ -243,4 +304,26 @@ function note(changes: Partial<NoteAtHead>): NoteAtHead {
 /** The suggestions planned for `a.ts` edited by `hunk`. */
 function planned(hunk: readonly string[]): UraSuggestionDraftView[] {
   return suggestionsOf(planEditSuggestions(input(hunk)));
+}
+
+/** `b.ts` of 2 × `count` lines, every other line from line 1 edited: `count` regions. */
+function many(count: number): EditPlanInput {
+  const hunks = Array.from({ length: count }, (_, index) => {
+    const line = String(index * 2 + 1);
+    return [`@@ -${line} +${line} @@`, `-${line}`, `+edited ${line}`];
+  }).flat();
+  const text = [
+    'diff --git a/b.ts b/b.ts',
+    'index 1111111..2222222 100644',
+    '--- a/b.ts',
+    '+++ b/b.ts',
+    ...hunks,
+    '',
+  ].join('\n');
+  const lines = Array.from({ length: count * 2 }, (_, index) => `${String(index + 1)}\n`);
+  return {
+    ...input([]),
+    edits: okValueFrom(parseUnifiedDiff(text)),
+    headTexts: new Map([['b.ts', lines.join('')]]),
+  };
 }

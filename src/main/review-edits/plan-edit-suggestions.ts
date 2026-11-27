@@ -8,6 +8,7 @@ import type {
 import type { DiffFile, DiffHunk } from '#internal/git/diff-model.ts';
 import { fenceCodeBlock } from '#internal/ura/fence-code-block.ts';
 import { suggestedPatchFrom } from '#internal/ura/suggested-patch-from.ts';
+import { uraSuggestionLimits } from '#internal/ura/ura-suggestion-limits.ts';
 
 /** A staged line note written against the head the edits start from. */
 export interface NoteAtHead {
@@ -204,9 +205,18 @@ interface Region {
 
 /** A region's suggestion, and the head lines a note must cover to take it. */
 interface Placed {
+  readonly kind: 'placed';
   readonly harvested: HarvestedSuggestion;
   readonly span: LineRange;
 }
+
+/** Why a region is a note with a diff instead: what its title says after its lines. */
+interface Unsayable {
+  readonly kind: 'unsayable';
+  readonly why: string;
+}
+
+const { maxSuggestions, maxReplacementBytes } = uraSuggestionLimits;
 
 function lineDrafts(file: DiffFile, head: HeadFile, input: EditPlanInput): readonly Draft[] {
   const notes = input.notes.filter((note) => {
@@ -218,8 +228,8 @@ function lineDrafts(file: DiffFile, head: HeadFile, input: EditPlanInput): reado
   for (const hunk of file.hunks) {
     const region = regionOf(hunk);
     const placed = placedOf(region, head);
-    if (placed === undefined) {
-      drafts.push(lineNote(region, head, input));
+    if (placed.kind === 'unsayable') {
+      drafts.push(lineNote({ region, why: placed.why }, head, input));
       continue;
     }
     const note = notes.find((candidate) => {
@@ -229,20 +239,33 @@ function lineDrafts(file: DiffFile, head: HeadFile, input: EditPlanInput): reado
       loose.push(placed);
       continue;
     }
-    attached
-      .getOrInsertComputed(note, () => {
-        return [];
-      })
-      .push(placed);
+    const inside = attached.getOrInsertComputed(note, () => {
+      return [];
+    });
+    // A note full to the item limit leaves the rest to the file's new notes.
+    if (inside.length >= maxSuggestions) {
+      loose.push(placed);
+      continue;
+    }
+    inside.push(placed);
   }
   for (const [note, inside] of attached) {
     drafts.push(attachDraft(note, inside));
   }
-  const [first] = loose;
-  if (first !== undefined) {
-    drafts.push(groupDraft({ head, first, loose }, input));
+  const groups = chunksOf(loose, maxSuggestions);
+  for (const [index, group] of groups.entries()) {
+    drafts.push(groupDraft({ head, group, index, count: groups.length }, input));
   }
   return drafts;
+}
+
+/** `items` in runs of at most `size`, in order. */
+function chunksOf<T>(items: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let start = 0; start < items.length; start += size) {
+    chunks.push(items.slice(start, start + size));
+  }
+  return chunks;
 }
 
 /**
@@ -278,25 +301,32 @@ function regionOf(hunk: DiffHunk): Region {
   return { start: hunk.oldStart + 1, end: hunk.oldStart, replacement, isNewlineChanged };
 }
 
-/** The region as a suggestion with its derived patch, unless a suggestion can't say it. */
-function placedOf(region: Region, head: HeadFile): Placed | undefined {
+/**
+ * The region as a suggestion with its derived patch, unless a suggestion can't say it: a change
+ * to the final newline, a replacement over the item limit's 64 KiB, or one empty line inserted
+ * into an empty file.
+ */
+function placedOf(region: Region, head: HeadFile): Placed | Unsayable {
   if (region.isNewlineChanged) {
-    return undefined;
+    return { kind: 'unsayable', why: 'its final newline changes' };
   }
   const suggestion = suggestionOf(region, head);
   if (suggestion === undefined) {
-    return undefined;
+    return { kind: 'unsayable', why: 'a suggestion can’t say it' };
+  }
+  if (new TextEncoder().encode(suggestion.replacement).length > maxReplacementBytes) {
+    return { kind: 'unsayable', why: 'too large for a suggestion' };
   }
   const patch = suggestedPatchFrom(head.text, suggestion);
   if (!patch.ok) {
-    return undefined;
+    return { kind: 'unsayable', why: 'a suggestion can’t say it' };
   }
   let span: LineRange = { start: region.start, end: region.end };
   if (region.end < region.start) {
     const line = Math.max(1, region.start - 1);
     span = { start: line, end: line };
   }
-  return { harvested: { suggestion, diff: patch.value }, span };
+  return { kind: 'placed', harvested: { suggestion, diff: patch.value }, span };
 }
 
 /**
@@ -340,23 +370,39 @@ function attachDraft(note: NoteAtHead, inside: readonly Placed[]): Draft {
   };
 }
 
-/** A file's regions that no staged note takes, and the first of them. */
+/**
+ * Some of a file's regions that no staged note takes: group `index` of `count`, each at most
+ * the item limit's 500 suggestions.
+ */
 interface LooseRegions {
   readonly head: HeadFile;
-  readonly first: Placed;
-  readonly loose: readonly Placed[];
+  readonly group: readonly Placed[];
+  readonly index: number;
+  readonly count: number;
 }
 
-function groupDraft({ head, first, loose }: LooseRegions, input: EditPlanInput): Draft {
-  const { start, end } = first.span;
+/**
+ * A new note of a file's suggestions, anchored at its first region. A file with more than 500 has
+ * several, each its own target (`suggestions:<path>`, then `suggestions:<path>#2`, …).
+ */
+function groupDraft({ head, group, index, count }: LooseRegions, input: EditPlanInput): Draft {
+  const span = group[0]?.span ?? { start: 1, end: 1 };
+  let target = `${groupPrefix}${head.path}`;
+  let title = `Suggested changes to \`${head.path}\``;
+  if (index > 0) {
+    target += `#${String(index + 1)}`;
+  }
+  if (count > 1) {
+    title += ` (${String(index + 1)} of ${String(count)})`;
+  }
   return {
-    target: `${groupPrefix}${head.path}`,
-    anchor: { kind: 'lines', path: head.path, startLine: start, endLine: end },
+    target,
+    anchor: { kind: 'lines', path: head.path, startLine: span.start, endLine: span.end },
     kind: 'suggestions',
     severity: 'suggestion',
-    title: `Suggested changes to \`${head.path}\``,
+    title,
     body: `From review edits on \`${input.branch}\`.`,
-    suggestions: loose.map((placed) => placed.harvested),
+    suggestions: group.map((placed) => placed.harvested),
     diff: '',
   };
 }
@@ -370,7 +416,13 @@ function describeCount(count: number): string {
   return `${String(count)} suggested changes`;
 }
 
-function lineNote(region: Region, head: HeadFile, input: EditPlanInput): Draft {
+/** A region a suggestion can't say, and why. */
+interface UnsayableRegion {
+  readonly region: Region;
+  readonly why: string;
+}
+
+function lineNote({ region, why }: UnsayableRegion, head: HeadFile, input: EditPlanInput): Draft {
   const diff = buildPatch(head, region);
   const start = Math.max(1, Math.min(region.start, region.end));
   const end = Math.max(start, region.end);
@@ -379,7 +431,7 @@ function lineNote(region: Region, head: HeadFile, input: EditPlanInput): Draft {
     anchor: { kind: 'lines', path: head.path, startLine: start, endLine: end },
     kind: 'note',
     severity: 'issue',
-    title: `Edit to ${describeLines({ start, end })} (its final newline changes)`,
+    title: `Edit to ${describeLines({ start, end })} (${why})`,
     body: noteBody({ text: diff }, input.branch),
     suggestions: [],
     diff,

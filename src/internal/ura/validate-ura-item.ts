@@ -4,13 +4,13 @@ import type { Result } from '#x/result/result.ts';
 import { isUuid } from '#x/text/is-uuid.ts';
 
 import type { UraAnchor, UraItem, UraItemError, UraOrigin, UraSuggestion } from './ura-item.ts';
+import { uraSuggestionLimits } from './ura-suggestion-limits.ts';
 
 /** An item as callers and rows describe it, not yet checked. */
 export type UraItemCandidate = UraItem;
 
 const maxTitleLength = 200;
-const maxSuggestions = 500;
-const maxReplacementBytes = 64 * 1024;
+const { maxSuggestions, maxReplacementBytes } = uraSuggestionLimits;
 
 /**
  * The one gate every item passes, whether built by a constructor, edited or read from a row:
