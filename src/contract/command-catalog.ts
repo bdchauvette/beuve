@@ -684,7 +684,7 @@ const entries = Object.freeze([
     id: 'stage',
     title: 'Add Note',
     menu: { menu: 'note', group: 0 },
-    keys: { mac: 'Cmd+/', linux: 'Ctrl+/' },
+    keys: { mac: 'Cmd+N', linux: 'Ctrl+N' },
     context: ['line', 'file'],
     when: ['diff-target'],
     windows: ['main'],

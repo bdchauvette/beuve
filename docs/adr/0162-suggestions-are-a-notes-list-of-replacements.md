@@ -1,0 +1,55 @@
+# 0162. Suggestions are a note's list of replacements, edited in CodeMirror fields and posted piece by piece
+
+- Status: Accepted; supersedes [0043](0043-inline-edits-become-suggestions.md); amends [0023](0023-universal-review-artifact-model-and-exporters.md) (suggestions, exports), [0039](0039-posting-reviews-and-posted-items.md) (placement, postings), [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md) (Add Note's key) and [0088](0088-review-edits-branch-and-never-push.md) (harvest)
+- Date: 2026-11-27
+
+## Context
+
+ADR 0043 made Add Suggestion… an editor attached to the file card: `@pierre/diffs/edit` on the hunk, an edit bar, the stream's keys held back while editing, and a refusal when an edit strays outside the target lines. It is modal state inside the component built for reading, and using it has not been pleasant. The model behind it is GitHub's: a note carries at most one `SuggestedPatch`, on the note's own path, changing only the note's own lines. GitHub can only post a suggestion on lines in the diff, and beuve took the limit on as its own: Turn into Suggestions (ADR 0088) drops change regions outside the lines the pull request changed, a rename that touches five files cannot be one note, and notes are only written from the diff stream. The JSON and XML exports, which go to agents and not to GitHub, inherit the same limits.
+
+A review tool should be able to say "change this, and these four call sites" about any line at the head, and leave it to each export to carry that as well as its target allows.
+
+## Decision
+
+### The model
+
+- **A note has a list of suggestions** in place of one patch: `UraItem.suggestions: readonly UraSuggestion[]`, each `{ path, startLine, endLine, replacement }`, on the head side of the item's `headSha`. Lines are 1-based and inclusive; `endLine = startLine - 1` is an insertion before `startLine` (after the last line when `startLine` is one past it). `replacement` is the text of the new lines, `\n`-joined, without a final newline.
+- **Independent of the anchor.** A suggestion may be on any path of the head's tree, inside or outside the diff, and on lines the note's anchor does not cover. A whole-change or file note may carry suggestions. Paths follow the anchor rules (ADR 0023). Suggestions of one item never overlap; at most 500 per item and 64 KiB of replacement each (`validateUraItem`). Main checks each range against the head blob's line count before storing it, since the domain reads no files.
+- **Patches are derived.** `suggestedPatchFrom` builds a unified diff for a suggestion at export, from the head blob, with three context lines, keeping `\r` and git's no-newline marker as `buildSuggestedPatch` did. Nothing stores a patch.
+- **Re-anchoring per suggestion.** Each suggestion is re-anchored like a `lines` anchor (`reanchorUraAnchor`, GitHub's outdated rule); an insertion follows the line before it. An outdated suggestion is kept and carries its reason, in the notes list and in every export, so a rename is never silently missing one site.
+- **Persistence.** Migration `ura-0004-suggestions` creates `ura_item_suggestions` (STRICT: `item_id` cascading from `ura_items`, `position`, `path`, `start_line`, `end_line`, `replacement`; primary key `(item_id, position)`; CHECKs for `start_line >= 1` and `end_line >= start_line - 1`) and converts every stored `suggested_patch`: each hunk becomes one suggestion over its old range, whose replacement is the hunk's new side. The old column is set to NULL and no longer read.
+
+### Writing suggestions
+
+- **The inline editor goes.** Add Suggestion… no longer edits the card: `@pierre/diffs/edit`, the edit bar, `planEditTarget`, `editableDiffFrom`, `prepareForEditing`, the stream's editing state and the `editable-target` condition are removed. A card being edited no longer has to stay mounted.
+- **Suggestion fields.** The note composer and the notes list's editor show a note's suggestions as fields, each headed by its `path:Lstart–end` and with Remove. A field opens pre-filled with the current text of its lines, so editing starts from the code.
+  - **Add Suggestion…** (`add-suggestion`, ⌥⌘E / Ctrl+Shift+E, unchanged) on a line selection in the diff or a sheet adds a field for those lines: to the note being composed, else to a staged note under the cursor written against the head being shown, else to a new note on those lines.
+  - The composer's **Add suggestion** button adds a field over the note's own lines; a note without lines takes the diff's current selection.
+- **Fields are CodeMirror 6** (`@codemirror/state`, `@codemirror/view`, `@codemirror/commands`, exact versions pinned when added, no install scripts). No language packages: the field is highlighted with the tokens of beuve's own Shiki highlighter (ADR 0018, 0119), applied as mark decorations, so code in a field looks like code in the diff. The theme (`EditorView.theme`) uses only `--beuve-*` tokens and logical properties, and `local/css-design-tokens` checks it as it checks `css` templates. A spike confirms, before the dependency is merged, that CodeMirror runs under the renderer's CSP and Trusted Types without a change to either (it builds nodes and its style elements are allowed by `style-src-elem 'unsafe-inline'`); if it does not, this ADR is revisited.
+  - **Keys.** A minimal keymap: history (⌘Z / ⇧⌘Z), the platform's caret and selection keys, indent and outdent on ⌘] / ⌘[ (Ctrl+] / Ctrl+[), ⌘Return saves, Escape cancels. Tab moves focus, as everywhere else (ADR 0068). Nothing binds ⌘/ or ⌥↑/↓. A focused field reports `text-focus`, so menu chords marked `textConflict` (Back/Forward among them) are disabled while it has focus.
+  - Each field has an accessible name ("Suggestion for src/retry.ts, lines 10 to 12").
+- **Add Note is ⌘N / Ctrl+N** (was ⌘/ / Ctrl+/), the conventional "new item" key, leaving ⌘/ to its usual meaning in code fields.
+- **Notes anywhere.** Add Note and Add Suggestion… work on lines outside the diff: unchanged lines the diff has expanded, and sheets (ADR 0067), whose menus gain both. A sheet does not write notes itself: it asks main (`sheet:add-note { headSha, path, startLine, endLine, suggest }`), and main has the main window open its composer on those lines, so notes keep one place where they are written.
+
+### Turn into Suggestions (amends ADR 0088)
+
+Every change region of the snapshot becomes a suggestion, whether or not the pull request changed those lines. A region attaches to the staged note at that head that covers it; the rest are grouped into one new note per file, labeled `suggestion` and anchored at its first region. The preview lists both.
+
+### Posting to GitHub (amends ADR 0039)
+
+Each piece of a note is placed on its own:
+
+- **The note's comment** is inline on its anchor when GitHub can take it there (current, `lines`, inside `commentableRanges`). A suggestion covering exactly the note's lines goes in that comment as a condensed ` ```suggestion ` block, the replacement lines and nothing else.
+- **Every other suggestion** inside `commentableRanges` is an inline comment of its own on its lines, with a ` ```suggestion ` block and a first line naming the note ("Suggestion 2 of 3 for **Rename `retries` to `retryBudget`**").
+- **Everything else goes in the review body, in `<details>`**: a note whose anchor GitHub cannot take, and every suggestion it cannot take (outside the diff, outdated, or an insertion with no line to hang on). One `<details>` per note, in note order, under the reviewer's summary: its `<summary>` is the note's headline (escaped with `escapeMarkdownHtml`), and inside are the note's text when it was not posted inline, then each suggestion as a ` ```diff ` block of its derived patch, with blank lines around every fence so GitHub renders Markdown inside the HTML block. This replaces "### Not attached to a line".
+- **Permalinks for everything outside the diff.** Each line-anchored note and each suggestion placed in the body is preceded by a permalink to its lines (`permalinkFrom`, ADR 0067), on a line of its own, so GitHub shows the code beside it; a file note links to the file. The link is to the head it is placed on: the current head, or for an outdated piece the head it was written against, labeled "(outdated)". Links name the pull request's base repository, which serves a fork's commits too. `buildGithubReview` stays pure and in the `ura` domain: main passes `permalinkFor(target)`, built on `#internal/github/permalink-from.ts`, in its options, and without it (a local session's "Copy GitHub review") no links are written.
+- **Size.** GitHub refuses a review body or comment over 65,536 characters. When the body would exceed it, whole `<details>` blocks are left out from the end and a last line says how many ("12 more suggestions are in the exported review"); nothing is cut inside a block or a fence. An inline comment that would exceed it moves to the body under the same rule.
+- **Postings** record each place a note went (its comment, each separate suggestion comment, its body section); a migration widens `ura_item_postings`. A note counts as posted once all its pieces were.
+
+### Exports (amends ADR 0023)
+
+The agent JSON and XML follow none of GitHub's limits. They become `beuve.ura/2`: each item has `suggestions`, each with its path, its lines on the head the artifact is compiled for (or `outdated` with the reason and the lines it was written against), the replacement and the derived unified diff. In the XML, replacements and patches are CDATA with `]]>` split, as bodies are. `beuve.ura/1` is no longer produced; the export is pasted, so there is no reader to keep.
+
+## Consequences
+
+The diff stream goes back to being read-only, and the largest piece of modal state in it goes. A note can say everything a reviewer means about the code, wherever it is, and each export carries as much as its target can: agents get all of it, GitHub gets inline suggestions where it allows and a readable, linked `<details>` section where it does not. CodeMirror is a real dependency (its size in the bundle is measured in the spike) with its own focus and selection model, which the composer and the notes list's editor must host; using beuve's highlighter keeps one source of syntax styles at the cost of a small decoration plugin. Splitting one note into several GitHub comments scatters it on GitHub, which the "n of m for" line mitigates. Readers of `beuve.ura/1` must move to `/2`. Muscle memory for ⌘/ breaks once.

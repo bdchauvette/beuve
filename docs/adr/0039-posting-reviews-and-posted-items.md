@@ -1,6 +1,6 @@
 # 0039. Posting the URA as a GitHub review, and remembering what was posted
 
-- Status: Accepted; amended by [0078](0078-per-head-requests-carry-their-head.md)
+- Status: Accepted; amended by [0078](0078-per-head-requests-carry-their-head.md) and [0162](0162-suggestions-are-a-notes-list-of-replacements.md) (placement, permalinks, postings)
 - Date: 2026-10-28
 
 ## Context

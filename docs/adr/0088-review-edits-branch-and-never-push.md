@@ -1,6 +1,6 @@
 # 0088. Review edits: one writable local branch per session, harvested as suggestions; beuve never pushes
 
-- Status: Accepted
+- Status: Accepted; harvest amended by [0162](0162-suggestions-are-a-notes-list-of-replacements.md)
 - Date: 2026-10-31
 
 ## Context
