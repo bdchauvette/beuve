@@ -1574,8 +1574,9 @@ export class BeuveFileCard extends LitElement {
     }
     composerElement.where = composer.where;
     composerElement.anchor = composer.anchor;
+    composerElement.placement = '';
     if (isOutsideHunks(composer.anchor, this.file.hunks)) {
-      composerElement.where = `${composer.where} · outside the diff: on GitHub it goes in the review body`;
+      composerElement.placement = 'Outside the diff: on GitHub it goes in the review body.';
     }
     composerElement.suggestions = composer.suggestions;
     composerElement.saving = composer.saving;

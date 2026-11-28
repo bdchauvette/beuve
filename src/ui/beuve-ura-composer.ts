@@ -160,6 +160,10 @@ export class BeuveUraComposer extends LitElement {
         color: var(--beuve-text-muted);
       }
 
+      .hint {
+        margin: 0;
+      }
+
       .error {
         color: var(--beuve-danger);
       }
@@ -229,6 +233,8 @@ export class BeuveUraComposer extends LitElement {
 
   /** `src/a.ts:12-14`, shown so the reviewer sees what the note is about. */
   @property() accessor where = '';
+  /** Where the note goes when posted, if not where a note usually does; shown under {@link where}. */
+  @property() accessor placement = '';
   /** Set by the owner while the note is being saved, or when saving failed. */
   @property({ type: Boolean }) accessor saving = false;
   @property() accessor error = '';
@@ -313,6 +319,7 @@ export class BeuveUraComposer extends LitElement {
     const labels = submitLabels(this.draft !== undefined);
     return html`<form @submit=${this.onSubmit} aria-label=${labels.form}>
       ${this.renderWhere()}
+      ${this.placement === '' ? nothing : html`<p class="hint">${this.placement}</p>`}
       <div class="row">
         <beuve-ura-label-menu
           .severity=${this.severity}

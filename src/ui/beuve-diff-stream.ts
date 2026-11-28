@@ -1476,16 +1476,17 @@ export class BeuveDiffStream extends LitElement {
       return nothing;
     }
     const file = this.shownFiles().find((candidate) => candidate.path === composer.path);
-    let where = `${composer.where} · not in this diff: on GitHub it goes in the review body`;
+    let placement = 'Not in this diff: on GitHub it goes in the review body.';
     if (file !== undefined && !isOutsideHunks(composer.anchor, file.hunks)) {
-      where = composer.where;
+      placement = '';
     }
     return html`<section class="above-cards" aria-label="Note">
       ${keyed(
         this.composerCount,
         html`<beuve-ura-composer
           .draft=${composer.edit?.draft}
-          .where=${where}
+          .where=${composer.where}
+          .placement=${placement}
           .anchor=${composer.anchor}
           .suggestions=${composer.suggestions}
           ?saving=${composer.saving}

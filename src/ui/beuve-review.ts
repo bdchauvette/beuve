@@ -1973,7 +1973,7 @@ export class BeuveReview extends LitElement {
     if (request.headSha !== review.headSha) {
       this.showNotice({
         tone: 'info',
-        text: `That sheet is at ${request.headSha.slice(0, 7)}, not the head this review shows (${review.headSha.slice(0, 7)}): notes are written on the head shown. Open the file at the head to add one.`,
+        text: `That sheet is at ${request.headSha.slice(0, 7)}; notes go on the head shown, ${review.headSha.slice(0, 7)}.`,
       });
       return;
     }
@@ -1996,7 +1996,7 @@ export class BeuveReview extends LitElement {
     if (request.headSha !== review.headSha) {
       this.showNotice({
         tone: 'info',
-        text: `That sheet is at ${request.headSha.slice(0, 7)}, not the head this review shows (${review.headSha.slice(0, 7)}): renames are suggested on the head shown.`,
+        text: `That sheet is at ${request.headSha.slice(0, 7)}; renames go on the head shown, ${review.headSha.slice(0, 7)}.`,
       });
       return;
     }
