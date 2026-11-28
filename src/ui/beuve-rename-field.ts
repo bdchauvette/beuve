@@ -36,8 +36,13 @@ export interface RenameFieldHost {
 
 /** Where the field opens and what it runs; with `newName`, it asks for that rename at once. */
 export interface RenameFieldOpening {
-  /** The token, to open under; else the field opens at the top of the window. */
+  /** The token, to open under; else the field opens at the top of {@link frame}. */
   readonly anchor: Element | undefined;
+  /**
+   * Without a token, the element whose top the field opens at, centered on it, so it covers no
+   * band above it; without either, the top of the window.
+   */
+  readonly frame?: Element | undefined;
   readonly host: RenameFieldHost;
   readonly newName?: string;
 }
@@ -134,6 +139,7 @@ export class BeuveRenameField extends LitElement {
 
   private host: RenameFieldHost | undefined;
   private anchor: Element | undefined;
+  private frame: Element | undefined;
   /** Bumped on every opening and close, so a late answer for an earlier one is dropped. */
   private generation = 0;
 
@@ -329,13 +335,16 @@ export class BeuveRenameField extends LitElement {
       </div>`;
   }
 
-  /** Under the token (or above it when there is no room), else at the top of the window. */
+  /** Under the token (or above it when there is no room), else at the top of the frame or window. */
   private place(card: HTMLElement): void {
     const { width, height } = card.getBoundingClientRect();
     let anchor: HoverAnchor = { x: (innerWidth - width) / 2, top: 0, bottom: 0 };
     if (this.anchor?.isConnected === true) {
       const bounds = this.anchor.getBoundingClientRect();
       anchor = { x: bounds.left, top: bounds.top, bottom: bounds.bottom };
+    } else if (this.frame?.isConnected === true) {
+      const bounds = this.frame.getBoundingClientRect();
+      anchor = { x: bounds.left + (bounds.width - width) / 2, top: bounds.top, bottom: bounds.top };
     }
     const { left, top } = placeHoverCard(
       anchor,
@@ -351,6 +360,7 @@ export class BeuveRenameField extends LitElement {
     this.generation += 1;
     this.host = opening.host;
     this.anchor = opening.anchor;
+    this.frame = opening.frame;
     if (opening.newName === undefined) {
       void this.prepare(this.generation);
     } else {

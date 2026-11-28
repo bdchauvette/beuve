@@ -2002,6 +2002,7 @@ export class BeuveReview extends LitElement {
     }
     this.renameField()?.open({
       anchor: undefined,
+      frame: this.stream(),
       host: this.renameHost({
         path: request.path,
         line: request.startLine,
