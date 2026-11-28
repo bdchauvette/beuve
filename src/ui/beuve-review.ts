@@ -105,6 +105,7 @@ import type { UraController } from './ura-controller.ts';
 import type { EditorPlace } from './review-edits-controller.ts';
 import type { UraEditManyDetail, UraUpdateDetail } from './ura-controller.ts';
 import { describeNoteDeletion } from './describe-note-deletion.ts';
+import { plainTitleFrom } from './plain-title-from.ts';
 import { describeNoteRestore } from './describe-note-restore.ts';
 import type { GithubFetch, GithubPostDetail } from './github-controller.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
@@ -1032,7 +1033,9 @@ export class BeuveReview extends LitElement {
     this.lastDeletion = { deletionId: deletion.deletionId, count: deletion.titles.length };
     this.showNotice({
       tone: 'info',
-      text: describeNoteDeletion(deletion.titles.map((title) => revealFormatControls(title))),
+      text: describeNoteDeletion(
+        deletion.titles.map((title) => revealFormatControls(plainTitleFrom(title))),
+      ),
       action: { label: 'Undo', command: 'undo-delete-note' },
     });
   }
@@ -1369,7 +1372,7 @@ export class BeuveReview extends LitElement {
         if (!created.ok) {
           return created.error.message;
         }
-        this.showNotice({ tone: 'info', text: `Staged “${created.value.title}”.` });
+        this.showNotice({ tone: 'info', text: `Staged “${plainTitleFrom(created.value.title)}”.` });
         return;
       },
     };

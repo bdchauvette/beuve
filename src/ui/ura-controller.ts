@@ -16,6 +16,7 @@ import type { UraCreateRequest } from './beuve-diff-stream.ts';
 import type { NoteExpandDraft, NoteExpandOutcome } from './beuve-note-expand.ts';
 import type { NoteListNotice } from './beuve-note-list.ts';
 import { countNoun } from './count-noun.ts';
+import { plainTitleFrom } from './plain-title-from.ts';
 import type { ReviewRef } from './review-ref.ts';
 
 /** The fields of a staged item the notes list edited. */
@@ -240,7 +241,9 @@ export class UraController implements ReactiveController {
       return;
     }
     request.settle(undefined);
-    this.patch({ notice: { tone: 'info', text: `Staged “${created.value.title}”.` } });
+    this.patch({
+      notice: { tone: 'info', text: `Staged “${plainTitleFrom(created.value.title)}”.` },
+    });
   }
 
   async update(detail: UraUpdateDetail): Promise<void> {
@@ -441,7 +444,7 @@ const exportLabels: Readonly<Record<UraExportTarget, string>> = {
 function stagedNotice({ item, created }: UraStagedView): string {
   let name = 'the note';
   if (item.title !== '') {
-    name = `“${item.title}”`;
+    name = `“${plainTitleFrom(item.title)}”`;
   }
   if (created) {
     return `Staged ${name}.`;

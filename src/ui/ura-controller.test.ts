@@ -169,6 +169,26 @@ describe('UraController', () => {
     expect(ura.notice).toBeUndefined();
   });
 
+  test('names a staged note by its title without its Markdown', async ({ expect }) => {
+    const title = 'Rename `validate` to `isValid`';
+    const { ura } = createUraHarness({
+      review: reviewOf(),
+      replies: { 'ura:create': ok(createUraItemView({ title })) },
+    });
+    await ura.create({
+      anchor: { kind: 'change' },
+      headSha: 'a'.repeat(40),
+      draft: { severity: 'suggestion', blocking: false, title, body: '', suggestions: [] },
+      settle: (error): void => {
+        expect(error).toBeUndefined();
+      },
+    });
+    expect(ura.notice).toStrictEqual({
+      tone: 'info',
+      text: 'Staged “Rename validate to isValid”.',
+    });
+  });
+
   test('closes the composer and says what was staged', async ({ expect }) => {
     const { ura, invoked } = createUraHarness({
       review: reviewOf(),

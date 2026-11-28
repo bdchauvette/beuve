@@ -40,13 +40,12 @@ import { uraSeverityViews } from './ura-severity-views.ts';
 import { noteListSelectionAfter } from './note-list-selection-after.ts';
 import type { NoteListGesture, NoteListSelection } from './note-list-selection-after.ts';
 import { countNoun } from './count-noun.ts';
-import { parseInlineTitle } from './parse-inline-title.ts';
 import { noteMarksFrom } from './note-marks-from.ts';
+import { renderInlineTitle } from './render-inline-title.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import './primitives/beuve-agent-mark.ts';
 import './beuve-ura-label-menu.ts';
 import type { UraLabelChange } from './beuve-ura-label-menu.ts';
-import type { InlineSpan } from './parse-markdown-subset.ts';
 import { noteLabelStateFrom } from './note-label-state-from.ts';
 import { resolveNoteListVerdict } from './resolve-note-list-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -1380,16 +1379,12 @@ export class BeuveNoteList extends LitElement {
   /** What the note says: its title, else its body, else its suggestion (ADR 0154). */
   private renderNoteText(item: UraItemView): TemplateResult {
     if (item.title !== '') {
-      return html`<span class="note-title"
-        >${parseInlineTitle(item.title).map((span) => renderInlineSpan(span))}</span
-      >`;
+      return html`<span class="note-title">${renderInlineTitle(item.title)}</span>`;
     }
     const body = item.body.trim();
     const preview = suggestionPreviewFrom(item);
     if (body !== '' || preview === undefined) {
-      return html`<span class="note-text"
-        >${parseInlineTitle(body.replaceAll(/\s+/gu, ' ')).map((span) => renderInlineSpan(span))}</span
-      >`;
+      return html`<span class="note-text">${renderInlineTitle(body)}</span>`;
     }
     return html`<beuve-patch-preview .patch=${preview}></beuve-patch-preview>`;
   }
@@ -2307,23 +2302,5 @@ function hasNoteText(item: UraItemView): boolean {
 declare global {
   interface HTMLElementTagNameMap {
     'beuve-note-list': BeuveNoteList;
-  }
-}
-
-/** An inline span of an item's title as a template: text stays text, never HTML. */
-function renderInlineSpan(span: InlineSpan): TemplateResult | string {
-  switch (span.kind) {
-    case 'text': {
-      return span.text;
-    }
-    case 'code': {
-      return html`<code>${span.text}</code>`;
-    }
-    case 'strong': {
-      return html`<strong>${span.text}</strong>`;
-    }
-    case 'emphasis': {
-      return html`<em>${span.text}</em>`;
-    }
   }
 }

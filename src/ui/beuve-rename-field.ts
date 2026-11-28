@@ -11,6 +11,7 @@ import { placeHoverCard } from './place-hover-card.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { fieldStyles } from './primitives/field-styles.ts';
 import { renameLeftOutLines } from './rename-left-out-lines.ts';
+import { renderInlineTitle } from './render-inline-title.ts';
 
 /** What `prepareRename` gave: the name to offer, or why there is none. */
 export type RenameNaming =
@@ -104,6 +105,14 @@ export class BeuveRenameField extends LitElement {
 
       .title {
         font-weight: var(--beuve-font-weight-semibold);
+        overflow-wrap: anywhere;
+      }
+
+      .title code {
+        padding: 0 var(--beuve-space-0-5);
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-code);
       }
 
       .hint,
@@ -295,7 +304,7 @@ export class BeuveRenameField extends LitElement {
           })}
         </ul>`;
     }
-    return html`<p class="title">${preview.title}</p>
+    return html`<p class="title">${renderInlineTitle(preview.title)}</p>
       ${summary}
       ${
         leftOut.length === 0
