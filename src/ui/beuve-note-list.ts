@@ -446,10 +446,16 @@ export class BeuveNoteList extends LitElement {
         margin-block-start: var(--beuve-space-1);
       }
 
+      /* As in the composer: fields apart from the body and each other, the actions from the last. */
       .editor .suggestions {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: var(--beuve-space-2);
+        gap: var(--beuve-space-3);
+        margin-block-start: var(--beuve-space-1);
+      }
+
+      .editor .actions {
+        margin-block-start: var(--beuve-space-2);
       }
 
       .editor .suggestion-notice {
@@ -1495,7 +1501,7 @@ export class BeuveNoteList extends LitElement {
           ? nothing
           : html`<span class="suggestion-notice" role="status">${this.suggestionNotice}</span>`
       }
-      <div class="row">
+      <div class="row actions">
         <beuve-note-expand
           .anchor=${item.anchor}
           .headSha=${item.headSha}

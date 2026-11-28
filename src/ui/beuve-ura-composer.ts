@@ -142,10 +142,16 @@ export class BeuveUraComposer extends LitElement {
         outline: none;
       }
 
+      /* Fields stand apart from the body and from each other, and the actions from the last one. */
       .suggestions {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: var(--beuve-space-2);
+        gap: var(--beuve-space-3);
+        margin-block-start: var(--beuve-space-1);
+      }
+
+      .actions {
+        margin-block-start: var(--beuve-space-2);
       }
 
       .hint,
@@ -348,7 +354,7 @@ export class BeuveUraComposer extends LitElement {
               )}
             </div>`
       }
-      <div class="row">
+      <div class="row actions">
         <beuve-note-expand .anchor=${this.anchor}></beuve-note-expand>
         <button class="button" type="button" @click=${this.onAddSuggestion}>Add suggestion</button>
         <span class="spacer"></span>
