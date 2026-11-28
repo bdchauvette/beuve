@@ -60,7 +60,7 @@ import { fieldStyles } from './primitives/field-styles.ts';
 import { completionListStyles } from './completion-list-styles.ts';
 import { EmojiCompletion } from './emoji-completion.ts';
 import { emojiCompletionStyles } from './emoji-completion-styles.ts';
-import { suggestionPreviewFrom } from './suggestion-preview-from.ts';
+import { suggestionPreviewsFrom } from './suggestion-previews-from.ts';
 
 /** A status line under the export buttons; `tone` colors it. */
 export interface NoteListNotice {
@@ -581,7 +581,9 @@ export class BeuveNoteList extends LitElement {
         cursor: default;
       }
 
-      .harvest-suggestions {
+      .harvest-suggestions,
+      .suggestion-previews,
+      .suggestion-preview {
         display: grid;
         gap: var(--beuve-space-1);
         margin: 0;
@@ -1324,7 +1326,7 @@ export class BeuveNoteList extends LitElement {
   /**
    * One note (ADR 0154): its label's emoji in a column of its own, then what it says, its path,
    * and the facts that differ from the default, if any (Blocking, Outdated, Posted, Addressed or
-   * Withdrawn, then ✨ for an agent's note). The cursor row adds the suggestion's preview.
+   * Withdrawn, then ✨ for an agent's note). The cursor row adds each suggestion's preview, except while its editor shows the fields.
    */
   private renderItem(item: UraItemView, index: number): TemplateResult {
     const labels = describeUraItem(item);
@@ -1355,12 +1357,8 @@ export class BeuveNoteList extends LitElement {
       <div class="note-content">
         ${this.renderNoteText(item)}
         ${
-          item.suggestions.length > 0 &&
-          hasNoteText(item) &&
-          (isCursor || this.editingId === item.id)
-            ? html`<beuve-patch-preview
-                .patch=${suggestionPreviewFrom(item) ?? ''}
-              ></beuve-patch-preview>`
+          isCursor && this.editingId !== item.id && item.suggestions.length > 0 && hasNoteText(item)
+            ? this.renderSuggestionPreviews(item)
             : nothing
         }
         ${
@@ -1382,11 +1380,29 @@ export class BeuveNoteList extends LitElement {
       return html`<span class="note-title">${renderInlineTitle(item.title)}</span>`;
     }
     const body = item.body.trim();
-    const preview = suggestionPreviewFrom(item);
-    if (body !== '' || preview === undefined) {
+    if (body !== '' || item.suggestions.length === 0) {
       return html`<span class="note-text">${renderInlineTitle(body)}</span>`;
     }
-    return html`<beuve-patch-preview .patch=${preview}></beuve-patch-preview>`;
+    return this.renderSuggestionPreviews(item);
+  }
+
+  /**
+   * Each suggestion's own preview, under its `path:L` lines when they aren't the note's (ADR
+   * 0162). Joining their patches made one file's diff with the next one's header inside it.
+   */
+  private renderSuggestionPreviews(item: UraItemView): TemplateResult {
+    return html`<div class="suggestion-previews">
+      ${suggestionPreviewsFrom(item).map((preview) => {
+        return html`<div class="suggestion-preview">
+          ${
+            preview.heading === undefined
+              ? nothing
+              : html`<span class="anchor"><bdi>${pathText(preview.heading)}</bdi></span>`
+          }
+          <beuve-patch-preview .patch=${preview.patch}></beuve-patch-preview>
+        </div>`;
+      })}
+    </div>`;
   }
 
   /** The words for what is marked, then ✨ for an agent's note, the least of them; nothing when nothing is. */

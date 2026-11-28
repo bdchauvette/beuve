@@ -3,7 +3,8 @@ import type { UraItemView } from '#contract/ipc-contract.ts';
 import { createAnnotationHead } from './create-annotation-head.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { noteMarksFrom } from './note-marks-from.ts';
-import { suggestionPreviewFrom } from './suggestion-preview-from.ts';
+import { splitPatch } from './split-patch.ts';
+import { suggestionPreviewsFrom } from './suggestion-previews-from.ts';
 import './primitives/beuve-agent-mark.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 
@@ -86,13 +87,13 @@ function noteText(item: UraItemView): NoteText {
     return { text: item.title, isBodyText: false };
   }
   const [line = ''] = item.body.trim().split('\n', 1);
-  const preview = suggestionPreviewFrom(item);
-  if (line !== '' || preview === undefined) {
+  const previews = suggestionPreviewsFrom(item);
+  if (line !== '' || previews.length === 0) {
     return { text: line, isBodyText: true };
   }
-  const added = preview
-    .split('\n')
-    .find((patchLine) => patchLine.startsWith('+') && !patchLine.startsWith('+++'));
+  const added = previews
+    .flatMap((preview) => splitPatch(preview.patch))
+    .find((patchLine) => patchLine.kind === 'added')?.text;
   if (added === undefined) {
     return { text: 'Suggests removing these lines', isBodyText: true };
   }
