@@ -349,7 +349,10 @@ export class BeuveUraComposer extends LitElement {
                   return field.key;
                 },
                 (field) => {
-                  return html`<beuve-suggestion-field .field=${field}></beuve-suggestion-field>`;
+                  return html`<beuve-suggestion-field
+                    .field=${field}
+                    .anchor=${this.anchor}
+                  ></beuve-suggestion-field>`;
                 },
               )}
             </div>`

@@ -2,12 +2,13 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { UraSuggestionDraftView } from '#contract/ipc-contract.ts';
+import type { UraAnchorView, UraSuggestionDraftView } from '#contract/ipc-contract.ts';
 
 import type * as SuggestionEditorModule from './create-suggestion-editor.ts';
 import type { SuggestionEditor } from './create-suggestion-editor.ts';
 import { describeSuggestionLines } from './describe-suggestion-lines.ts';
 import { formatControlStyles } from './format-control-styles.ts';
+import { isOnNoteLines } from './is-on-note-lines.ts';
 import { loadTokenMarks } from './load-token-marks.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
@@ -34,8 +35,8 @@ export interface SuggestionFieldKeyDetail {
 type Phase = 'reading' | 'opening' | 'ready';
 
 /**
- * One suggestion of a note (ADR 0162): a header naming its `path:Lstart–end` (with why it is
- * outdated, if it is) and Remove, over a CodeMirror field (`createSuggestionEditor`, a lazy chunk)
+ * One suggestion of a note (ADR 0162): a header naming its `path:Lstart–end`, unless those are
+ * the note's own {@link anchor} lines (with why it is outdated, if it is) and Remove, over a CodeMirror field (`createSuggestionEditor`, a lazy chunk)
  * highlighted by beuve's own highlighter (`loadTokenMarks`). A field without a `replacement`
  * starts from the current text of its lines, which it asks its container for
  * (`beuve-suggestion-lines`). The text is the field's own until {@link draft} reads it; a field
@@ -115,6 +116,8 @@ export class BeuveSuggestionField extends LitElement {
 
   /** The suggestion this field shows; its `key` must not change while the field lives. */
   @property({ attribute: false }) accessor field: SuggestionFieldView | undefined;
+  /** The note's anchor: a field on exactly its lines doesn't name them again. */
+  @property({ attribute: false }) accessor anchor: UraAnchorView | undefined;
 
   @state() accessor phase: Phase = 'opening';
   /** Why the field started empty, when its lines couldn't be read. */
@@ -273,7 +276,11 @@ export class BeuveSuggestionField extends LitElement {
     }
     const labels = describeSuggestionLines(field);
     return html`<div class="head">
-        <span class="where" title=${labels.heading}>${pathText(labels.heading)}</span>
+        ${
+          isOnNoteLines(field, this.anchor)
+            ? nothing
+            : html`<span class="where" title=${labels.heading}>${pathText(labels.heading)}</span>`
+        }
         ${field.outdated === undefined ? nothing : html`<span class="outdated">${field.outdated}</span>`}
         ${this.notice === '' ? nothing : html`<span class="notice" role="alert">${this.notice}</span>`}
         <span class="spacer"></span>

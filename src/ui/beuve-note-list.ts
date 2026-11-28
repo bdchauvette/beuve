@@ -1491,7 +1491,10 @@ export class BeuveNoteList extends LitElement {
                   return field.key;
                 },
                 (field) => {
-                  return html`<beuve-suggestion-field .field=${field}></beuve-suggestion-field>`;
+                  return html`<beuve-suggestion-field
+                    .field=${field}
+                    .anchor=${item.anchor}
+                  ></beuve-suggestion-field>`;
                 },
               )}
             </div>`
