@@ -232,7 +232,7 @@ export class BeuveNoteExpand extends LitElement {
     }
     return html`${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
       <button
-        class="button quiet"
+        class="button"
         type="button"
         title="Flesh out this note: Claude writes it up for the author from your draft and the diff"
         ?disabled=${!this.hasText || this.anchor === undefined}
