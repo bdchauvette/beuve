@@ -591,6 +591,12 @@ export class BeuveNoteList extends LitElement {
         list-style: none;
       }
 
+      /* Under the note's own text: the lines sit at the start, as the note's path does. */
+      .suggestion-preview > .anchor {
+        justify-self: start;
+        max-inline-size: 100%;
+      }
+
       .posted {
         font: var(--beuve-font-small);
         color: var(--beuve-ok);
