@@ -3,6 +3,8 @@ import { describe } from 'vitest';
 import { buildAgentReview } from './build-agent-review.ts';
 import { renderAgentReviewXml } from './render-agent-review-xml.ts';
 import { createSampleArtifact } from './testing/create-sample-artifact.ts';
+import { createTestUraItem } from './testing/create-test-ura-item.ts';
+import { testUraIds } from './testing/test-ura-ids.ts';
 import { test } from './testing/test.ts';
 
 describe('buildAgentReview', () => {
@@ -58,7 +60,10 @@ describe('buildAgentReview', () => {
               "kind": "human",
             },
             "severity": "issue",
-            "suggestedPatch": "--- a/src/app.ts
+            "suggestions": [
+              {
+                "endLine": 12,
+                "patch": "--- a/src/app.ts
       +++ b/src/app.ts
       @@ -10,3 +10,4 @@
        const items = load();
@@ -67,6 +72,15 @@ describe('buildAgentReview', () => {
       +const first = items[0];
        use(first);
       ",
+                "patchAgainstSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "path": "src/app.ts",
+                "replacement": "const items = load();
+      if (items.length === 0) return;
+      const first = items[0];
+      use(first);",
+                "startLine": 10,
+              },
+            ],
             "title": "Guard against an empty list",
           },
           {
@@ -86,6 +100,7 @@ describe('buildAgentReview', () => {
               "messageId": "msg-1",
             },
             "severity": "issue",
+            "suggestions": [],
             "title": "parseAll never checks for an empty list",
           },
           {
@@ -100,12 +115,21 @@ describe('buildAgentReview', () => {
               "kind": "human",
             },
             "severity": "question",
-            "suggestedPatch": "--- a/docs/notes.md
+            "suggestions": [
+              {
+                "endLine": 2,
+                "patch": "--- a/docs/notes.md
       +++ b/docs/notes.md
       @@ -1,2 +1 @@
       -# Scratch
        Notes
       ",
+                "patchAgainstSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "path": "docs/notes.md",
+                "replacement": "Notes",
+                "startLine": 1,
+              },
+            ],
             "title": "Is this file meant to ship?",
           },
           {
@@ -119,6 +143,7 @@ describe('buildAgentReview', () => {
               "kind": "human",
             },
             "severity": "praise",
+            "suggestions": [],
             "title": "Clear commit history",
           },
           {
@@ -142,14 +167,73 @@ describe('buildAgentReview', () => {
               "writtenAgainstSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             },
             "severity": "nitpick",
+            "suggestions": [
+              {
+                "outdated": {
+                  "endLine": 11,
+                  "path": "src/app.ts",
+                  "reason": "lines-changed",
+                  "startLine": 11,
+                  "writtenAgainstSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                },
+                "patch": "--- a/src/app.ts
+      +++ b/src/app.ts
+      @@ -11 +11 @@
+      -const x = [1];
+      +const x = [[1]]> as const;
+      ",
+                "patchAgainstSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "replacement": "const x = [[1]]> as const;",
+              },
+            ],
             "title": "Prefer <const> & "readonly"",
           },
         ],
-        "schema": "beuve.ura/1",
+        "schema": "beuve.ura/2",
         "verdict": "request-changes",
         "verdictSource": "derived",
       }
     `);
+  });
+
+  test('places each suggestion on its own: moved lines on the head, the patch on its own head', ({
+    expect,
+  }) => {
+    const written = {
+      id: testUraIds.suggestionId(1),
+      path: 'src/app.ts',
+      startLine: 8,
+      endLine: 7,
+      replacement: 'inserted',
+    };
+    const moved = { ...written, startLine: 12, endLine: 11 };
+    const item = createTestUraItem({ suggestions: [written] });
+    const artifact = {
+      ...createSampleArtifact(),
+      entries: [
+        {
+          item,
+          placement: { kind: 'current', anchor: item.anchor },
+          suggestions: [
+            {
+              suggestion: written,
+              placement: { kind: 'current', suggestion: moved },
+              patch: 'p\n',
+            },
+          ],
+        },
+      ],
+    } as const;
+    expect(buildAgentReview(artifact).items[0]?.suggestions).toStrictEqual([
+      {
+        path: 'src/app.ts',
+        startLine: 12,
+        endLine: 11,
+        replacement: 'inserted',
+        patch: 'p\n',
+        patchAgainstSha: testUraIds.headSha,
+      },
+    ]);
   });
 
   test('describes a local change and a chosen verdict', ({ expect }) => {

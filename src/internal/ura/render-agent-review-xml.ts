@@ -4,6 +4,7 @@ import type {
   AgentReviewAnchor,
   AgentReviewItem,
   AgentReviewOptions,
+  AgentReviewSuggestion,
 } from './build-agent-review.ts';
 import type { UraArtifact } from './ura-artifact.ts';
 import { uraSeverities } from './ura-severities.ts';
@@ -12,7 +13,8 @@ const indent = '  ';
 
 /**
  * The agent payload as an XML document: the same data as {@link buildAgentReview}, with titles
- * escaped and the summary, bodies and patches in CDATA sections (any `]]>` split across two). Characters XML
+ * escaped and the summary, bodies, replacements and patches in CDATA sections (any `]]>` split
+ * across two). Characters XML
  * can't represent become U+FFFD. Pure and deterministic; it carries data, never instructions.
  */
 export function renderAgentReviewXml(
@@ -113,16 +115,50 @@ function itemElement(item: AgentReviewItem): string[] {
   if (item.title !== '') {
     children.push(`<title>${escapeText(item.title)}</title>`);
   }
-  children.push(bodyElement(item.body));
-  if (item.suggestedPatch !== undefined) {
-    children.push(
-      `<suggested-patch format="unified-diff">${cdata(item.suggestedPatch)}</suggested-patch>`,
-    );
-  }
+  children.push(bodyElement(item.body), ...suggestionsElement(item.suggestions));
   return [
     `<item${attributes({ id: item.id, severity: item.severity, blocking: String(item.blocking), origin: origin.kind, ...provenanceOf(origin) })}>`,
     ...children.map((line) => indent + line),
     '</item>',
+  ];
+}
+
+function suggestionsElement(suggestions: readonly AgentReviewSuggestion[]): string[] {
+  if (suggestions.length === 0) {
+    return ['<suggestions/>'];
+  }
+  return [
+    '<suggestions>',
+    ...suggestions.flatMap((suggestion) => {
+      return suggestionElement(suggestion).map((line) => indent + line);
+    }),
+    '</suggestions>',
+  ];
+}
+
+/** A suggestion: its lines on the head as attributes, or an `outdated` child with the old ones. */
+function suggestionElement(suggestion: AgentReviewSuggestion): string[] {
+  const children: string[] = [];
+  const { outdated } = suggestion;
+  if (outdated !== undefined) {
+    children.push(
+      `<outdated${attributes({ reason: outdated.reason, 'written-against-sha': outdated.writtenAgainstSha, path: outdated.path, 'start-line': outdated.startLine, 'end-line': outdated.endLine })}/>`,
+    );
+  }
+  if (suggestion.replacement === '') {
+    children.push('<replacement/>');
+  } else {
+    children.push(`<replacement>${cdata(suggestion.replacement)}</replacement>`);
+  }
+  if (suggestion.patch !== undefined) {
+    children.push(
+      `<patch${attributes({ format: 'unified-diff', 'against-sha': suggestion.patchAgainstSha })}>${cdata(suggestion.patch)}</patch>`,
+    );
+  }
+  return [
+    `<suggestion${attributes({ path: suggestion.path, 'start-line': suggestion.startLine, 'end-line': suggestion.endLine })}>`,
+    ...children.map((line) => indent + line),
+    '</suggestion>',
   ];
 }
 

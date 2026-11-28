@@ -49,9 +49,19 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
         sessionId,
         anchor: { kind: 'change' },
         severity: 'nitpick',
-        title: 'Patch on the whole change',
+        title: 'Past the end',
         body: '',
-        suggestedPatch: '@@ -1 +1 @@\n-a\n+b\n',
+        suggestions: [{ path: 'src/app.ts', startLine: 8, endLine: 8, replacement: 'x' }],
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+    await expect(
+      services.ura.create({
+        sessionId,
+        anchor: { kind: 'change' },
+        severity: 'nitpick',
+        title: 'No such file',
+        body: '',
+        suggestions: [{ path: 'src/none.ts', startLine: 1, endLine: 0, replacement: 'x' }],
       }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 
@@ -59,23 +69,56 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(listed.items.map((item) => item.id)).toStrictEqual([first.id, second.id]);
     expect(listed.derivedVerdict).toBe('request-changes');
 
-    const patch = '@@ -2 +2 @@\n-const answer = 1;\n+const answer = 2;\n';
+    const suggestion = {
+      path: 'src/app.ts',
+      startLine: 2,
+      endLine: 2,
+      replacement: '  const answer = 2;',
+    };
     const edited = okValueFrom(
-      await services.ura.update({ itemId: first.id, severity: 'nitpick', suggestedPatch: patch }),
+      await services.ura.update({
+        itemId: first.id,
+        severity: 'nitpick',
+        suggestions: [suggestion],
+      }),
     );
     expect(edited).toMatchObject({
       severity: 'nitpick',
       blocking: false,
       title: 'Name the constant',
     });
-    expect(edited.suggestedPatch).toBe(`--- a/src/app.ts\n+++ b/src/app.ts\n${patch}`);
+    expect(edited.suggestions[0]?.id).toMatch(/^[\da-f-]{36}$/u);
+    expect(edited.suggestions).toStrictEqual([
+      {
+        ...suggestion,
+        id: edited.suggestions[0]?.id ?? '',
+        placement: { kind: 'current', path: 'src/app.ts', startLine: 2, endLine: 2 },
+        patch: [
+          '--- a/src/app.ts',
+          '+++ b/src/app.ts',
+          '@@ -1,5 +1,5 @@',
+          ' export function answer(): number {',
+          '-  const answer = 1;',
+          '+  const answer = 2;',
+          '   return answer;',
+          ' }',
+          ' export function other(): number {',
+          '',
+        ].join('\n'),
+      },
+    ]);
+    expect(okValueFrom(await services.ura.list({ sessionId })).items[0]?.suggestions).toStrictEqual(
+      edited.suggestions,
+    );
     await expect(
-      services.ura.update({ itemId: first.id, suggestedPatch: '@@ -9 +9 @@\n-x\n+y\n' }),
+      services.ura.update({
+        itemId: first.id,
+        suggestions: [{ ...suggestion, startLine: 9, endLine: 9 }],
+      }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
     expect(
-      okValueFrom(await services.ura.update({ itemId: first.id, suggestedPatch: '' }))
-        .suggestedPatch,
-    ).toBeUndefined();
+      okValueFrom(await services.ura.update({ itemId: first.id, suggestions: [] })).suggestions,
+    ).toStrictEqual([]);
 
     expect(
       okValueFrom(
@@ -132,6 +175,10 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
         severity: 'question',
         title: 'Why a new file?',
         body: '',
+        suggestions: [
+          { path: 'src/app.ts', startLine: 5, endLine: 6, replacement: 'moved' },
+          { path: 'src/app.ts', startLine: 2, endLine: 2, replacement: 'replaced' },
+        ],
       }),
     );
     const oldHead = await repo.git('rev-parse', 'feature');
@@ -161,6 +208,12 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       reason: 'lines-changed',
     });
     expect(byId.get(fileNote.id)?.placement).toMatchObject({ kind: 'current' });
+    expect(
+      byId.get(fileNote.id)?.suggestions.map((suggestion) => suggestion.placement),
+    ).toStrictEqual([
+      { kind: 'current', path: 'src/app.ts', startLine: 7, endLine: 8 },
+      { kind: 'outdated', reason: 'lines-changed' },
+    ]);
     expect(changes).toContain(sessionId);
 
     okValueFrom(
@@ -455,7 +508,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       itemCount: 2,
     });
     expect(JSON.parse(json.text)).toMatchObject({
-      schema: 'beuve.ura/1',
+      schema: 'beuve.ura/2',
       change: { scope: 'full', headSha: head, repository: { kind: 'local', headRef: 'feature' } },
       items: [{ title: 'Prefer <const>' }, { severity: 'issue', blocking: true }],
     });
@@ -487,13 +540,13 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     await note({ startLine: 5, endLine: 6, title: 'Below the edit' });
     const json = okValueFrom(await services.ura.export({ sessionId, target: 'agent-json' }));
     expect(JSON.parse(json.text)).toMatchObject({
-      schema: 'beuve.ura/1',
+      schema: 'beuve.ura/2',
       verdict: 'comment',
       counts: { issue: 1 },
       items: [{ anchor: { kind: 'lines', path: 'src/app.ts', startLine: 5, endLine: 6 } }],
     });
     const xml = okValueFrom(await services.ura.export({ sessionId, target: 'agent-xml' }));
-    expect(xml.text).toContain('<beuve-review schema="beuve.ura/1" verdict="comment"');
+    expect(xml.text).toContain('<beuve-review schema="beuve.ura/2" verdict="comment"');
     await expect(
       services.ura.export({ sessionId: 'nope', target: 'agent-json' }),
     ).resolves.toMatchObject({ ok: false });

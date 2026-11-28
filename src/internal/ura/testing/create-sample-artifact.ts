@@ -1,5 +1,6 @@
 import type { UraArtifact, UraArtifactVerdict, UraEntry, UraSummary } from '../ura-artifact.ts';
 
+import { createTestEntry } from './create-test-entry.ts';
 import { createTestUraItem } from './create-test-ura-item.ts';
 import { testUraIds } from './test-ura-ids.ts';
 
@@ -37,7 +38,7 @@ export function createSampleArtifact(verdict?: UraArtifactVerdict): UraArtifact 
  * One entry of each interesting shape: a multi-line blocking issue with a pure-replacement patch, a
  * single-line review finding with its confidence, a file-level question with a non-replacement patch, a
  * whole-change praise, and an outdated review finding, staged before confidences were kept, with text that
- * needs escaping.
+ * needs escaping and an outdated suggestion whose text holds a CDATA terminator.
  */
 function sampleEntries(): UraEntry[] {
   const blocking = createTestUraItem({
@@ -46,15 +47,6 @@ function sampleEntries(): UraEntry[] {
     blocking: true,
     title: 'Guard against an empty list',
     body: 'Calling `first()` on `[]` throws.',
-    suggestion: [
-      '@@ -10,3 +10,4 @@',
-      ' const items = load();',
-      '-const first = items[0];',
-      '+if (items.length === 0) return;',
-      '+const first = items[0];',
-      ' use(first);',
-      '',
-    ].join('\n'),
   });
   const finding = createTestUraItem({
     id: id(2),
@@ -71,7 +63,6 @@ function sampleEntries(): UraEntry[] {
     severity: 'question',
     title: 'Is this file meant to ship?',
     body: 'It reads like scratch notes.',
-    suggestion: ['@@ -1,2 +1 @@', '-# Scratch', ' Notes', ''].join('\n'),
   });
   const praise = createTestUraItem({
     id: id(4),
@@ -89,10 +80,30 @@ function sampleEntries(): UraEntry[] {
     body: 'Use `as const` here.\nA CDATA terminator: ]]> stays text.',
   });
   return [
-    { item: blocking, placement: { kind: 'current', anchor: blocking.anchor } },
-    { item: finding, placement: { kind: 'current', anchor: finding.anchor } },
-    { item: question, placement: { kind: 'current', anchor: question.anchor } },
-    { item: praise, placement: { kind: 'current', anchor: praise.anchor } },
-    { item: outdated, placement: { kind: 'outdated', reason: 'lines-changed' } },
+    createTestEntry({
+      item: blocking,
+      placement: { kind: 'current', anchor: blocking.anchor },
+      patch: [
+        '@@ -10,3 +10,4 @@',
+        ' const items = load();',
+        '-const first = items[0];',
+        '+if (items.length === 0) return;',
+        '+const first = items[0];',
+        ' use(first);',
+        '',
+      ].join('\n'),
+    }),
+    createTestEntry({ item: finding, placement: { kind: 'current', anchor: finding.anchor } }),
+    createTestEntry({
+      item: question,
+      placement: { kind: 'current', anchor: question.anchor },
+      patch: ['@@ -1,2 +1 @@', '-# Scratch', ' Notes', ''].join('\n'),
+    }),
+    createTestEntry({ item: praise, placement: { kind: 'current', anchor: praise.anchor } }),
+    createTestEntry({
+      item: outdated,
+      placement: { kind: 'outdated', reason: 'lines-changed' },
+      patch: ['@@ -11 +11 @@', '-const x = [1];', '+const x = [[1]]> as const;', ''].join('\n'),
+    }),
   ];
 }

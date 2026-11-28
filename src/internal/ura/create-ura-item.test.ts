@@ -23,7 +23,7 @@ describe('createUraItem', () => {
           origin: { kind: 'human' },
           title: 'Rename x',
           body: '`x` says nothing.',
-          suggestion: undefined,
+          suggestions: [],
           status: { kind: 'staged' },
           createdAt: '2026-10-28T12:00:00.000Z',
           updatedAt: '2026-10-28T12:00:00.000Z',
@@ -32,12 +32,20 @@ describe('createUraItem', () => {
     },
   );
 
-  test('validates the suggestion', ({ expect, deps }) => {
-    const result = createUraItem({ ...draft(), suggestion: '@@ -3 +3 @@\n-x\n+count\n' }, deps);
-    expect(result.ok && result.value.suggestion?.text).toBe(
-      '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -3 +3 @@\n-x\n+count\n',
+  test('validates the suggestions', ({ expect, deps }) => {
+    const suggestion = { path: 'src/a.ts', startLine: 3, endLine: 3, replacement: 'count' };
+    const result = createUraItem({ ...draft(), suggestions: [suggestion] }, deps);
+    expect(result.ok && result.value.suggestions).toStrictEqual([
+      { ...suggestion, id: testUraIds.itemId(2) },
+    ]);
+    const sent = createUraItem(
+      { ...draft(), suggestions: [{ ...suggestion, id: testUraIds.suggestionId(1) }] },
+      deps,
     );
-    expect(createUraItem({ ...draft(), suggestion: 'nonsense' }, deps).ok).toBe(false);
+    expect(sent.ok && sent.value.suggestions[0]?.id).not.toBe(testUraIds.suggestionId(1));
+    expect(
+      createUraItem({ ...draft(), suggestions: [{ ...suggestion, path: '../a.ts' }] }, deps).ok,
+    ).toBe(false);
   });
 
   test('keeps a note without a title', ({ expect, deps }) => {

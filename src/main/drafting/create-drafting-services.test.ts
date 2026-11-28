@@ -24,7 +24,7 @@ function featureLine(): UraAnchorView {
   return { kind: 'lines', path: 'feature.rs', startLine: 2, endLine: 2 };
 }
 
-/** "Expand on this" through `createMainServices`, a temporary repository and the fake `claude`. */
+/** ✨ Autoedit through `createMainServices`, a temporary repository and the fake `claude`. */
 describe(
   'createDraftingServices (integration: SQLite + git + fake claude, no Electron)',
   { timeout: 30_000 },
@@ -42,8 +42,13 @@ describe(
       await settled(asked.answer.id);
       const rows = chatRows(db);
 
-      claude.rescript(['```markdown\nWhy does `feature` return 1? Name the constant.\n```']);
-      const expanded = await services.drafting.expandNote(
+      claude.rescript([
+        JSON.stringify({
+          body: 'Why does `feature` return 1? Name the constant.',
+          suggestions: [],
+        }),
+      ]);
+      const expanded = await services.drafting.autoeditNote(
         {
           sessionId,
           headSha: await headOf(services, sessionId),
@@ -57,8 +62,10 @@ describe(
       expect(expanded).toStrictEqual({
         ok: true,
         value: {
-          outcome: 'expanded',
+          outcome: 'autoedited',
           body: 'Why does `feature` return 1? Name the constant.',
+          suggestions: [],
+          droppedSuggestions: 0,
           model: expect.anything() as unknown,
         },
       });
@@ -72,6 +79,7 @@ describe(
       expect(draft?.stdin).toContain('```markdown\nmagic number?\n```');
       expect(draft?.stdin).toContain('### added feature.rs');
       expect(draft?.stdin).toContain('+  1');
+      expect(draft?.stdin).toContain('Suggestions: (none)');
       expect(draft?.stdin).not.toContain('CHAT-QUESTION-MARKER');
       expect(draft?.stdin).not.toContain('CHAT-ANSWER-MARKER');
       expect(draft?.args.join('\n')).toContain("in the reviewer's voice");
@@ -82,6 +90,101 @@ describe(
       await expect(stat(scratch)).rejects.toMatchObject({ code: 'ENOENT' });
       expect(chatRows(db)).toStrictEqual(rows);
       expect(okValueFrom(chat.list({ sessionId })).messages).toHaveLength(2);
+    });
+
+    test('sends the suggestions with their head lines, and keeps only the valid ones', async ({
+      expect,
+      fakeClaude,
+      startChat,
+      signal,
+    }) => {
+      const claude = fakeClaude.scripted({
+        chunks: [
+          JSON.stringify({
+            body: 'Name the constant `DEFAULT`.',
+            suggestions: [
+              { id: 's1', path: 'feature.rs', startLine: 2, endLine: 2, replacement: '  DEFAULT' },
+              {
+                path: 'feature.rs',
+                startLine: 1,
+                endLine: 0,
+                replacement: 'const DEFAULT: u8 = 1;',
+              },
+              { path: 'app.rs', startLine: 1, endLine: 1, replacement: 'outside the prompt' },
+              { id: 's7', path: 'feature.rs', startLine: 3, endLine: 3, replacement: '}' },
+            ],
+          }),
+        ],
+      });
+      const { services, sessionId } = await startChat(claude.settings);
+      const answer = await services.drafting.autoeditNote(
+        {
+          sessionId,
+          headSha: await headOf(services, sessionId),
+          anchor: featureLine(),
+          severity: 'nitpick',
+          title: '',
+          body: 'name the 1',
+          suggestions: [
+            { key: 'field-a', path: 'feature.rs', startLine: 2, endLine: 2, replacement: '  ONE' },
+          ],
+        },
+        { signal },
+      );
+      expect(answer).toStrictEqual({
+        ok: true,
+        value: {
+          outcome: 'autoedited',
+          body: 'Name the constant `DEFAULT`.',
+          suggestions: [
+            {
+              key: 'field-a',
+              path: 'feature.rs',
+              startLine: 2,
+              endLine: 2,
+              replacement: '  DEFAULT',
+            },
+            {
+              path: 'feature.rs',
+              startLine: 1,
+              endLine: 0,
+              replacement: 'const DEFAULT: u8 = 1;',
+            },
+          ],
+          droppedSuggestions: 2,
+          model: expect.anything() as unknown,
+        },
+      });
+      const stdin = claude.calls()[0]?.stdin ?? '';
+      expect(stdin).toContain(
+        '### s1: feature.rs, line 2\n\nReplaces these lines at the head:\n\n```text\n  1\n```',
+      );
+      expect(stdin).toContain('With:\n\n```text\n  ONE\n```');
+    });
+
+    test('fails readably on an answer that is not the JSON asked for', async ({
+      expect,
+      fakeClaude,
+      startChat,
+      signal,
+    }) => {
+      const claude = fakeClaude.scripted({ chunks: ['Sure! Here is the note.'] });
+      const { services, sessionId } = await startChat(claude.settings);
+      const answer = await services.drafting.autoeditNote(
+        {
+          sessionId,
+          headSha: await headOf(services, sessionId),
+          anchor: featureLine(),
+          severity: 'nitpick',
+          title: '',
+          body: 'name the 1',
+        },
+        { signal },
+      );
+      expect(answer).toMatchObject({
+        ok: true,
+        value: { outcome: 'failed', errorKind: 'invalid-output' },
+      });
     });
 
     test('answers cancelled when its signal aborts, and refuses without a model call', async ({
@@ -103,7 +206,7 @@ describe(
       } as const;
 
       await expect(
-        services.drafting.expandNote({ ...draft, body: ' ' }, { signal }),
+        services.drafting.autoeditNote({ ...draft, body: ' ' }, { signal }),
       ).resolves.toStrictEqual({
         ok: true,
         value: {
@@ -113,15 +216,15 @@ describe(
         },
       });
       await expect(
-        services.drafting.expandNote({ ...draft, sessionId: 'missing' }, { signal }),
+        services.drafting.autoeditNote({ ...draft, sessionId: 'missing' }, { signal }),
       ).resolves.toMatchObject({ ok: false });
       await expect(
-        services.drafting.expandNote({ ...draft, headSha: 'f'.repeat(40) }, { signal }),
+        services.drafting.autoeditNote({ ...draft, headSha: 'f'.repeat(40) }, { signal }),
       ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
       expect(claude.calls()).toStrictEqual([]);
 
       const controller = new AbortController();
-      const pending = services.drafting.expandNote(draft, { signal: controller.signal });
+      const pending = services.drafting.autoeditNote(draft, { signal: controller.signal });
       await expect.poll(() => claude.calls()).toHaveLength(1);
       controller.abort();
       await expect(pending).resolves.toStrictEqual({

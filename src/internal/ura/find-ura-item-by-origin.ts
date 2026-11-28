@@ -3,7 +3,7 @@ import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { uraItemFromRow } from './ura-item-from-row.ts';
+import { uraItemsFromRows } from './ura-items-from-rows.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
 
 /**
@@ -29,5 +29,9 @@ export function findUraItemByOrigin(
   if (row === undefined) {
     return ok(undefined);
   }
-  return uraItemFromRow(row);
+  const items = uraItemsFromRows(db, [row]);
+  if (!items.ok) {
+    return items;
+  }
+  return ok(items.value[0]);
 }

@@ -1,10 +1,13 @@
 import type { SheetInvokeChannel } from './ipc-contract.ts';
+import { sheetOnlyInvokeChannels } from './sheet-only-invoke-channels.ts';
 
 /** Every channel a sheet window may invoke (ADR 0067), for its preload and for main. */
 export const sheetInvokeChannels = Object.freeze([
   'lsp:definition',
   'lsp:hover',
   'lsp:diagnostics',
+  'lsp:rename-support',
+  'lsp:prepare-rename',
   'display:get',
   'sheet:open',
   'sheet:get-file',
@@ -16,4 +19,5 @@ export const sheetInvokeChannels = Object.freeze([
   'clipboard:write-text',
   'menu:set-state',
   'menu:context',
+  ...sheetOnlyInvokeChannels,
 ] as const satisfies readonly SheetInvokeChannel[]);

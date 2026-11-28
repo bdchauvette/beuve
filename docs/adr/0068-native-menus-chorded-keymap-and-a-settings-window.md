@@ -57,3 +57,7 @@ The catalog gains three fields. `checkedNames` gives a command the title and lab
 ## Amendment 2026-11-20: menus grouped by concern
 
 ADR 0152 regroups the menu bar: Go becomes Navigate; Analyze and Note are new top-level menus; File holds the review's lifecycle and the commands that open it elsewhere; Review keeps progress and edits.
+
+## Amendment 2026-11-27: Add Note is ⌘N (ADR 0162)
+
+Add Note moves from ⌘/ / Ctrl+/ to ⌘N / Ctrl+N, the conventional key for a new item, so ⌘/ keeps its usual meaning in the code fields ADR 0162 adds. beuve has no New Window or New Document for ⌘N to collide with.

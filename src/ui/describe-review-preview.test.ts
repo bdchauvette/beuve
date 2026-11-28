@@ -35,4 +35,10 @@ describe('describeReviewPreview', () => {
       `No new items, only the verdict, as Approve, on ${'c'.repeat(12)}. 1 item already posted stays out.`,
     );
   });
+
+  test('says how many pieces are too long for the body', ({ expect }) => {
+    expect(describeReviewPreview({ ...base(), leftOutCount: 3 })).toBe(
+      `2 inline comments and 1 in the review body, as Comment, on ${'c'.repeat(12)}. 3 parts of notes are too long for GitHub and only in the exported review.`,
+    );
+  });
 });

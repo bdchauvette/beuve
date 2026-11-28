@@ -35,16 +35,19 @@ import type {
   HoverView,
   LocationView,
   Position,
+  Range,
   ServerStatus,
   SkippedServer,
 } from './lsp-model.ts';
-import type { LspCallHierarchyItem } from './lsp-protocol.ts';
+import type { LspCallHierarchyItem, LspTextEdit, PositionEncoding } from './lsp-protocol.ts';
 import { normalizeUri } from './normalize-uri.ts';
 import { parseCallHierarchyItems } from './parse-call-hierarchy-items.ts';
 import type { LspCallHierarchyEdge } from './parse-call-hierarchy-items.ts';
 import { parseDocumentSymbols } from './parse-document-symbols.ts';
 import { parseHover } from './parse-hover.ts';
 import { parseLocations } from './parse-locations.ts';
+import { parsePrepareRename } from './parse-prepare-rename.ts';
+import { parseWorkspaceEdit } from './parse-workspace-edit.ts';
 import { resolveWorkspaceFile } from './resolve-workspace-file.ts';
 import type { WorkspaceFile } from './resolve-workspace-file.ts';
 import { resolveWorkspaceRoot } from './resolve-workspace-root.ts';
@@ -122,6 +125,46 @@ export interface DiagnosticsRequest extends FileRequest {
   readonly timeout?: Temporal.Duration;
 }
 
+/** A rename request (ADR 0163): read-only, so the caller's signal is all that bounds it. */
+export interface PrepareRenameRequest extends PositionRequest {
+  readonly signal?: AbortSignal | undefined;
+}
+
+export interface RenameRequest extends PrepareRenameRequest {
+  readonly newName: string;
+}
+
+/**
+ * What `prepareRename` says about a position: the token's range (UTF-16) and the name to offer,
+ * `default` when the server has no `prepareProvider` or leaves finding the token to the client,
+ * or `refused`.
+ */
+export type PrepareRenameAnswer =
+  | { readonly kind: 'range'; readonly range: Range; readonly placeholder: string | undefined }
+  | { readonly kind: 'default' }
+  | { readonly kind: 'refused' };
+
+/** One checkout file a rename edits, by its real path relative to the checkout. */
+export interface RenamedFile {
+  readonly path: string;
+  /** In the server's `encoding`, unapplied and in the server's order. */
+  readonly edits: readonly LspTextEdit[];
+}
+
+/**
+ * A rename's `WorkspaceEdit` (ADR 0163), its files resolved inside the checkout. Untrusted
+ * still: edits may overlap or point past the file, and the checkout may hold untracked files.
+ */
+export interface RenameAnswer {
+  readonly encoding: PositionEncoding;
+  /** Sorted by path. */
+  readonly files: readonly RenamedFile[];
+  /** Documents whose URI doesn't resolve, after symlinks, to a file inside the checkout. */
+  readonly outside: number;
+  readonly resourceOperations: number;
+  readonly malformed: number;
+}
+
 export interface DefinitionRequest extends PositionRequest {
   /** `definition` (the default) or `type-definition`. */
   readonly kind?: 'definition' | 'type-definition';
@@ -159,6 +202,17 @@ export interface LspMultiplexer {
    * token's range, or `undefined` when it has nothing to say there. Read-only.
    */
   readonly hover: (request: PositionRequest) => Promise<Result<HoverView | undefined, LspError>>;
+  /** Whether a server that handles the file advertises `renameProvider` (ADR 0163); starts it to know. */
+  readonly renameSupport: (request: FileRequest) => Promise<Result<boolean, LspError>>;
+  /** `textDocument/prepareRename` at a position, when the server has it. Read-only. */
+  readonly prepareRename: (
+    request: PrepareRenameRequest,
+  ) => Promise<Result<PrepareRenameAnswer, LspError>>;
+  /**
+   * `textDocument/rename`: the server's `WorkspaceEdit` for giving the symbol at a position
+   * `newName`. A read: nothing is applied, no `didChange` is sent.
+   */
+  readonly rename: (request: RenameRequest) => Promise<Result<RenameAnswer, LspError>>;
   readonly status: () => readonly ServerStatus[];
   /**
    * Stops every server of the workspace `root` (resolved to its real path), so the next request
@@ -199,6 +253,8 @@ interface NodeHandle {
 
 const defaultMaxFileBytes = 8 * 1024 * 1024;
 const idleTimerPeriod = Temporal.Duration.from({ minutes: 1 });
+/** How long a rename waits for the server to report on the file before asking (ADR 0163). */
+const renameSettleTimeout = Temporal.Duration.from({ seconds: 5 });
 
 /**
  * Creates the LSP multiplexer. It owns its server processes: callers must `dispose` it (main does
@@ -788,6 +844,96 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       });
     },
 
+    renameSupport: async (request): Promise<Result<boolean, LspError>> => {
+      const opened = await openCapable(request, 'rename');
+      if (opened.ok) {
+        return ok(true);
+      }
+      if (
+        opened.error.kind === 'capability-missing' ||
+        opened.error.kind === 'unsupported-language'
+      ) {
+        return ok(false);
+      }
+      return opened;
+    },
+
+    prepareRename: async (request): Promise<Result<PrepareRenameAnswer, LspError>> => {
+      const opened = await openCapable(request, 'rename');
+      if (!opened.ok) {
+        return opened;
+      }
+      const { session, entry } = opened.value;
+      if (!session.server.capabilities.prepareRename) {
+        return ok({ kind: 'default' });
+      }
+      const result = await session.request(
+        'textDocument/prepareRename',
+        positionParams(opened.value, request.position),
+        { signal: request.signal },
+      );
+      if (!result.ok) {
+        return result;
+      }
+      const answer = parsePrepareRename(result.value);
+      if (answer.kind !== 'range') {
+        return ok(answer);
+      }
+      const mapper = await mapperFor(session, entry.workspace, [opened.value.document.uri]);
+      return ok({
+        kind: 'range',
+        range: mapper.range(opened.value.document.uri, answer.range),
+        placeholder: answer.placeholder,
+      });
+    },
+
+    rename: async (request): Promise<Result<RenameAnswer, LspError>> => {
+      const opened = await openCapable(request, 'rename');
+      if (!opened.ok) {
+        return opened;
+      }
+      const { session, entry, document } = opened.value;
+      // A server still loading its project renames only what it has read (tsserver renames an
+      // import's local name alone): wait until it has reported on the file, as diagnostics do.
+      await session.diagnostics(document, {
+        timeout: renameSettleTimeout,
+        grace: options.diagnosticsGrace ?? Temporal.Duration.from({ milliseconds: 1500 }),
+        quiet: entry.definition.diagnosticsQuiet,
+      });
+      const result = await session.request(
+        'textDocument/rename',
+        { ...positionParams(opened.value, request.position), newName: request.newName },
+        { signal: request.signal },
+      );
+      if (!result.ok) {
+        return result;
+      }
+      const parsed = parseWorkspaceEdit(result.value);
+      const byPath = new Map<string, LspTextEdit[]>();
+      let outside = 0;
+      for (const file of parsed.files) {
+        const resolved = await resolveEditedFile(entry.workspace, file.uri);
+        if (resolved === undefined) {
+          outside += 1;
+          continue;
+        }
+        byPath
+          .getOrInsertComputed(resolved, () => {
+            return [];
+          })
+          .push(...file.edits);
+      }
+      return ok({
+        encoding: session.server.capabilities.positionEncoding,
+        files: Array.from(byPath, ([filePath, edits]) => {
+          return { path: filePath, edits };
+        }).toSorted((a, b) => compareText(a.path, b.path)),
+        outside,
+        resourceOperations: parsed.resourceOperations,
+        malformed: parsed.malformed,
+      });
+    },
+
     status: (): readonly ServerStatus[] => {
       const statuses: ServerStatus[] = [];
       for (const entry of entries.values()) {
@@ -892,7 +1038,8 @@ interface DiagnosticsAnswer {
   >;
 }
 
-type Capability = 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition' | 'hover';
+type Capability =
+  'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition' | 'hover' | 'rename';
 
 const freshnessOrder: readonly DiagnosticsFreshness[] = ['fresh', 'assumed-unchanged', 'timed-out'];
 
@@ -978,6 +1125,38 @@ function positionParams(opened: OpenedFile, position: Position): Record<string, 
 
 function languageIdOf(definition: ServerDefinition, file: WorkspaceFile): string {
   return definition.languageIds[path.extname(file.absolutePath).toLowerCase()] ?? 'plaintext';
+}
+
+/**
+ * The checkout-relative real path of a file a server's edit names, or `undefined` when the URI is
+ * no file URI or doesn't resolve, after symlinks, to a regular file inside the checkout.
+ */
+async function resolveEditedFile(
+  workspace: WorkspaceRoot,
+  uri: string,
+): Promise<string | undefined> {
+  let filePath: string;
+  try {
+    filePath = fileURLToPath(uri);
+  } catch {
+    return undefined;
+  }
+  const resolved = await resolveWorkspaceFile(workspace, filePath);
+  if (!resolved.ok) {
+    return undefined;
+  }
+  return resolved.value.relativePath;
+}
+
+/** Code-unit order, the same on every machine. */
+function compareText(a: string, b: string): number {
+  if (a < b) {
+    return -1;
+  }
+  if (a > b) {
+    return 1;
+  }
+  return 0;
 }
 
 async function readInsideRoot(

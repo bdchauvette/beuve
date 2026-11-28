@@ -3,8 +3,9 @@ import type { ExpectStatic } from 'vitest';
 
 import type {
   AppInfo,
+  ComposeNoteView,
   DescriptionSheetView,
-  ExpandedNoteView,
+  AutoeditedNoteView,
   IpcError,
   IpcResult,
   OpenedView,
@@ -19,6 +20,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Err, Ok } from '#x/result/result.ts';
 
 import type { MainServices, SessionServices } from '../main-services.ts';
+import type { SheetLinesRequest } from '../sheets/create-sheet-services.ts';
 
 import { test } from '../testing/test.ts';
 import { createIpcHandlers } from './create-ipc-handlers.ts';
@@ -54,6 +56,8 @@ function perHeadRequestWithoutHead(channel: PerHeadInvokeChannel): object {
     'github:preview-review': { sessionId: 's1' },
     'github:post-review': { sessionId: 's1' },
     'lsp:call-hierarchy': { sessionId: 's1', path: 'a.ts', line: 1, direction: 'incoming' },
+    'lsp:prepare-rename': { sessionId: 's1', path: 'a.ts', line: 1, character: 0 },
+    'lsp:rename': { sessionId: 's1', path: 'a.ts', line: 1, character: 0, newName: 'b' },
     'terminal:open': { sessionId: 's1', cols: 80, rows: 24 },
     'setup:status': { sessionId: 's1' },
     'setup:run': { sessionId: 's1', cols: 80, rows: 24 },
@@ -364,6 +368,9 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
           hover: notWired,
           restart: notWired,
           status: notWiredError,
+          renameSupport: notWired,
+          prepareRename: notWired,
+          rename: notWired,
         },
       },
       appInfo(),
@@ -405,6 +412,9 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
           hover: notWired,
           restart: notWired,
           status: notWiredError,
+          renameSupport: notWired,
+          prepareRename: notWired,
+          rename: notWired,
         },
       },
       appInfo(),
@@ -450,6 +460,9 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
           },
           restart: notWired,
           status: notWiredError,
+          renameSupport: notWired,
+          prepareRename: notWired,
+          rename: notWired,
         },
       },
       appInfo(),
@@ -487,6 +500,9 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
           hover: notWired,
           restart: notWired,
           status: notWiredError,
+          renameSupport: notWired,
+          prepareRename: notWired,
+          rename: notWired,
         },
       },
       appInfo(),
@@ -523,6 +539,7 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
             }
             return notFound();
           },
+          checkLines: notWired,
         },
       },
       appInfo(),
@@ -552,6 +569,122 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
         path: 'src/a.ts',
       }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
+  });
+
+  test('asks the main window for a note only for a file sheet’s own commit and lines', async ({
+    expect,
+  }) => {
+    const composed: ComposeNoteView[] = [];
+    const checked: SheetLinesRequest[] = [];
+    const sha = 'c'.repeat(40);
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        sheets: {
+          getFile: notWired,
+          getHead: notWired,
+          getImage: notWired,
+          checkOpen: notWired,
+          checkLines: async (request): Promise<IpcResult<OpenedView>> => {
+            checked.push(request);
+            if (request.endLine <= 10) {
+              return sheetChecked();
+            }
+            return err({ code: 'invalid-request', message: 'src/a.ts has 10 lines' });
+          },
+        },
+      },
+      appInfo(),
+      {
+        sheetOf: (webContentsId) => {
+          if (webContentsId === 7) {
+            return { sessionId: 's1', sha };
+          }
+          return;
+        },
+        composeNote: (view): void => {
+          composed.push(view);
+        },
+      },
+    );
+    const note = { headSha: sha, path: 'src/a.ts', startLine: 3, endLine: 4, suggest: true };
+    const fromSheet = { webContentsId: 7 };
+    await expectInvalid(expect, handlers['sheet:add-note']({ ...note, path: '../a' }, fromSheet));
+    await expectInvalid(expect, handlers['sheet:add-note']({ ...note, endLine: 2 }, fromSheet));
+    await expectInvalid(
+      expect,
+      handlers['sheet:add-note']({ ...note, sessionId: 's2' }, fromSheet),
+    );
+    await expect(handlers['sheet:add-note'](note, { webContentsId: 1 })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'invalid-request' },
+    });
+    await expect(
+      handlers['sheet:add-note']({ ...note, headSha: 'd'.repeat(40) }, fromSheet),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+    await expect(
+      handlers['sheet:add-note']({ ...note, endLine: 11 }, fromSheet),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+    expect(composed).toStrictEqual([]);
+    await expect(handlers['sheet:add-note'](note, fromSheet)).resolves.toStrictEqual({
+      ok: true,
+      value: { sent: true },
+    });
+    expect(composed).toStrictEqual([{ sessionId: 's1', ...note }]);
+    expect(checked.at(-1)).toStrictEqual({
+      sessionId: 's1',
+      sha,
+      path: 'src/a.ts',
+      startLine: 3,
+      endLine: 4,
+    });
+    await expect(
+      createIpcHandlers(stubServices({}), appInfo())['sheet:add-note'](note, fromSheet),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
+    const rename = { ...note, endLine: 3, suggest: false, rename: { character: 2, newName: 'b' } };
+    for (const newName of ['', ' b', 'a\nb', 'x'.repeat(201)]) {
+      await expectInvalid(
+        expect,
+        handlers['sheet:add-note']({ ...rename, rename: { character: 2, newName } }, fromSheet),
+      );
+    }
+    await expectInvalid(expect, handlers['sheet:add-note']({ ...rename, endLine: 4 }, fromSheet));
+    await expect(handlers['sheet:add-note'](rename, fromSheet)).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(composed.at(-1)).toStrictEqual({ sessionId: 's1', ...rename });
+  });
+
+  test('runs Suggest Rename… requests in a scope the next one supersedes', async ({ expect }) => {
+    const seen: (AbortSignal | undefined)[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        lsp: {
+          ...stubServices({}).lsp,
+          prepareRename: async (_request, options) => {
+            seen.push(options?.signal);
+            await Promise.resolve();
+            return notWired();
+          },
+        },
+      },
+      appInfo(),
+    );
+    const request = {
+      sessionId: 's1',
+      expectedHeadSha: sha(),
+      path: 'src/a.ts',
+      line: 1,
+      character: 0,
+    };
+    const window = { webContentsId: 3 };
+    const first = handlers['lsp:prepare-rename'](request, window);
+    const second = handlers['lsp:prepare-rename'](request, window);
+    await expect(first).resolves.toMatchObject({ ok: false, error: { code: 'cancelled' } });
+    await expect(second).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
+    expect(seen.map((signal) => signal?.aborted)).toStrictEqual([true, false]);
+    await expectInvalid(expect, handlers['lsp:rename']({ ...request, newName: 'a\tb' }, window));
   });
 
   test('opens a description sheet only for a pull request main has read', async ({ expect }) => {
@@ -1293,7 +1426,7 @@ describe('github channels', () => {
   });
 });
 
-describe('ura:expand-note', () => {
+describe('ura:autoedit-note', () => {
   test('validates the draft and passes it on, scoped by its requestId (ADR 0125)', async ({
     expect,
   }) => {
@@ -1303,14 +1436,20 @@ describe('ura:expand-note', () => {
       {
         ...stubServices({}),
         drafting: {
-          expandNote: async (request, options): Promise<IpcResult<ExpandedNoteView>> => {
+          autoeditNote: async (request, options): Promise<IpcResult<AutoeditedNoteView>> => {
             calls.push(request);
             const aborted = Promise.withResolvers<undefined>();
             options?.signal?.addEventListener('abort', () => {
               aborted.resolve(undefined);
             });
             await aborted.promise;
-            return ok({ outcome: 'expanded', body: 'late', model: undefined });
+            return ok({
+              outcome: 'autoedited',
+              body: 'late',
+              suggestions: [],
+              droppedSuggestions: 0,
+              model: undefined,
+            });
           },
         },
       },
@@ -1325,13 +1464,29 @@ describe('ura:expand-note', () => {
       title: '',
       body: 'rename',
     };
-    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, headSha: 'abc' }));
-    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, severity: 'major' }));
-    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, chat: 'history' }));
+    await expectInvalid(expect, handlers['ura:autoedit-note']({ ...draft, headSha: 'abc' }));
+    await expectInvalid(expect, handlers['ura:autoedit-note']({ ...draft, severity: 'major' }));
+    await expectInvalid(expect, handlers['ura:autoedit-note']({ ...draft, chat: 'history' }));
+    const suggestion = { key: 'f1', path: 'src/a.ts', startLine: 3, endLine: 3, replacement: 'x' };
+    await expectInvalid(
+      expect,
+      handlers['ura:autoedit-note']({ ...draft, suggestions: [suggestion, suggestion] }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['ura:autoedit-note']({
+        ...draft,
+        suggestions: [{ ...suggestion, startLine: 5, endLine: 3 }],
+      }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['ura:autoedit-note']({ ...draft, suggestions: [{ ...suggestion, id: 'x' }] }),
+    );
     const sender = { webContentsId: 1 };
-    const first = handlers['ura:expand-note']({ ...draft, requestId: 'note-a' }, sender);
-    const other = handlers['ura:expand-note']({ ...draft, requestId: 'note-b' }, sender);
-    const again = handlers['ura:expand-note']({ ...draft, requestId: 'note-a' }, sender);
+    const first = handlers['ura:autoedit-note']({ ...draft, requestId: 'note-a' }, sender);
+    const other = handlers['ura:autoedit-note']({ ...draft, requestId: 'note-b' }, sender);
+    const again = handlers['ura:autoedit-note']({ ...draft, requestId: 'note-a' }, sender);
     const cancelled = { ok: false, error: { code: 'cancelled', message: 'cancelled' } };
     await expect(first).resolves.toStrictEqual(cancelled);
     expect(handlers['request:cancel']({ requestId: 'note-a' }, sender)).toStrictEqual(
@@ -1342,7 +1497,15 @@ describe('ura:expand-note', () => {
       ok({ cancelled: true }),
     );
     await expect(other).resolves.toStrictEqual(cancelled);
-    expect(calls).toStrictEqual([draft, draft, draft]);
+    const withSuggestion = handlers['ura:autoedit-note'](
+      { ...draft, suggestions: [suggestion], requestId: 'note-c' },
+      sender,
+    );
+    expect(handlers['request:cancel']({ requestId: 'note-c' }, sender)).toStrictEqual(
+      ok({ cancelled: true }),
+    );
+    await expect(withSuggestion).resolves.toStrictEqual(cancelled);
+    expect(calls).toStrictEqual([draft, draft, draft, { ...draft, suggestions: [suggestion] }]);
   });
 });
 
@@ -1396,8 +1559,17 @@ function stubServices(
       hover: notWired,
       restart: notWired,
       status: notWiredError,
+      renameSupport: notWired,
+      prepareRename: notWired,
+      rename: notWired,
     },
-    sheets: { getFile: notWired, getHead: notWired, getImage: notWired, checkOpen: notWired },
+    sheets: {
+      getFile: notWired,
+      getHead: notWired,
+      getImage: notWired,
+      checkOpen: notWired,
+      checkLines: notWired,
+    },
     remote: { permalink: notWired, openPermalink: notWired, openCommit: notWired },
     commits: { getCommit: notWired },
     shell: { openUrl: notWired },
@@ -1445,7 +1617,7 @@ function stubServices(
         return doNothingSync;
       },
     },
-    drafting: { expandNote: notWired },
+    drafting: { autoeditNote: notWired },
     terminal: {
       open: notWired,
       openScripted: notWired,

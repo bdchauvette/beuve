@@ -1,11 +1,18 @@
 import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 
-import type { UraAnchorView, UraSeverityView } from '#contract/ipc-contract.ts';
+import type {
+  UraAnchorView,
+  UraSeverityView,
+  UraSuggestionDraftView,
+} from '#contract/ipc-contract.ts';
 
-import './beuve-note-expand.ts';
-import './beuve-patch-preview.ts';
+import './beuve-note-autoedit.ts';
+import './beuve-suggestion-field.ts';
+import type { BeuveSuggestionField } from './beuve-suggestion-field.ts';
+import type { SuggestionFieldView } from './suggestion-field-view.ts';
 
 import { keyPlatformOf } from './key-platform-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
@@ -18,13 +25,20 @@ import { completionListStyles } from './completion-list-styles.ts';
 import { EmojiCompletion } from './emoji-completion.ts';
 import { emojiCompletionStyles } from './emoji-completion-styles.ts';
 
-/** What the composer submits: a note's label, whether it blocks, one-line title and Markdown body. */
+/**
+ * What the composer submits: a note's label, whether it blocks, one-line title and Markdown body,
+ * and its suggestions as its fields hold them, each with its id when it edits a stored one.
+ */
 export interface UraDraft {
   readonly severity: UraSeverityView;
   readonly blocking: boolean;
   readonly title: string;
   readonly body: string;
+  readonly suggestions: readonly UraSuggestionDraftView[];
 }
+
+/** A staged note's text, which an edit's composer starts from. */
+export type UraDraftText = Omit<UraDraft, 'suggestions'>;
 
 /**
  * The compact note composer Add Note opens under the staged lines (ADR 0027): a label menu that
@@ -32,10 +46,13 @@ export interface UraDraft {
  * and a body. Enter in
  * the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels. Both fields complete `:shortcode:` emoji
  * (ADR 0145), whose open list takes Enter and Escape first.
- * With a suggestion from an Add Suggestion edit (ADR 0043) it previews the patch that is staged with the
- * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Given a staged
- * note's {@link draft}, it opens with that note's text and saves it instead (ADR 0129). Emits
- * `beuve-ura-compose-submit` with a {@link UraDraft} and `beuve-ura-compose-cancel`.
+ * The note's suggestions are fields under the body (ADR 0162), which the owner lists in
+ * {@link suggestions}; Add suggestion asks for one more (`beuve-suggestion-add`) and a field's
+ * Remove asks for one fewer (`beuve-suggestion-field-remove`). ⌘/Ctrl+Return in a field saves and
+ * Escape cancels, as anywhere in the composer. Keys typed here never reach the diff stream's or
+ * the shell's shortcuts. Given a staged note's {@link draft}, it opens with that note's text and
+ * saves it instead (ADR 0129). Emits `beuve-ura-compose-submit` with a {@link UraDraft} and
+ * `beuve-ura-compose-cancel`.
  */
 @customElement('beuve-ura-composer')
 export class BeuveUraComposer extends LitElement {
@@ -125,20 +142,27 @@ export class BeuveUraComposer extends LitElement {
         outline: none;
       }
 
-      .suggestion {
+      /* Fields stand apart from the body and from each other, and the actions from the last one. */
+      .suggestions {
         display: grid;
-        gap: var(--beuve-space-0-5);
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--beuve-space-3);
+        margin-block-start: var(--beuve-space-1);
       }
 
-      .suggestion .label {
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
+      .actions {
+        flex-wrap: wrap;
+        margin-block-start: var(--beuve-space-2);
       }
 
       .hint,
       .error {
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
+      }
+
+      .hint {
+        margin: 0;
       }
 
       .error {
@@ -156,6 +180,10 @@ export class BeuveUraComposer extends LitElement {
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     // Text entry is never a shortcut: nothing typed here reaches the stream or the shell.
     event.stopPropagation();
+    // A suggestion field handled it (its own save and cancel come as events).
+    if (event.defaultPrevented) {
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       this.dispatchEvent(
@@ -190,17 +218,37 @@ export class BeuveUraComposer extends LitElement {
     );
   };
 
+  private readonly onFieldSave = (event: Event): void => {
+    event.stopPropagation();
+    this.submit();
+  };
+
+  private readonly onFieldCancel = (event: Event): void => {
+    event.stopPropagation();
+    this.onCancel();
+  };
+
+  private readonly onAddSuggestion = (): void => {
+    this.dispatchEvent(new CustomEvent('beuve-suggestion-add', { bubbles: true, composed: true }));
+  };
+
   /** `src/a.ts:12-14`, shown so the reviewer sees what the note is about. */
   @property() accessor where = '';
+  /** Where the note goes when posted, if not where a note usually does; shown under {@link where}. */
+  @property() accessor placement = '';
   /** Set by the owner while the note is being saved, or when saving failed. */
   @property({ type: Boolean }) accessor saving = false;
   @property() accessor error = '';
-  /** The suggested patch staged with the note; empty for none. */
-  @property() accessor patch = '';
+  /** The note's suggestion fields, in order (ADR 0162). */
+  @property({ attribute: false }) accessor suggestions: readonly SuggestionFieldView[] = [];
   /** The staged note being edited, whose text the fields start from; `undefined` for a new note. */
-  @property({ attribute: false }) accessor draft: UraDraft | undefined;
-  /** What the note is on, for Expand (ADR 0125). */
+  @property({ attribute: false }) accessor draft: UraDraftText | undefined;
+  /** What the note is on, for ✨ Autoedit (ADR 0125). */
   @property({ attribute: false }) accessor anchor: UraAnchorView | undefined;
+  /** The head {@link anchor} and the fields are on; empty for the open review's head. */
+  @property() accessor headSha = '';
+  /** Names the note to ✨ Autoedit: the staged note's id, or `new`. */
+  @property() accessor noteKey = 'new';
 
   @state() accessor severity: UraSeverityView = 'issue';
   @state() accessor blocking = false;
@@ -208,6 +256,8 @@ export class BeuveUraComposer extends LitElement {
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
+    this.addEventListener('beuve-suggestion-field-save', this.onFieldSave);
+    this.addEventListener('beuve-suggestion-field-cancel', this.onFieldCancel);
     // Clicks inside the composer must not make the card or stream steal focus.
     this.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -224,11 +274,24 @@ export class BeuveUraComposer extends LitElement {
     }
     const title = this.titleInput()?.value.trim() ?? '';
     const body = this.renderRoot.querySelector('textarea')?.value ?? '';
-    if (title === '' && body.trim() === '' && this.patch === '') {
+    const fields = [...this.renderRoot.querySelectorAll('beuve-suggestion-field')];
+    const suggestions = fields.map((field) => field.draft());
+    const reading = fields.find((_field, index) => suggestions[index] === undefined);
+    if (reading !== undefined) {
+      reading.focus();
+      return;
+    }
+    if (title === '' && body.trim() === '' && fields.length === 0) {
       this.titleInput()?.focus();
       return;
     }
-    const draft: UraDraft = { severity: this.severity, blocking: this.blocking, title, body };
+    const draft: UraDraft = {
+      severity: this.severity,
+      blocking: this.blocking,
+      title,
+      body,
+      suggestions: suggestions.filter((suggestion) => suggestion !== undefined),
+    };
     this.dispatchEvent(
       new CustomEvent('beuve-ura-compose-submit', { detail: draft, bubbles: true, composed: true }),
     );
@@ -248,10 +311,20 @@ export class BeuveUraComposer extends LitElement {
     this.titleInput()?.focus({ preventScroll: true });
   }
 
+  /** Focuses the suggestion field `key`, once it is rendered and its editor is open. */
+  async focusSuggestion(key: string): Promise<void> {
+    await this.updateComplete;
+    const field = [
+      ...this.renderRoot.querySelectorAll<BeuveSuggestionField>('beuve-suggestion-field'),
+    ].find((candidate) => candidate.field?.key === key);
+    field?.focus();
+  }
+
   override render(): TemplateResult {
     const labels = submitLabels(this.draft !== undefined);
     return html`<form @submit=${this.onSubmit} aria-label=${labels.form}>
       ${this.renderWhere()}
+      ${this.placement === '' ? nothing : html`<p class="hint">${this.placement}</p>`}
       <div class="row">
         <beuve-ura-label-menu
           .severity=${this.severity}
@@ -279,15 +352,30 @@ export class BeuveUraComposer extends LitElement {
         data-emoji-completion
       ></textarea>
       ${
-        this.patch === ''
+        this.suggestions.length === 0
           ? nothing
-          : html`<div class="suggestion">
-              <span class="label">Suggestion</span>
-              <beuve-patch-preview .patch=${this.patch}></beuve-patch-preview>
+          : html`<div class="suggestions">
+              ${repeat(
+                this.suggestions,
+                (field) => {
+                  return field.key;
+                },
+                (field) => {
+                  return html`<beuve-suggestion-field
+                    .field=${field}
+                    .anchor=${this.anchor}
+                  ></beuve-suggestion-field>`;
+                },
+              )}
             </div>`
       }
-      <div class="row">
-        <beuve-note-expand .anchor=${this.anchor}></beuve-note-expand>
+      <div class="row actions">
+        <beuve-note-autoedit
+          .anchor=${this.anchor}
+          .headSha=${this.headSha}
+          .noteKey=${this.noteKey}
+        ></beuve-note-autoedit>
+        <button class="button" type="button" @click=${this.onAddSuggestion}>Add suggestion</button>
         <span class="spacer"></span>
         ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
         <button class="button" type="button" title="Cancel (Esc)" @click=${this.onCancel}>

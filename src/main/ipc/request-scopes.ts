@@ -2,7 +2,10 @@
  * The kinds of request a newer one of the same kind, from the same window, supersedes (ADR 0079).
  * A window shows one review and one sheet file at a time, so only its latest load of each is
  * wanted, whichever session it is for. A `note-draft` is superseded only by one with the same
- * `requestId`: the renderer names a note's drafting requests by the note (ADR 0125).
+ * `requestId`: the renderer names a note's drafting requests by the note (ADR 0125). A
+ * `named-file` read (a `sheet:get-file` with a `requestId`, as each suggestion field's read of its
+ * lines is, ADR 0162) is likewise superseded only by one with its own id. A `rename` is
+ * Suggest Rename…'s `prepareRename` or `rename` (ADR 0163): the next of either supersedes it.
  */
 export type SupersededKind =
   | 'review'
@@ -10,9 +13,11 @@ export type SupersededKind =
   | 'tree'
   | 'file-attributes'
   | 'sheet-file'
+  | 'named-file'
   | 'sheet-head'
   | 'open-pull-request'
-  | 'note-draft';
+  | 'note-draft'
+  | 'rename';
 
 /** One request's cancellation. Disposing it when the request ends forgets it. */
 export interface RequestScope extends Disposable {
@@ -39,7 +44,7 @@ export class RequestScopes {
   /** Starts a request of `kind` from `window`, aborting the window's previous one of that kind. */
   begin(window: number, kind: SupersededKind, requestId?: string): RequestScope {
     let key = `${String(window)}\0${kind}`;
-    if (kind === 'note-draft') {
+    if (kind === 'note-draft' || kind === 'named-file') {
       key += `\0${requestId ?? ''}`;
     }
     this.#latest.get(key)?.controller.abort(new DOMException('superseded', 'AbortError'));

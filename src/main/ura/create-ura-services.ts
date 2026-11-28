@@ -22,6 +22,7 @@ import type {
   UraOrderView,
   UraPlacementView,
   UraRestoredView,
+  UraSuggestionPlacementView,
   UraStagedView,
   UraVerdictStateView,
   UraVerdictView,
@@ -43,6 +44,7 @@ import type { LineMapping } from '#internal/ura/line-mapping.ts';
 import { listUraItems } from '#internal/ura/list-ura-items.ts';
 import { listUraPostings } from '#internal/ura/list-ura-postings.ts';
 import { reanchorUraAnchor } from '#internal/ura/reanchor-ura-anchor.ts';
+import { reanchorUraSuggestion } from '#internal/ura/reanchor-ura-suggestion.ts';
 import { recordUraPostings } from '#internal/ura/record-ura-postings.ts';
 import { readVerdictChoice } from '#internal/ura/read-verdict-choice.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
@@ -55,6 +57,7 @@ import { withdrawUraItem } from '#internal/ura/withdraw-ura-item.ts';
 import { updateUraItem } from '#internal/ura/update-ura-item.ts';
 import { writeVerdictChoice } from '#internal/ura/write-verdict-choice.ts';
 import type { UraArtifact, UraSummary } from '#internal/ura/ura-artifact.ts';
+import type { UraHeadTexts } from '#internal/ura/compile-ura-artifact.ts';
 import type {
   CommitSha,
   SessionId,
@@ -72,6 +75,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
+import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
@@ -80,6 +84,8 @@ import type { SessionContext } from '../sessions/session-context.ts';
 import { noteLabelFrom } from '../chat/note-label-from.ts';
 
 import { buildLineMapping } from './build-line-mapping.ts';
+import { checkSuggestionRanges } from './check-suggestion-ranges.ts';
+import { readSuggestionTexts } from './read-suggestion-texts.ts';
 import { renderUraExport } from './render-ura-export.ts';
 import { uraItemViewFrom } from './ura-item-view-from.ts';
 import { uraSummaryFrom } from './ura-summary-from.ts';
@@ -169,6 +175,12 @@ export interface UraServicesOptions {
   readonly cacheSize?: number;
 }
 
+/** Where an item, and each of its suggestions, sits on the session's current head. */
+interface ItemPlacements {
+  readonly placement: UraPlacementView;
+  readonly suggestionPlacements: readonly UraSuggestionPlacementView[];
+}
+
 interface Head {
   readonly sessionId: string;
   readonly headSha: CommitSha;
@@ -247,31 +259,46 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   const placer = async (
     head: Head,
     items: readonly UraItem[],
-  ): Promise<(item: UraItem) => UraPlacementView> => {
+  ): Promise<(item: UraItem) => ItemPlacements> => {
     const built = await mappingsFor(head, items);
     const byHead = new Map(
       built.map((mapping) => {
         return [mapping.fromHeadSha, mapping] as const;
       }),
     );
-    return (item: UraItem): UraPlacementView => {
+    return (item: UraItem): ItemPlacements => {
       if (item.headSha === head.headSha) {
-        return { kind: 'current', anchor: item.anchor };
+        return {
+          placement: { kind: 'current', anchor: item.anchor },
+          suggestionPlacements: item.suggestions.map(({ path, startLine, endLine }) => {
+            return { kind: 'current', path, startLine, endLine };
+          }),
+        };
       }
       const mapping = byHead.get(item.headSha);
       if (mapping === undefined) {
-        return { kind: 'outdated', reason: 'no-line-mapping' };
+        const outdated = { kind: 'outdated', reason: 'no-line-mapping' } as const;
+        return {
+          placement: outdated,
+          suggestionPlacements: item.suggestions.map(() => outdated),
+        };
       }
-      return reanchorUraAnchor(item.anchor, mapping.files);
+      return {
+        placement: reanchorUraAnchor(item.anchor, mapping.files),
+        suggestionPlacements: item.suggestions.map((suggestion): UraSuggestionPlacementView => {
+          const moved = reanchorUraSuggestion(suggestion, mapping.files);
+          if (moved.kind === 'outdated') {
+            return moved;
+          }
+          const { path, startLine, endLine } = moved.suggestion;
+          return { kind: 'current', path, startLine, endLine };
+        }),
+      };
     };
   };
 
-  const postingsFor = (sessionId: string): ReadonlyMap<string, UraPosting> => {
-    return new Map(
-      listUraPostings(db, sessionId as SessionId).map((posting) => {
-        return [posting.itemId, posting];
-      }),
-    );
+  const postingsFor = (sessionId: string): readonly UraPosting[] => {
+    return listUraPostings(db, sessionId as SessionId);
   };
 
   const headOf = async (sessionId: string): Promise<IpcResult<Head>> => {
@@ -290,13 +317,48 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     return refreshed;
   };
 
+  /**
+   * The files the items' suggestions name, to derive their patches from; a read that fails is
+   * logged and leaves the patches out rather than failing the list.
+   */
+  const textsFor = async (head: Head, items: readonly UraItem[]): Promise<UraHeadTexts> => {
+    const texts = await readSuggestionTexts(head.repository, items);
+    if (texts.ok) {
+      return texts.value;
+    }
+    logger.warn('could not read the files of review suggestions', { error: texts.error });
+    return new Map();
+  };
+
+  /** Refuses suggestions on lines the item's head doesn't have (ADR 0162). */
+  const checkRanges = async (head: Head, item: UraItem): Promise<IpcResult<UraHeadTexts>> => {
+    if (item.suggestions.length === 0) {
+      return ok(new Map());
+    }
+    const texts = await readSuggestionTexts(head.repository, [item]);
+    if (!texts.ok) {
+      return gitFailure(logger, texts.error);
+    }
+    const checked = checkSuggestionRanges(item, texts.value);
+    if (!checked.ok) {
+      return checked;
+    }
+    return ok(texts.value);
+  };
+
   const viewOne = async (item: UraItem): Promise<IpcResult<UraItemView>> => {
     const head = await headOf(item.sessionId);
     if (!head.ok) {
       return head;
     }
     const place = await placer(head.value, [item]);
-    return ok(uraItemViewFrom(item, place(item), postingsFor(item.sessionId).get(item.id)));
+    return ok(
+      uraItemViewFrom(item, {
+        ...place(item),
+        postings: postingsFor(item.sessionId),
+        headTexts: await textsFor(head.value, [item]),
+      }),
+    );
   };
 
   /** The items `itemIds` names, which must all exist and share one session. */
@@ -417,6 +479,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       summary,
       items: items.value,
       lineMappings: await mappingsFor(head, live),
+      headTexts: await textsFor(head, live),
       ...(chosen !== undefined && { verdict: chosen }),
     });
     if (artifact.ok) {
@@ -481,8 +544,13 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       }
       const place = await placer(head.value, items.value);
       const postings = postingsFor(head.value.sessionId);
+      const headTexts = await textsFor(head.value, items.value);
       const views = items.value.map((item) => {
-        return uraItemViewFrom(item, place(item), postings.get(item.id));
+        return uraItemViewFrom(item, {
+          ...place(item),
+          postings,
+          headTexts,
+        });
       });
       return ok({
         sessionId: head.value.sessionId,
@@ -505,7 +573,6 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         }
         headSha = written.value;
       }
-      const patch = request.suggestedPatch ?? '';
       const item = createUraItem(
         {
           sessionId: head.value.sessionId as SessionId,
@@ -516,12 +583,16 @@ export function createUraServices(options: UraServicesOptions): UraServices {
           origin: { kind: 'human' },
           title: request.title,
           body: request.body,
-          ...(patch.trim() !== '' && { suggestion: patch }),
+          ...(request.suggestions !== undefined && { suggestions: request.suggestions }),
         },
         deps,
       );
       if (!item.ok) {
         return uraFailure(logger, item.error);
+      }
+      const headTexts = await checkRanges(head.value, item.value);
+      if (!headTexts.ok) {
+        return headTexts;
       }
       const inserted = insertUraItem(db, item.value);
       if (!inserted.ok) {
@@ -529,21 +600,32 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       }
       changed(item.value.sessionId);
       const place = await placer(head.value, [item.value]);
-      return ok(uraItemViewFrom(item.value, place(item.value)));
+      return ok(
+        uraItemViewFrom(item.value, {
+          ...place(item.value),
+          headTexts: headTexts.value,
+        }),
+      );
     },
 
-    update: async ({ itemId, suggestedPatch, ...text }): Promise<IpcResult<UraItemView>> => {
+    update: async ({ itemId, ...edit }): Promise<IpcResult<UraItemView>> => {
       const found = findUraItem(db, itemId as UraItemId);
       if (!found.ok) {
         return uraFailure(logger, found.error);
       }
-      const edit = {
-        ...text,
-        ...(suggestedPatch !== undefined && { suggestion: suggestionFrom(suggestedPatch) }),
-      };
-      const edited = editUraItem(found.value, edit, Temporal.Now.instant());
+      const edited = editUraItem(found.value, edit, { now: Temporal.Now.instant(), deps });
       if (!edited.ok) {
         return uraFailure(logger, edited.error);
+      }
+      if (edit.suggestions !== undefined) {
+        const head = await headOf(edited.value.sessionId);
+        if (!head.ok) {
+          return head;
+        }
+        const checked = await checkRanges(head.value, edited.value);
+        if (!checked.ok) {
+          return checked;
+        }
       }
       const saved = updateUraItem(db, edited.value);
       if (!saved.ok) {
@@ -570,7 +652,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const now = Temporal.Now.instant();
       const edited: UraItem[] = [];
       for (const item of items) {
-        const next = changedItem(item, { change, atSha, now });
+        const next = changedItem(item, { change, atSha, now, deps });
         if (!next.ok) {
           return uraFailure(logger, next.error);
         }
@@ -789,12 +871,13 @@ interface ItemChange {
   readonly change: UraItemsChange;
   readonly atSha: CommitSha | undefined;
   readonly now: Temporal.Instant;
+  readonly deps: UraDeps;
 }
 
 /** The item after the change, or `undefined` when it is in the asked-for state already. */
 function changedItem(
   item: UraItem,
-  { change, atSha, now }: ItemChange,
+  { change, atSha, now, deps }: ItemChange,
 ): Result<UraItem | undefined, UraItemError> {
   switch (change.kind) {
     case 'withdraw': {
@@ -819,13 +902,13 @@ function changedItem(
       if (item.severity === change.severity) {
         return ok(undefined);
       }
-      return editUraItem(item, { severity: change.severity }, now);
+      return editUraItem(item, { severity: change.severity }, { now, deps });
     }
     case 'blocking': {
       if (item.blocking === change.blocking) {
         return ok(undefined);
       }
-      return editUraItem(item, { blocking: change.blocking }, now);
+      return editUraItem(item, { blocking: change.blocking }, { now, deps });
     }
   }
 }
@@ -848,12 +931,4 @@ function putBackInOrder(db: DatabaseSync, { sessionId, order }: Deletion): void 
 
 function deriveStagedVerdict(items: readonly UraItem[]): UraVerdictView {
   return deriveUraVerdict(items.filter((item) => item.status.kind === 'staged'));
-}
-
-/** An empty suggestion clears it; anything else is kept as typed. */
-function suggestionFrom(patch: string): string {
-  if (patch.trim() === '') {
-    return '';
-  }
-  return patch;
 }

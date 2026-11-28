@@ -1,11 +1,17 @@
 import { countUraSeverities } from './count-ura-severities.ts';
 import type { UraCounts } from './count-ura-severities.ts';
-import type { OutdatedReason, UraArtifact, UraEntry, UraVerdict } from './ura-artifact.ts';
-import type { UraAnchor, UraOrigin } from './ura-item.ts';
+import type {
+  OutdatedReason,
+  UraArtifact,
+  UraEntry,
+  UraPlacedSuggestion,
+  UraVerdict,
+} from './ura-artifact.ts';
+import type { UraAnchor, UraItem, UraOrigin } from './ura-item.ts';
 import type { UraSeverity } from './ura-severities.ts';
 
 /** Identifies the schema of {@link AgentReview} and its XML form. */
-export type AgentReviewSchema = 'beuve.ura/1';
+export type AgentReviewSchema = 'beuve.ura/2';
 
 /** A location on the head side: lines are 1-based and inclusive. */
 export type AgentReviewAnchor =
@@ -47,8 +53,35 @@ export interface AgentReviewItem {
   readonly title: string;
   /** Markdown. */
   readonly body: string;
-  /** A unified diff for the anchored path, against the head the item was written against. */
-  readonly suggestedPatch?: string;
+  /** The replacements the reviewer suggests, in their order, each placed on its own (ADR 0162). */
+  readonly suggestions: readonly AgentReviewSuggestion[];
+}
+
+/** Lines of a file: 1-based and inclusive; `endLine` is `startLine - 1` for an insertion. */
+export interface AgentReviewLines {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+/**
+ * A replacement of lines, on any path, inside or outside the change. Its lines are on
+ * `change.headSha`, absent when it is outdated; it is never dropped.
+ */
+export interface AgentReviewSuggestion extends Partial<AgentReviewLines> {
+  /** Present instead of the lines when they no longer map onto the head. */
+  readonly outdated?: {
+    readonly reason: OutdatedReason;
+    readonly writtenAgainstSha: string;
+  } & AgentReviewLines;
+  /** The new lines, `\n`-joined, without a final newline; `''` deletes the lines. */
+  readonly replacement: string;
+  /**
+   * The unified diff of the replacement, derived from the file at `patchAgainstSha`, the head the
+   * note was written against; absent when the file couldn't be read or nothing changes.
+   */
+  readonly patch?: string;
+  readonly patchAgainstSha?: string;
 }
 
 /**
@@ -114,7 +147,7 @@ export function buildAgentReview(
   const written = options.summary?.trim() ?? '';
   const { change } = summary;
   return {
-    schema: 'beuve.ura/1',
+    schema: 'beuve.ura/2',
     change: {
       repository: repositoryFrom(change),
       scope: summary.scope.kind,
@@ -130,7 +163,7 @@ export function buildAgentReview(
   };
 }
 
-function itemFrom({ item, placement }: UraEntry): AgentReviewItem {
+function itemFrom({ item, placement, suggestions }: UraEntry): AgentReviewItem {
   return {
     id: item.id,
     severity: item.severity,
@@ -139,7 +172,32 @@ function itemFrom({ item, placement }: UraEntry): AgentReviewItem {
     ...placementFrom({ item, placement }),
     title: item.title,
     body: item.body,
-    ...(item.suggestion !== undefined && { suggestedPatch: item.suggestion.text }),
+    suggestions: suggestions.map((placed) => suggestionFrom(item, placed)),
+  };
+}
+
+function suggestionFrom(
+  item: UraItem,
+  { suggestion, placement, patch }: UraPlacedSuggestion,
+): AgentReviewSuggestion {
+  const derived = {
+    replacement: suggestion.replacement,
+    ...(patch !== undefined && { patch, patchAgainstSha: item.headSha }),
+  };
+  if (placement.kind === 'current') {
+    const { path, startLine, endLine } = placement.suggestion;
+    return { path, startLine, endLine, ...derived };
+  }
+  const { path, startLine, endLine } = suggestion;
+  return {
+    outdated: {
+      reason: placement.reason,
+      writtenAgainstSha: item.headSha,
+      path,
+      startLine,
+      endLine,
+    },
+    ...derived,
   };
 }
 
@@ -179,7 +237,7 @@ function repositoryFrom(
 function placementFrom({
   item,
   placement,
-}: UraEntry): Pick<AgentReviewItem, 'anchor' | 'outdated'> {
+}: Pick<UraEntry, 'item' | 'placement'>): Pick<AgentReviewItem, 'anchor' | 'outdated'> {
   if (placement.kind === 'current') {
     return { anchor: anchorFrom(placement.anchor) };
   }

@@ -6,6 +6,9 @@ import { sessionReviewRangesMigration } from '#internal/session/session-review-r
 import { setupMigrations } from '#internal/setup/setup-migrations.ts';
 import { uraFindingConfidenceMigration } from '#internal/ura/ura-finding-confidence-migration.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
+import { uraPostingPiecesMigration } from '#internal/ura/ura-posting-pieces-migration.ts';
+import { uraSuggestionIdsMigration } from '#internal/ura/ura-suggestion-ids-migration.ts';
+import { uraSuggestionsMigration } from '#internal/ura/ura-suggestions-migration.ts';
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 import { retiredMigrations } from './retired-migrations.ts';
@@ -31,4 +34,7 @@ export const appMigrations: readonly Migration[] = Object.freeze([
   ...retiredMigrations,
   uraFindingConfidenceMigration,
   sessionReviewRangesMigration,
+  uraSuggestionsMigration,
+  uraPostingPiecesMigration,
+  uraSuggestionIdsMigration,
 ]);

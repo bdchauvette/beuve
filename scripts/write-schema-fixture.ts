@@ -130,49 +130,49 @@ function sessionRows(): string {
 }
 
 function uraRows(): string {
-  const patch = [
-    '--- a/src/a.ts',
-    '+++ b/src/a.ts',
-    '@@ -3,1 +3,1 @@',
-    '-  for (let i = 0; i < n - 1; i++) {',
-    '+  for (let i = 0; i < n; i++) {',
-    '',
-  ].join('\n');
+  const replacement = '  for (let i = 0; i < n; i++) {';
   return `
     INSERT INTO ura_items (id, session_id, position, head_sha, anchor_kind, path, line_start,
                            line_end, severity, blocking, origin_kind, chat_message_id,
-                           chat_finding, chat_proposal, title, body, patch, status, addressed_sha,
+                           chat_finding, chat_proposal, title, body, status, addressed_sha,
                            addressed_by, created_at, updated_at)
     VALUES
       ('${id(21)}', '${id(1)}', 0, '${sha(1)}', 'lines', 'src/a.ts', 3, 3, 'issue', 1, 'human',
-       NULL, NULL, NULL, 'Off by one', 'The loop stops one short.', ${quoted(patch)}, 'staged', NULL,
+       NULL, NULL, NULL, 'Off by one', 'The loop stops one short.', 'staged', NULL,
        NULL, '${at(4)}', '${at(4)}'),
       ('${id(22)}', '${id(1)}', 1, '${sha(1)}', 'file', 'README.md', NULL, NULL, 'suggestion', 0,
-       'human', NULL, NULL, NULL, '', 'Mention the --verbose flag.', NULL, 'staged', NULL, NULL,
+       'human', NULL, NULL, NULL, '', 'Mention the --verbose flag.', 'staged', NULL, NULL,
        '${at(4)}', '${at(5)}'),
       ('${id(23)}', '${id(1)}', 2, '${sha(1)}', 'change', NULL, NULL, NULL, 'praise', 0, 'human',
-       NULL, NULL, NULL, 'Clear tests', '', NULL, 'withdrawn', NULL, NULL, '${at(4)}', '${at(6)}'),
+       NULL, NULL, NULL, 'Clear tests', '', 'withdrawn', NULL, NULL, '${at(4)}', '${at(6)}'),
       ('${id(24)}', '${id(1)}', 3, '${sha(1)}', 'lines', 'src/b.ts', 10, 14, 'todo', 1, 'human',
-       NULL, NULL, NULL, 'Handle the empty list', '', NULL, 'staged', NULL, NULL, '${at(5)}',
+       NULL, NULL, NULL, 'Handle the empty list', '', 'staged', NULL, NULL, '${at(5)}',
        '${at(5)}'),
       ('${id(25)}', '${id(2)}', 0, '${sha(4)}', 'lines', 'src/a.ts', 3, 5, 'question', 0,
        'chat-answer', '${id(34)}', 0, NULL, 'Can n be zero?', 'An empty input skips the loop.',
-       NULL, 'addressed', '${sha(2)}', 'agent', '${at(3)}', '${at(6)}'),
+       'addressed', '${sha(2)}', 'agent', '${at(3)}', '${at(6)}'),
       ('${id(26)}', '${id(2)}', 1, '${sha(4)}', 'lines', 'src/c.ts', 1, 2, 'nitpick', 0,
-       'chat-answer', '${id(32)}', NULL, 0, 'Name the constant', 'magic number', NULL,
+       'chat-answer', '${id(32)}', NULL, 0, 'Name the constant', 'magic number',
        'addressed', '${sha(2)}', 'reviewer', '${at(3)}', '${at(6)}'),
       ('${id(27)}', '${id(2)}', 2, '${sha(2)}', 'lines', 'src/c.ts', 8, 8, 'smell', 0,
-       'chat-answer', '${id(34)}', 1, NULL, '', 'This retries forever.', NULL, 'staged', NULL,
+       'chat-answer', '${id(34)}', 1, NULL, '', 'This retries forever.', 'staged', NULL,
        NULL, '${at(6)}', '${at(6)}'),
       ('${id(28)}', '${id(2)}', 3, '${sha(2)}', 'change', NULL, NULL, NULL, 'chore', 1, 'human',
-       NULL, NULL, NULL, 'Update the changelog', '', NULL, 'staged', NULL, NULL, '${at(7)}',
+       NULL, NULL, NULL, 'Update the changelog', '', 'staged', NULL, NULL, '${at(7)}',
        '${at(7)}'),
       ('${id(29)}', '${id(3)}', 0, '${sha256(3)}', 'file', 'Makefile', NULL, NULL, 'thought', 0,
-       'human', NULL, NULL, NULL, '', 'Could this target be phony?', NULL, 'staged', NULL, NULL,
+       'human', NULL, NULL, NULL, '', 'Could this target be phony?', 'staged', NULL, NULL,
        '${at(7)}', '${at(7)}'),
       ('${id(30)}', '${id(3)}', 1, '${sha256(3)}', 'lines', 'lib/ünï.c', 2, 4, 'note', 0, 'human',
-       NULL, NULL, NULL, 'Mind the locale', '', NULL, 'withdrawn', NULL, NULL, '${at(7)}',
+       NULL, NULL, NULL, 'Mind the locale', '', 'withdrawn', NULL, NULL, '${at(7)}',
        '${at(8)}');
+
+    INSERT INTO ura_item_suggestions (item_id, position, id, path, start_line, end_line,
+                                      replacement)
+    VALUES
+      ('${id(21)}', 0, '${id(41)}', 'src/a.ts', 3, 3, ${quoted(replacement)}),
+      ('${id(22)}', 0, '${id(42)}', 'README.md', 1, 0, '# Usage'),
+      ('${id(26)}', 0, '${id(43)}', 'src/c.ts', 1, 2, 'const limit = 3;');
 
     INSERT INTO ura_verdict_choices (session_id, verdict, cleared_reason, head_sha, updated_at)
     VALUES
@@ -180,14 +180,17 @@ function uraRows(): string {
       ('${id(2)}', NULL, 'head-moved', NULL, '${at(6)}'),
       ('${id(3)}', NULL, 'blocking-staged', NULL, '${at(7)}');
 
-    INSERT INTO ura_item_postings (item_id, target, session_id, url, head_sha, placement,
-                                   posted_at)
+    INSERT INTO ura_item_postings (item_id, target, piece, suggestion_id, session_id, url,
+                                   head_sha, placement, posted_at)
     VALUES
-      ('${id(25)}', 'github', '${id(2)}',
-       'https://github.com/octo/beuve/pull/42#discussion_r1', '${sha(4)}', 'inline', '${at(5)}'),
-      ('${id(26)}', 'github', '${id(2)}',
+      ('${id(25)}', 'github', 'note', '', '${id(2)}',
+       'https://github.com/octo/beuve/pull/42#discussion_r1', '${sha(4)}', 'comment', '${at(5)}'),
+      ('${id(26)}', 'github', 'note', '', '${id(2)}',
        'https://github.com/octo/beuve/pull/42#pullrequestreview-2', '${sha(4)}', 'body',
-       '${at(5)}');
+       '${at(5)}'),
+      ('${id(26)}', 'github', 'suggestion', '${id(43)}', '${id(2)}',
+       'https://github.com/octo/beuve/pull/42#pullrequestreview-2', '${sha(4)}',
+       'suggestion-comment', '${at(5)}');
   `;
 }
 

@@ -4,6 +4,7 @@ import { describe } from 'vitest';
 
 import { uraItemFromRow } from './ura-item-from-row.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
+import { testUraIds } from './testing/test-ura-ids.ts';
 import { uraItemRowFrom } from './ura-item-row-from.ts';
 import type { UraItem } from './ura-item.ts';
 import { test } from './testing/test.ts';
@@ -15,7 +16,6 @@ function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQL
     'chat_finding',
     'chat_proposal',
     'chat_confidence',
-    'patch',
     'addressed_sha',
     'addressed_by',
   ];
@@ -34,7 +34,7 @@ function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQL
 }
 
 function reasonOf(overrides: Record<string, SQLOutputValue>): string | undefined {
-  const result = uraItemFromRow(row(overrides));
+  const result = uraItemFromRow(row(overrides), []);
   if (result.ok) {
     return undefined;
   }
@@ -43,8 +43,8 @@ function reasonOf(overrides: Record<string, SQLOutputValue>): string | undefined
 
 describe('uraItemFromRow', () => {
   test('maps a valid row, with integers as numbers or bigints', ({ expect }) => {
-    expect(uraItemFromRow(row())).toStrictEqual({ ok: true, value: item() });
-    expect(uraItemFromRow(row({ line_start: 10n, line_end: 12n }))).toStrictEqual({
+    expect(uraItemFromRow(row(), [])).toStrictEqual({ ok: true, value: item() });
+    expect(uraItemFromRow(row({ line_start: 10n, line_end: 12n }), [])).toStrictEqual({
       ok: true,
       value: item(),
     });
@@ -55,10 +55,13 @@ describe('uraItemFromRow', () => {
       origin: { kind: 'chat-answer', messageId: 'm1', proposal: 2 },
     });
     expect(
-      uraItemFromRow({
-        ...row(),
-        ...(uraItemRowFrom(proposed) as Record<string, SQLOutputValue>),
-      }),
+      uraItemFromRow(
+        {
+          ...row(),
+          ...(uraItemRowFrom(proposed) as Record<string, SQLOutputValue>),
+        },
+        [],
+      ),
     ).toStrictEqual({ ok: true, value: proposed });
   });
 
@@ -67,7 +70,10 @@ describe('uraItemFromRow', () => {
       origin: { kind: 'chat-answer', messageId: 'm1', finding: 0, confidence: 0.75 },
     });
     expect(
-      uraItemFromRow({ ...row(), ...(uraItemRowFrom(finding) as Record<string, SQLOutputValue>) }),
+      uraItemFromRow(
+        { ...row(), ...(uraItemRowFrom(finding) as Record<string, SQLOutputValue>) },
+        [],
+      ),
     ).toStrictEqual({ ok: true, value: finding });
   });
 
@@ -79,7 +85,6 @@ describe('uraItemFromRow', () => {
     ['blocking', 2, 'blocking is not 0 or 1'],
     ['blocking', 'yes', 'blocking is not 0 or 1'],
     ['title', 7, 'title or body is not text'],
-    ['patch', 7, 'patch is not text'],
     ['updated_at', 'now', 'created_at or updated_at is not an ISO-8601 UTC timestamp'],
     ['anchor_kind', 'hunk', 'anchor_kind is unknown'],
     ['line_end', 1.5, 'path, line_start or line_end is missing'],
@@ -88,6 +93,51 @@ describe('uraItemFromRow', () => {
     ['line_start', 20, 'invalid-anchor: the end line comes before the start line'],
   ])('reports a bad %s', ([column, value, reason], { expect }) => {
     expect(reasonOf({ [column]: value })).toBe(reason);
+  });
+
+  test('maps suggestion rows in order, with integers as numbers or bigints', ({ expect }) => {
+    const [first, second] = [testUraIds.suggestionId(1), testUraIds.suggestionId(2)];
+    const rows = [
+      { id: first, path: 'src/b.ts', start_line: 4n, end_line: 3n, replacement: 'new' },
+      { id: second, path: 'src/app.ts', start_line: 10, end_line: 11, replacement: '' },
+    ];
+    expect(uraItemFromRow(row(), rows)).toStrictEqual({
+      ok: true,
+      value: {
+        ...item(),
+        suggestions: [
+          { id: first, path: 'src/b.ts', startLine: 4, endLine: 3, replacement: 'new' },
+          { id: second, path: 'src/app.ts', startLine: 10, endLine: 11, replacement: '' },
+        ],
+      },
+    });
+  });
+
+  test('reports bad suggestion rows', ({ expect }) => {
+    const good = {
+      id: testUraIds.suggestionId(1),
+      path: 'src/b.ts',
+      start_line: 4,
+      end_line: 4,
+      replacement: 'x',
+    };
+    expect(uraItemFromRow(row(), [{ ...good, replacement: 7 }])).toMatchObject({
+      ok: false,
+      error: {
+        table: 'ura_item_suggestions',
+        reason: 'id, path, start_line, end_line or replacement is missing',
+      },
+    });
+    expect(
+      uraItemFromRow(row(), [good, { ...good, id: testUraIds.suggestionId(2) }]),
+    ).toMatchObject({
+      ok: false,
+      error: { reason: 'invalid-suggestion: suggestions of one note must not overlap' },
+    });
+    expect(uraItemFromRow(row(), [{ ...good, id: 'x' }])).toMatchObject({
+      ok: false,
+      error: { reason: "invalid-suggestion: a suggestion's id is a UUID" },
+    });
   });
 
   test('reports incomplete origins and statuses', ({ expect }) => {

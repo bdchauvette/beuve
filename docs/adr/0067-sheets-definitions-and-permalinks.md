@@ -1,6 +1,6 @@
 # 0067. Sheets: whole files pinned to a commit, definition jumps and permalinks
 
-- Status: Accepted (inline sheets removed 2026-11-06); amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md) and [0123](0123-rich-views-starting-with-rendered-markdown.md)
+- Status: Accepted (inline sheets removed 2026-11-06); amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md), [0123](0123-rich-views-starting-with-rendered-markdown.md) and [0162](0162-suggestions-are-a-notes-list-of-replacements.md) (`sheet:add-note`)
 - Date: 2026-10-30
 
 ## Context

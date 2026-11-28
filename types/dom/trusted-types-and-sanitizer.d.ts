@@ -11,10 +11,22 @@ interface TrustedScriptURL {
   toString(): string;
 }
 
-/** The conversions a policy offers; a sink whose conversion is missing throws. */
+/**
+ * Parser options that a Trusted Types policy admitted. From Chromium 158, `parseHTMLUnsafe` and
+ * `setHTMLUnsafe` are a Trusted Types sink for their options too; Chromium 156 has no such type.
+ */
+interface TrustedHTMLParserOptions {
+  readonly [Symbol.toStringTag]: 'TrustedHTMLParserOptions';
+}
+
+/**
+ * The conversions a policy offers; a sink whose conversion is missing throws. A browser without
+ * `createParserOptions` ignores it, as it ignores any member a dictionary does not declare.
+ */
 interface TrustedTypePolicyOptions {
   createHTML?: (input: string, type: string, sink: string) => string;
   createScriptURL?: (input: string, type: string, sink: string) => string;
+  createParserOptions?: (options: SetHTMLOptions) => SetHTMLOptions;
 }
 
 /** A named policy, created once per document unless the CSP says `'allow-duplicates'`. */
@@ -22,6 +34,8 @@ interface TrustedTypePolicy {
   readonly name: string;
   createHTML(input: string): TrustedHTML;
   createScriptURL(input: string): TrustedScriptURL;
+  /** Absent before Chromium 158. */
+  createParserOptions?: (options: SetHTMLOptions) => TrustedHTMLParserOptions;
 }
 
 /** `globalThis.trustedTypes`. */
@@ -53,6 +67,12 @@ interface ShadowRoot {
 interface DocumentParsers {
   /** Parses into an inert document, always removing unsafe markup. */
   parseHTML(html: string, options?: SetHTMLOptions): Document;
-  /** Parses into an inert document, removing only what the sanitizer removes. A Trusted Types sink. */
-  parseHTMLUnsafe(html: TrustedHTML | string, options?: SetHTMLOptions): Document;
+  /**
+   * Parses into an inert document, removing only what the sanitizer removes. A Trusted Types sink
+   * for `html`, and from Chromium 158 for `options`.
+   */
+  parseHTMLUnsafe(
+    html: TrustedHTML | string,
+    options?: SetHTMLOptions | TrustedHTMLParserOptions,
+  ): Document;
 }

@@ -5,16 +5,18 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { sqliteErrorCode } from '#sqlite/sqlite-error-code.ts';
+import { withTransaction } from '#sqlite/with-transaction.ts';
 import { uraItemRowFrom } from './ura-item-row-from.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
+import { writeUraSuggestions } from './write-ura-suggestions.ts';
 
 const foreignKeyViolation = 787;
 const primaryKeyViolation = 1555;
 const uniqueViolation = 2067;
 
 /**
- * Appends an item to the end of its session's notes list. A `/review` finding or a proposed note can be
- * staged once; a repeat is `duplicate-item`, so main can find and restore the existing item
+ * Appends an item, with its suggestions, to the end of its session's notes list. A `/review`
+ * finding or a proposed note can be staged once; a repeat is `duplicate-item`, so main can find and restore the existing item
  * instead.
  */
 export function insertUraItem(
@@ -22,20 +24,10 @@ export function insertUraItem(
   item: UraItem,
 ): Result<void, Extract<UraStoreError, { kind: 'session-not-found' | 'duplicate-item' }>> {
   try {
-    db.prepare(
-      `INSERT INTO ura_items (id, session_id, position, head_sha, anchor_kind, path, line_start,
-                              line_end, severity, blocking, origin_kind, chat_message_id,
-                              chat_finding, chat_proposal, chat_confidence,
-                              title, body, patch, status, addressed_sha, addressed_by,
-                              created_at, updated_at)
-       VALUES (:id, :session_id,
-               (SELECT coalesce(max(position) + 1, 0) FROM ura_items WHERE session_id = :session_id),
-               :head_sha, :anchor_kind, :path, :line_start, :line_end, :severity, :blocking,
-               :origin_kind, :chat_message_id, :chat_finding, :chat_proposal, :chat_confidence,
-               :title, :body,
-               :patch, :status,
-               :addressed_sha, :addressed_by, :created_at, :updated_at);`,
-    ).run(uraItemRowFrom(item));
+    withTransaction(db, (): void => {
+      insertRow(db, item);
+      writeUraSuggestions(db, item);
+    });
   } catch (error: unknown) {
     switch (sqliteErrorCode(error)) {
       case foreignKeyViolation: {
@@ -57,4 +49,20 @@ export function insertUraItem(
     }
   }
   return ok(undefined);
+}
+
+function insertRow(db: DatabaseSync, item: UraItem): void {
+  db.prepare(
+    `INSERT INTO ura_items (id, session_id, position, head_sha, anchor_kind, path, line_start,
+                            line_end, severity, blocking, origin_kind, chat_message_id,
+                            chat_finding, chat_proposal, chat_confidence,
+                            title, body, status, addressed_sha, addressed_by,
+                            created_at, updated_at)
+     VALUES (:id, :session_id,
+             (SELECT coalesce(max(position) + 1, 0) FROM ura_items WHERE session_id = :session_id),
+             :head_sha, :anchor_kind, :path, :line_start, :line_end, :severity, :blocking,
+             :origin_kind, :chat_message_id, :chat_finding, :chat_proposal, :chat_confidence,
+             :title, :body, :status,
+             :addressed_sha, :addressed_by, :created_at, :updated_at);`,
+  ).run(uraItemRowFrom(item));
 }

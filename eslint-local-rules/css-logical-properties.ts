@@ -3,6 +3,7 @@ import type { TSESTree } from '@typescript-eslint/utils';
 
 import { cssDeclarationsFrom } from './css-declarations-from.ts';
 import type { CssDeclaration } from './css-declarations-from.ts';
+import { cssDeclarationsFromTheme } from './css-declarations-from-theme.ts';
 
 type MessageIds = 'physicalProperty' | 'physicalValue' | 'asymmetricShorthand';
 
@@ -59,6 +60,7 @@ const boxShorthands: ReadonlySet<string> = new Set([
  * A four-value box shorthand whose left and right differ (`padding: 0 0 0 8px`) becomes
  * `padding-block` and `padding-inline`, and a border radius whose corners differ across the inline
  * axis becomes the `border-start-start-radius` family; shorthands that mirror left and right stay.
+ * A CodeMirror theme spec (`EditorView.theme({ … })`, ADR 0162) is checked the same way.
  */
 export const cssLogicalProperties = ESLintUtils.RuleCreator.withoutDocs<[], MessageIds>({
   meta: {
@@ -74,6 +76,19 @@ export const cssLogicalProperties = ESLintUtils.RuleCreator.withoutDocs<[], Mess
   },
   create(context) {
     return {
+      CallExpression(node: TSESTree.CallExpression): void {
+        const declarations = cssDeclarationsFromTheme(node) ?? [];
+        for (const declaration of declarations) {
+          const finding = findingFrom(declaration);
+          if (finding !== undefined) {
+            context.report({
+              node: declaration.node,
+              messageId: finding.messageId,
+              data: { found: finding.found, logical: finding.logical },
+            });
+          }
+        }
+      },
       TaggedTemplateExpression(node: TSESTree.TaggedTemplateExpression): void {
         if (node.tag.type !== AST_NODE_TYPES.Identifier || node.tag.name !== 'css') {
           return;

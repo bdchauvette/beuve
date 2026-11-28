@@ -1,6 +1,6 @@
 # 0043. Inline edits become suggested patches, never writes
 
-- Status: Accepted
+- Status: Superseded by [0162](0162-suggestions-are-a-notes-list-of-replacements.md)
 - Date: 2026-10-29
 
 ## Context

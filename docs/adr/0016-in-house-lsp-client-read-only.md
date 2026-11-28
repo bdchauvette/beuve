@@ -1,6 +1,6 @@
 # 0016. In-house JSON-RPC and LSP client, read-only by construction
 
-- Status: Accepted
+- Status: Accepted; amended by [0163](0163-suggest-rename-from-the-language-server.md) (rename requests)
 - Date: 2026-10-28
 
 ## Context

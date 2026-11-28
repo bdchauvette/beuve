@@ -564,6 +564,91 @@ export interface HoverView {
 }
 
 /**
+ * `lsp:rename-support` (ADR 0163): whether Suggest Rename… can run on a file of `sha` (the session
+ * head when absent): it is the session head, and a language server that handles the file
+ * advertises `renameProvider`. Asking starts the server.
+ */
+export interface RenameSupportRequest {
+  readonly sessionId: string;
+  readonly sha?: string;
+  /** Repository-relative path with `/` separators. */
+  readonly path: string;
+}
+
+export interface RenameSupportView {
+  readonly sha: string;
+  readonly supported: boolean;
+}
+
+/**
+ * A token of a file at the session head that Suggest Rename… asks about (ADR 0163): 1-based
+ * `line`, 0-based UTF-16 `character`. `expectedHeadSha` is the head shown (ADR 0078); main refuses
+ * when the session's head is no longer that one.
+ */
+export interface PrepareRenameRequest {
+  readonly sessionId: string;
+  readonly expectedHeadSha: string;
+  /** Repository-relative path with `/` separators. */
+  readonly path: string;
+  readonly line: number;
+  readonly character: number;
+}
+
+/**
+ * `lsp:prepare-rename`'s answer: the token and the name to offer (the server's placeholder, else
+ * the token's text), or the server's refusal, shown in place of the field.
+ */
+export type PrepareRenameView =
+  | {
+      readonly kind: 'ready';
+      readonly headSha: string;
+      readonly range: SheetRangeView;
+      readonly placeholder: string;
+    }
+  | { readonly kind: 'refused'; readonly headSha: string; readonly message: string };
+
+/** `lsp:rename` (ADR 0163): the server's rename of the token to `newName`, as a preview. */
+export interface RenameRequest extends PrepareRenameRequest {
+  readonly newName: string;
+}
+
+/** One file a rename suggests changes to, its suggestions in line order. */
+export interface RenameFileView {
+  readonly path: string;
+  readonly suggestions: readonly UraSuggestionDraftView[];
+}
+
+/** A file the rename edits whose edits can't be suggestions, and why. */
+export interface RenameUnusableFileView {
+  readonly path: string;
+  readonly reason: string;
+}
+
+/**
+ * What a rename would stage (ADR 0163): one note, titled `title` and anchored at `line` of `path`
+ * on `headSha`, with each file's suggestions in path then line order. The counts are what the
+ * server's answer held that is left out: resource operations (create, rename or delete a file),
+ * documents outside beuve's head checkout, files the head doesn't track, edits that are none of
+ * the protocol's shapes, and files whose edits can't be suggestions.
+ */
+export interface RenamePreviewView {
+  readonly headSha: string;
+  readonly path: string;
+  readonly line: number;
+  readonly oldName: string;
+  readonly newName: string;
+  readonly title: string;
+  readonly files: readonly RenameFileView[];
+  readonly leftOut: {
+    readonly resourceOperations: number;
+    readonly outsideCheckout: number;
+    readonly untracked: number;
+    readonly malformed: number;
+    readonly unusable: readonly RenameUnusableFileView[];
+  };
+}
+
+/**
  * The language servers' diagnostics for one file (ADR 0111), asked in a checkout of `sha`, which
  * must be the session head: diagnostics exist at the head only. The session head when absent.
  */
@@ -637,6 +722,13 @@ export interface SheetFileRequest {
   readonly sessionId: string;
   readonly sha: string;
   readonly path: string;
+  /**
+   * Names a read that only a read with the same id from the same window supersedes, and that
+   * `request:cancel` stops (ADR 0079), so a suggestion field's read of its lines (ADR 0162) never
+   * cancels another's. Without one, a window's newer read supersedes its older one, as a sheet's
+   * file is only ever the latest.
+   */
+  readonly requestId?: string;
 }
 
 /**
@@ -1369,6 +1461,46 @@ export type UraPlacementView =
   | { readonly kind: 'outdated'; readonly reason: UraOutdatedReasonView };
 
 /**
+ * A replacement of head lines a note suggests (ADR 0162), on the head side of its item's head.
+ * Lines are 1-based and inclusive; `endLine` is `startLine - 1` for an insertion before
+ * `startLine`. `replacement` is the new lines, `\n`-joined, without a final newline (`''` is none).
+ */
+export interface UraSuggestionDraftView {
+  /**
+   * The id of a suggestion the note already has, to edit that one in place and keep its postings
+   * (ADR 0162); absent for a new suggestion, which gets a fresh id.
+   */
+  readonly id?: string;
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly replacement: string;
+}
+
+/**
+ * Where a suggestion sits on the session's current head (ADR 0162): its lines there, or why it
+ * can't be placed.
+ */
+export type UraSuggestionPlacementView =
+  | {
+      readonly kind: 'current';
+      readonly path: string;
+      readonly startLine: number;
+      readonly endLine: number;
+    }
+  | { readonly kind: 'outdated'; readonly reason: UraOutdatedReasonView };
+
+/** A stored suggestion, with the unified diff main derives for it from the head's file. */
+export interface UraSuggestionView extends UraSuggestionDraftView {
+  /** Unique within the note and kept across edits that send it back. */
+  readonly id: string;
+  /** Absent when the file can't be read at the item's head, or the suggestion changes nothing. */
+  readonly patch?: string;
+  /** Placed on its own, like the item; outdated suggestions are kept. */
+  readonly placement: UraSuggestionPlacementView;
+}
+
+/**
  * One item of the notes list (Zone 3). `anchor` is on `headSha`, the head it was written
  * against; `placement` is where it sits on the session's current head. `body` is Markdown.
  */
@@ -1384,15 +1516,19 @@ export interface UraItemView {
   readonly origin: UraOriginView;
   readonly title: string;
   readonly body: string;
-  /** A unified diff for the anchored path, against `headSha`. */
-  readonly suggestedPatch?: string;
+  /** In order, on `headSha`; may be on any path of that head. */
+  readonly suggestions: readonly UraSuggestionView[];
   readonly status: UraStatusView;
   readonly createdAt: string;
   readonly updatedAt: string;
-  /** Set once a posted GitHub review carried the item (ADR 0039); it is not posted again. */
+  /**
+   * Set once posted GitHub reviews carried every piece of the item, its text and each suggestion
+   * (ADR 0039, 0162); it is not posted again.
+   */
   readonly posted?: UraPostingView;
 }
 
+/** The latest review that carried a piece of the item, and where the item's own text went. */
 export interface UraPostingView {
   readonly url: string;
   readonly placement: 'inline' | 'body';
@@ -1442,7 +1578,8 @@ export interface UraVerdictStateView {
 
 /**
  * A reviewer's note. `headSha` is the head the reviewer was shown, which `anchor` refers to; it
- * defaults to the session's current head. An empty `suggestedPatch` means none.
+ * defaults to the session's current head. Main checks each suggestion's lines against that
+ * head's file.
  */
 export interface CreateUraItemRequest {
   readonly sessionId: string;
@@ -1453,27 +1590,27 @@ export interface CreateUraItemRequest {
   readonly blocking?: boolean;
   readonly title: string;
   readonly body: string;
-  readonly suggestedPatch?: string;
+  readonly suggestions?: readonly UraSuggestionDraftView[];
 }
 
-/** Edits an item's text, label, blocking or patch; an empty `suggestedPatch` removes the patch. */
+/** Edits an item's text, label, blocking or suggestions; `suggestions` replaces them all, `[]` removes them. */
 export interface UpdateUraItemRequest {
   readonly itemId: string;
   readonly severity?: UraSeverityView;
   readonly blocking?: boolean;
   readonly title?: string;
   readonly body?: string;
-  readonly suggestedPatch?: string;
+  readonly suggestions?: readonly UraSuggestionDraftView[];
 }
 
 /**
- * `ura:expand-note` (ADR 0125): "Expand on this" for a note being written or edited. One model
- * request outside the chat, on the `draft` role, whose context is only this draft and the diff
- * hunks near `anchor` at `headSha` (the head the anchor refers to). Nothing is stored. A newer
- * request with the same `requestId` from the same window replaces one in flight, and
- * `request:cancel` stops it (ADR 0079).
+ * `ura:autoedit-note` (ADR 0125 and its amendment "Autoedit: body and suggestions"): ✨ Autoedit
+ * for a note being written or edited. One model request outside the chat, on the `draft` role,
+ * whose context is only this draft (its suggestions included) and the diff hunks near `anchor` at
+ * `headSha` (the head the anchor refers to). Nothing is stored. A newer request with the same
+ * `requestId` from the same window replaces one in flight, and `request:cancel` stops it (ADR 0079).
  */
-export interface ExpandNoteRequest {
+export interface AutoeditNoteRequest {
   readonly sessionId: string;
   readonly headSha: string;
   readonly anchor: UraAnchorView;
@@ -1482,16 +1619,49 @@ export interface ExpandNoteRequest {
   readonly blocking?: boolean;
   readonly title: string;
   readonly body: string;
+  /** The form's suggestion fields as they hold now, on `headSha`. */
+  readonly suggestions?: readonly AutoeditSuggestionDraftView[];
   readonly requestId?: string;
 }
 
+/** A suggestion field of the draft being autoedited: its form `key`, lines and current text. */
+export interface AutoeditSuggestionDraftView {
+  /** The field's key in its form, unique among the request's suggestions. */
+  readonly key: string;
+  readonly path: string;
+  /** 1-based and inclusive on `headSha`; `endLine = startLine - 1` is an insertion. */
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly replacement: string;
+}
+
 /**
- * The expanded note body (Markdown) for the reviewer to keep, edit or undo, or why the model gave
- * none: `errorKind` is the model port's error kind (`timeout`, `not-authenticated`, …) or
- * `refused` for a draft that can't be expanded, and `message` says what to do.
+ * A suggestion an autoedit proposes, checked by main: it revises the field `key`, or is new when
+ * `key` is absent. Fields the answer leaves out stay as they are.
  */
-export type ExpandedNoteView =
-  | { readonly outcome: 'expanded'; readonly body: string; readonly model: string | undefined }
+export interface AutoeditSuggestionView {
+  readonly key?: string;
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly replacement: string;
+}
+
+/**
+ * The autoedited note: its new body (Markdown) and the suggestions it revised or added, for the
+ * form to show until the reviewer keeps, edits or undoes them; `droppedSuggestions` counts the
+ * ones main left out as invalid. Or why the model gave none: `errorKind` is the model port's error
+ * kind (`timeout`, `not-authenticated`, `invalid-output`, …) or `refused` for a draft that can't
+ * be autoedited, and `message` says what to do.
+ */
+export type AutoeditedNoteView =
+  | {
+      readonly outcome: 'autoedited';
+      readonly body: string;
+      readonly suggestions: readonly AutoeditSuggestionView[];
+      readonly droppedSuggestions: number;
+      readonly model: string | undefined;
+    }
   | { readonly outcome: 'failed'; readonly errorKind: string; readonly message: string };
 
 /**
@@ -1590,7 +1760,7 @@ export interface UraStagedView {
 }
 
 /**
- * Where an export goes: `agent-json` (the `beuve.ura/1` payload `beuve_read_human_review`
+ * Where an export goes: `agent-json` (the `beuve.ura/2` payload `beuve_read_human_review`
  * returns), `agent-xml` (the same as XML, for pasting into Claude Code), `github` (the body of a
  * pull request review, not posted).
  */
@@ -1756,13 +1926,26 @@ export interface ReviewEditsOpenedView {
   readonly created: boolean;
 }
 
-/** One edit as Turn Edits into Suggestions would stage it. */
+/**
+ * One item as Turn into Suggestions would stage it (ADR 0088, 0162): a staged note that takes
+ * suggestions (`attach`), a file's new note of suggestions, or a note with a diff.
+ */
 export interface ReviewEditPreviewView {
   readonly action: 'create' | 'attach' | 'update' | 'unchanged';
-  readonly kind: 'suggestion' | 'note';
+  readonly kind: 'suggestions' | 'note';
   readonly anchor: UraAnchorView;
   readonly title: string;
-  /** The suggested patch, or the note's diff, to preview. */
+  /** The suggestions, for `suggestions`, each with its derived patch. */
+  readonly suggestions: readonly ReviewEditSuggestionPreviewView[];
+  /** The note's diff, for `note`; `''` for `suggestions`. */
+  readonly diff: string;
+}
+
+/** One suggestion a harvest stages: its lines on the edits' base and its patch, to preview. */
+export interface ReviewEditSuggestionPreviewView {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
   readonly diff: string;
 }
 
@@ -2257,9 +2440,14 @@ export interface GithubReviewPreviewView {
   readonly sessionId: string;
   readonly headSha: string;
   readonly verdict: UraVerdictView;
+  /** Inline comments: notes' comments and suggestions' comments of their own (ADR 0162). */
   readonly inlineCount: number;
+  /** Notes with a section in the review body. */
   readonly bodyCount: number;
+  /** Notes an earlier review carried every piece of. */
   readonly alreadyPostedCount: number;
+  /** Pieces of notes the body had no room for (GitHub's 65,536 characters); absent when none. */
+  readonly leftOutCount?: number;
 }
 
 export type PostGithubReviewResponse =
@@ -2319,6 +2507,44 @@ export interface DescriptionSheetView {
 /** The answer of a request that opened something outside beuve. */
 export interface OpenedView {
   readonly opened: true;
+}
+
+/**
+ * `sheet:add-note` (ADR 0162): Add Note or Add Suggestion… on a sheet's lines. A sheet writes no
+ * notes: main checks the request against the sheet that sent it (its session, and `headSha` is
+ * its commit) and has the main window open its composer on those lines (`ura:compose`), with a
+ * suggestion field on them when `suggest`.
+ */
+export interface SheetNoteRequest {
+  readonly headSha: string;
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly suggest: boolean;
+  /**
+   * Suggest Rename… on a token of the sheet (ADR 0163): the main window asks for the rename of the
+   * token at `character` (0-based UTF-16) of `startLine` to `newName`, and previews it there.
+   */
+  readonly rename?: SheetRenameView;
+}
+
+/** The token and the name a sheet's Suggest Rename… hands to the main window. */
+export interface SheetRenameView {
+  readonly character: number;
+  readonly newName: string;
+}
+
+/** `sheet:add-note`'s answer: the main window was asked to open its composer. */
+export interface SheetNoteSentView {
+  readonly sent: true;
+}
+
+/**
+ * `ura:compose` (main to a main window, ADR 0162): open the note composer on these lines of
+ * `sessionId` at `headSha`, as a sheet asked with `sheet:add-note`.
+ */
+export interface ComposeNoteView extends SheetNoteRequest {
+  readonly sessionId: string;
 }
 
 export interface OpenUrlRequest {
@@ -2776,6 +3002,18 @@ export interface InvokeChannelMap {
     readonly request: DiagnosticsRequest;
     readonly response: IpcResult<DiagnosticsView>;
   };
+  'lsp:rename-support': {
+    readonly request: RenameSupportRequest;
+    readonly response: IpcResult<RenameSupportView>;
+  };
+  'lsp:prepare-rename': {
+    readonly request: PrepareRenameRequest;
+    readonly response: IpcResult<PrepareRenameView>;
+  };
+  'lsp:rename': {
+    readonly request: RenameRequest;
+    readonly response: IpcResult<RenamePreviewView>;
+  };
   'sheet:open': {
     readonly request: OpenSheetRequest;
     readonly response: IpcResult<OpenedView>;
@@ -2795,6 +3033,10 @@ export interface InvokeChannelMap {
   'sheet:get-description': {
     readonly request: DescriptionSheetRequest;
     readonly response: IpcResult<DescriptionSheetView>;
+  };
+  'sheet:add-note': {
+    readonly request: SheetNoteRequest;
+    readonly response: IpcResult<SheetNoteSentView>;
   };
   'media:get-image': {
     readonly request: ImageFileRequest;
@@ -2898,9 +3140,9 @@ export interface InvokeChannelMap {
     readonly request: ExportUraRequest;
     readonly response: IpcResult<UraExportView>;
   };
-  'ura:expand-note': {
-    readonly request: ExpandNoteRequest;
-    readonly response: IpcResult<ExpandedNoteView>;
+  'ura:autoedit-note': {
+    readonly request: AutoeditNoteRequest;
+    readonly response: IpcResult<AutoeditedNoteView>;
   };
   'chat:ask': { readonly request: ChatAskRequest; readonly response: IpcResult<ChatAskedView> };
   'chat:list': { readonly request: ChatListRequest; readonly response: IpcResult<ChatListView> };
@@ -3106,6 +3348,8 @@ export interface EventChannelMap {
   'link:open-branch': OpenRemoteBranchLinkView;
   /** Preferences changed in another window (the Settings window); read them again. */
   'settings:changed': Readonly<Record<string, never>>;
+  /** Open the note composer on a sheet's lines (ADR 0162). */
+  'ura:compose': ComposeNoteView;
 }
 
 export type EventChannel = keyof EventChannelMap;
@@ -3119,6 +3363,8 @@ export type SheetInvokeChannel =
   | 'lsp:definition'
   | 'lsp:hover'
   | 'lsp:diagnostics'
+  | 'lsp:rename-support'
+  | 'lsp:prepare-rename'
   | 'display:get'
   | 'sheet:open'
   | 'sheet:get-file'
@@ -3129,7 +3375,14 @@ export type SheetInvokeChannel =
   | 'remote:open-permalink'
   | 'clipboard:write-text'
   | 'menu:set-state'
-  | 'menu:context';
+  | 'menu:context'
+  | SheetOnlyInvokeChannel;
+
+/**
+ * The channels only a sheet may invoke (ADR 0162): main checks them against the sheet that sent
+ * them, so the main window, whose own composer writes notes, has no use for them.
+ */
+export type SheetOnlyInvokeChannel = 'sheet:add-note';
 
 /** The API the sheet preload exposes as `window.beuve`: sheet channels, and `menu:run` only. */
 export interface SheetApi {

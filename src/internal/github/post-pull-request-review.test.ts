@@ -2,7 +2,6 @@ import { describe } from 'vitest';
 
 import { test } from './testing/test.ts';
 
-import { moveCommentsToBody } from './move-comments-to-body.ts';
 import { postPullRequestReview } from './post-pull-request-review.ts';
 import type { PullRequestRef } from './pull-request.ts';
 import type { ReviewPayload } from './review-payload.ts';
@@ -68,7 +67,6 @@ describe('postPullRequestReview', () => {
         id: 80,
         htmlUrl: 'https://github.com/octo-org/hello-world/pull/1347#pullrequestreview-80',
         state: 'COMMENTED',
-        movedToBody: 0,
       },
     });
   });
@@ -99,11 +97,7 @@ describe('postPullRequestReview', () => {
     });
   });
 
-  test('reports rejected comments, without retrying by default', async ({
-    expect,
-    fakeGithub,
-    signal,
-  }) => {
+  test('reports rejected comments, without retrying', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub(() => offDiff());
     await expect(
       postPullRequestReview(client, { ref: ref(), payload: payload() }, { signal }),
@@ -121,61 +115,34 @@ describe('postPullRequestReview', () => {
     expect(requests).toHaveLength(1);
   });
 
-  test('falls back to moving every comment into the body when GitHub does not say which failed', async ({
+  test('names the comments GitHub refused when its message says which', async ({
     expect,
     fakeGithub,
     signal,
   }) => {
-    const { client, requests } = fakeGithub((_request, index) => {
-      if (index === 0) {
-        return offDiff();
-      }
-      return { status: 200, body: githubFixtures.review };
+    const { client, requests } = fakeGithub(() => {
+      return {
+        status: 422,
+        body: {
+          message: 'Validation Failed',
+          errors: [
+            {
+              resource: 'PullRequestReviewComment',
+              field: 'pull_request_review_thread.path',
+              code: 'invalid',
+              message: 'src/b.ts is not part of the diff',
+            },
+          ],
+        },
+      };
     });
-    const result = await postPullRequestReview(
-      client,
-      { ref: ref(), payload: payload() },
-      {
-        onRejectedComments: 'move-to-body',
-        signal,
-      },
-    );
-    expect(result).toMatchObject({ ok: true, value: { id: 80, movedToBody: 2 } });
-    expect(requests[1]?.body).toStrictEqual(moveCommentsToBody(payload()));
-  });
-
-  test('moves only the comments GitHub names', async ({ expect, fakeGithub, signal }) => {
-    const { client, requests } = fakeGithub((_request, index) => {
-      if (index === 0) {
-        return {
-          status: 422,
-          body: {
-            message: 'Validation Failed',
-            errors: [
-              {
-                resource: 'PullRequestReviewComment',
-                field: 'pull_request_review_thread.path',
-                code: 'invalid',
-                message: 'src/b.ts is not part of the diff',
-              },
-            ],
-          },
-        };
-      }
-      return { status: 200, body: githubFixtures.review };
+    await expect(
+      postPullRequestReview(client, { ref: ref(), payload: payload() }, { signal }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'comments-rejected', failedCommentIndexes: [1] },
     });
-    const result = await postPullRequestReview(
-      client,
-      { ref: ref(), payload: payload() },
-      {
-        onRejectedComments: 'move-to-body',
-        signal,
-      },
-    );
-    expect(result).toMatchObject({ ok: true, value: { movedToBody: 1 } });
-    expect(
-      (requests[1]?.body as ReviewPayload).comments.map((comment) => comment.path),
-    ).toStrictEqual(['src/a.ts']);
+    expect(requests).toHaveLength(1);
   });
 
   test('types a commit_id that is not part of the pull request', async ({
@@ -217,25 +184,5 @@ describe('postPullRequestReview', () => {
       ok: false,
       error: { kind: 'forbidden' },
     });
-  });
-});
-
-describe('moveCommentsToBody', () => {
-  test('appends the picked comments to the body under their locations', ({ expect }) => {
-    expect(moveCommentsToBody(payload(), (_comment, index) => index === 1)).toStrictEqual({
-      ...payload(),
-      body: [
-        '**beuve review: changes requested**',
-        '### Comments GitHub could not attach to the diff',
-        '**`src/b.ts`, lines 3–5**\n\nNit.',
-      ].join('\n\n'),
-      comments: [payload().comments[0]],
-    });
-  });
-
-  test('returns the payload() unchanged when nothing moves', ({ expect }) => {
-    const unchanged = payload();
-    expect(moveCommentsToBody(unchanged, () => false)).toBe(unchanged);
-    expect(moveCommentsToBody({ ...payload(), body: '' }).body).toMatch(/^### Comments/);
   });
 });

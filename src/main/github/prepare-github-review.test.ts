@@ -63,7 +63,7 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
     const prepared = okValueFrom(await preparing);
     expect(held.compiledAt()).toStrictEqual([firstHead]);
     expect(prepared.preview).toMatchObject({ headSha: firstHead, inlineCount: 1, bodyCount: 0 });
-    expect(prepared.payload).toMatchObject({
+    expect(prepared.review.payload).toMatchObject({
       commit_id: firstHead,
       comments: [{ path: 'app.ts', line: 1 }],
     });

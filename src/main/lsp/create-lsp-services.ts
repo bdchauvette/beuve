@@ -18,8 +18,24 @@ import type {
   LspRestartedView,
   LspRestartRequest,
   LspStatusView,
+  PrepareRenameRequest,
+  PrepareRenameView,
+  RenameFileView,
+  RenamePreviewView,
+  RenameRequest,
+  RenameSupportRequest,
+  RenameSupportView,
+  RenameUnusableFileView,
   SheetRangeView,
 } from '#contract/ipc-contract.ts';
+import { findTreeBlob } from '#internal/git/find-tree-blob.ts';
+import type { TreeBlobEntry } from '#internal/git/find-tree-blob.ts';
+import { readBlobs } from '#internal/git/read-blobs.ts';
+import type { RenamedFile } from '#internal/lsp/create-lsp-multiplexer.ts';
+import type { PositionEncoding } from '#internal/lsp/lsp-protocol.ts';
+import { checkUraPath } from '#internal/ura/check-ura-path.ts';
+import { uraSuggestionLimits } from '#internal/ura/ura-suggestion-limits.ts';
+import { timeoutSignal } from '#x/time/timeout-signal.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
 import type { Session } from '#internal/session/session.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
@@ -49,12 +65,15 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Err, Result } from '#x/result/result.ts';
 
+import type { RequestOptions } from '../request-options.ts';
+import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import { readSheetSource } from '../sheets/read-sheet-source.ts';
 import { resolveSheetCommit } from '../sheets/resolve-sheet-commit.ts';
+import type { SheetCommit } from '../sheets/resolve-sheet-commit.ts';
 import type { SessionWorktrees, WorktreeClaim } from '../worktrees/create-session-worktrees.ts';
 import type { LanguageServerRegistry } from '../language-servers/create-language-server-registry.ts';
 import type { RepositoryIdentity } from '../language-servers/repository-identity.ts';
@@ -64,6 +83,7 @@ import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 import type { ServerBindings } from './create-server-bindings.ts';
 import { ipcErrorFromLspError } from './ipc-error-from-lsp-error.ts';
 import { headSpansFrom } from './head-spans-from.ts';
+import { suggestionsFromTextEdits } from './suggestions-from-text-edits.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 /** Language-server features over a checkout of the session head (ADR 0020). */
@@ -94,6 +114,54 @@ export interface LspServices {
   readonly restart: (request: LspRestartRequest) => Promise<IpcResult<LspRestartedView>>;
   /** The language servers beuve has started and their state, for the status bar. */
   readonly status: () => IpcResult<LspStatusView>;
+  /**
+   * Whether Suggest Rename… can run on a file (ADR 0163): at the session head only, and when a
+   * server that handles it advertises `renameProvider`.
+   */
+  readonly renameSupport: (request: RenameSupportRequest) => Promise<IpcResult<RenameSupportView>>;
+  /**
+   * The token Suggest Rename… would rename and the name to offer, or the server's refusal, at
+   * `expectedHeadSha` (ADR 0078), which must still be the session head.
+   */
+  readonly prepareRename: (
+    request: PrepareRenameRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<PrepareRenameView>>;
+  /**
+   * The server's rename of a token to `newName`, as the note Stage would create (ADR 0163). The
+   * answer is untrusted: only text edits of files the head tracks, inside the head's checkout, are
+   * kept; the rest is counted. Nothing is written.
+   */
+  readonly rename: (
+    request: RenameRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<RenamePreviewView>>;
+}
+
+/** A rename's file, found in the head's tree. */
+interface TrackedFile {
+  readonly file: RenamedFile;
+  readonly blob: TreeBlobEntry;
+}
+
+/** What a rename's edits became, file by file. */
+interface RenameOutcome {
+  readonly files: readonly RenameFileView[];
+  readonly untracked: number;
+  readonly unusable: readonly RenameUnusableFileView[];
+}
+
+/** A server's edits to the head's files, and how to read their columns. */
+interface HeadEdits {
+  readonly commit: SheetCommit;
+  readonly encoding: PositionEncoding;
+  readonly files: readonly RenamedFile[];
+}
+
+/** The session head's line a rename asks about, read in the head's commit. */
+interface RenameLine {
+  readonly commit: SheetCommit;
+  readonly lineText: string;
 }
 
 /** A head file being asked about, in the checkout that answers. */
@@ -527,10 +595,298 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     });
   };
 
+  /** The head's commit and the asked line, once `expectedHeadSha` is known to still be the head. */
+  const renameLine = async (
+    request: PrepareRenameRequest,
+    options: RequestOptions,
+  ): Promise<Result<RenameLine, IpcError>> => {
+    const commit = await resolveSheetCommit(context, { sessionId: request.sessionId }, options);
+    if (!commit.ok) {
+      return commit;
+    }
+    if (commit.value.sha !== request.expectedHeadSha) {
+      return err({
+        code: 'stale-review',
+        message: 'new commits arrived since this review was loaded; reload it first',
+      });
+    }
+    const text = await readSheetSource(context, commit.value, request.path);
+    if (!text.ok) {
+      return text;
+    }
+    const lineText = text.value.split(lineBreak)[request.line - 1];
+    if (lineText === undefined) {
+      return err({
+        code: 'invalid-request',
+        message: `${request.path} has no line ${String(request.line)}`,
+      });
+    }
+    return ok({ commit: commit.value, lineText });
+  };
+
+  /** A rename request's failure: a refusal the reviewer reads in place, a timeout, or the error. */
+  const renameFailure = (error: LspError, deadline: Deadline): Err<IpcError> => {
+    if (error.kind === 'request-cancelled' && deadline.hasTimedOut()) {
+      return err({
+        code: 'lsp-failed',
+        message: `The language server did not answer within ${String(renameDeadline.seconds)} seconds.`,
+      });
+    }
+    if (error.kind === 'request-cancelled') {
+      return err({ code: 'cancelled', message: 'cancelled' });
+    }
+    if (error.kind === 'request-failed') {
+      return err({ code: 'refused', message: serverMessageFrom(error.message) });
+    }
+    if (isUnhoverable(error)) {
+      return err({
+        code: 'unsupported',
+        message: 'No language server that handles this file can rename.',
+      });
+    }
+    return fail(error);
+  };
+
+  const prepareRename = async (
+    request: PrepareRenameRequest,
+    options: RequestOptions = {},
+  ): Promise<IpcResult<PrepareRenameView>> => {
+    const asked = await renameLine(request, options);
+    if (!asked.ok) {
+      return asked;
+    }
+    const { commit, lineText } = asked.value;
+    const { sha } = commit;
+    const { session, repository } = commit.refreshed;
+    const leased = await worktrees.acquire(repository, claimOf(session, sha), {
+      signal: options.signal,
+    });
+    if (!leased.ok) {
+      return worktreeFailure(logger, leased.error);
+    }
+    using lease = leased.value;
+    await bindServers(session, lease.path);
+    const deadline = deadlineFrom(options.signal);
+    const line = request.line - 1;
+    const prepared = await multiplexer.prepareRename({
+      root: lease.path,
+      path: request.path,
+      position: { line, character: request.character },
+      signal: deadline.signal,
+    });
+    if (!prepared.ok) {
+      const failure = renameFailure(prepared.error, deadline);
+      if (failure.error.code === 'refused' || failure.error.code === 'unsupported') {
+        return ok({ kind: 'refused', headSha: sha, message: failure.error.message });
+      }
+      return failure;
+    }
+    const answer = prepared.value;
+    if (answer.kind === 'refused') {
+      return ok({
+        kind: 'refused',
+        headSha: sha,
+        message: 'The language server can’t rename this.',
+      });
+    }
+    const word = wordAt(lineText, request.character);
+    if (answer.kind === 'default') {
+      if (word === undefined) {
+        return ok({ kind: 'refused', headSha: sha, message: 'There is no name to rename here.' });
+      }
+      return ok({
+        kind: 'ready',
+        headSha: sha,
+        range: {
+          startLine: request.line,
+          startCharacter: word.start,
+          endLine: request.line,
+          endCharacter: word.end,
+        },
+        placeholder: word.text,
+      });
+    }
+    const { range } = answer;
+    let placeholder = answer.placeholder;
+    if (placeholder === undefined && range.start.line === line && range.end.line === line) {
+      placeholder = lineText.slice(range.start.character, range.end.character);
+    }
+    return ok({
+      kind: 'ready',
+      headSha: sha,
+      range: sheetRangeFrom(range),
+      placeholder: placeholder ?? word?.text ?? '',
+    });
+  };
+
+  /** Each file the head tracks as suggestions; untracked and unusable ones counted. */
+  const suggestionsOf = async ({
+    commit,
+    encoding,
+    files,
+  }: HeadEdits): Promise<Result<RenameOutcome, IpcError>> => {
+    const { repository } = commit.refreshed;
+    const tracked: TrackedFile[] = [];
+    const unusable: RenameUnusableFileView[] = [];
+    let untracked = 0;
+    for (const file of files) {
+      const pathReason = checkUraPath(file.path);
+      if (pathReason !== undefined) {
+        unusable.push({ path: file.path, reason: pathReason });
+        continue;
+      }
+      const blob = await findTreeBlob(repository, commit.sha, file.path);
+      if (!blob.ok) {
+        return gitFailure(logger, blob.error);
+      }
+      if (blob.value === undefined) {
+        untracked += 1;
+        continue;
+      }
+      tracked.push({ file, blob: blob.value });
+    }
+    const blobs = await readBlobs(
+      repository,
+      tracked.map(({ blob }) => blob),
+    );
+    if (!blobs.ok) {
+      return gitFailure(logger, blobs.error);
+    }
+    const suggested: RenameFileView[] = [];
+    for (const { file, blob } of tracked) {
+      const content = blobs.value.get(blob.objectId);
+      if (content?.kind !== 'text') {
+        unusable.push({ path: file.path, reason: 'it is not a text file beuve can read' });
+        continue;
+      }
+      const suggestions = suggestionsFromTextEdits({
+        path: file.path,
+        text: content.text,
+        edits: file.edits,
+        encoding,
+      });
+      if (!suggestions.ok) {
+        unusable.push({ path: file.path, reason: suggestions.error });
+        continue;
+      }
+      const isTooLarge = suggestions.value.some((suggestion) => {
+        return utf8Length(suggestion.replacement) > uraSuggestionLimits.maxReplacementBytes;
+      });
+      if (isTooLarge) {
+        unusable.push({ path: file.path, reason: 'a change is too large for a suggestion' });
+        continue;
+      }
+      if (suggestions.value.length > 0) {
+        suggested.push({ path: file.path, suggestions: suggestions.value });
+      }
+    }
+    return ok({ files: suggested, untracked, unusable });
+  };
+
+  const rename = async (
+    request: RenameRequest,
+    options: RequestOptions = {},
+  ): Promise<IpcResult<RenamePreviewView>> => {
+    const asked = await renameLine(request, options);
+    if (!asked.ok) {
+      return asked;
+    }
+    const { commit, lineText } = asked.value;
+    const oldName = wordAt(lineText, request.character)?.text ?? '';
+    if (request.newName === oldName) {
+      return err({ code: 'invalid-request', message: `It is already called ${oldName}.` });
+    }
+    const { sha } = commit;
+    const { session, repository } = commit.refreshed;
+    const leased = await worktrees.acquire(repository, claimOf(session, sha), {
+      signal: options.signal,
+    });
+    if (!leased.ok) {
+      return worktreeFailure(logger, leased.error);
+    }
+    using lease = leased.value;
+    await bindServers(session, lease.path);
+    const deadline = deadlineFrom(options.signal);
+    const renamed = await multiplexer.rename({
+      root: lease.path,
+      path: request.path,
+      position: { line: request.line - 1, character: request.character },
+      newName: request.newName,
+      signal: deadline.signal,
+    });
+    if (!renamed.ok) {
+      return renameFailure(renamed.error, deadline);
+    }
+    const outcome = await suggestionsOf({
+      commit,
+      encoding: renamed.value.encoding,
+      files: renamed.value.files,
+    });
+    if (!outcome.ok) {
+      return outcome;
+    }
+    const total = outcome.value.files.reduce((sum, file) => {
+      return sum + file.suggestions.length;
+    }, 0);
+    if (total > uraSuggestionLimits.maxSuggestions) {
+      return err({
+        code: 'refused',
+        message: `This rename changes ${String(total)} places, and a note holds at most ${String(uraSuggestionLimits.maxSuggestions)} suggestions. Rename it in an editor on the review edits branch (Review ▸ Review Edits) instead.`,
+      });
+    }
+    return ok({
+      headSha: sha,
+      path: request.path,
+      line: request.line,
+      oldName,
+      newName: request.newName,
+      title: renameTitleFrom({ oldName, newName: request.newName }),
+      files: outcome.value.files,
+      leftOut: {
+        resourceOperations: renamed.value.resourceOperations,
+        outsideCheckout: renamed.value.outside,
+        untracked: outcome.value.untracked,
+        malformed: renamed.value.malformed,
+        unusable: outcome.value.unusable,
+      },
+    });
+  };
+
+  const renameSupport = async (
+    request: RenameSupportRequest,
+  ): Promise<IpcResult<RenameSupportView>> => {
+    const commit = await resolveSheetCommit(context, request);
+    if (!commit.ok) {
+      return commit;
+    }
+    const { sha } = commit.value;
+    const { session, repository } = commit.value.refreshed;
+    if (sha !== session.headSha) {
+      return ok({ sha, supported: false });
+    }
+    const leased = await worktrees.acquire(repository, claimOf(session, sha));
+    if (!leased.ok) {
+      return worktreeFailure(logger, leased.error);
+    }
+    using lease = leased.value;
+    await bindServers(session, lease.path);
+    const supported = await multiplexer.renameSupport({ root: lease.path, path: request.path });
+    if (supported.ok) {
+      return ok({ sha, supported: supported.value });
+    }
+    if (isUndiagnosable(supported.error) || supported.error.kind === 'server-not-found') {
+      return ok({ sha, supported: false });
+    }
+    return fail(supported.error);
+  };
+
   return {
     definition: define,
     hover,
     diagnostics,
+    renameSupport,
+    prepareRename,
+    rename,
     status: (): IpcResult<LspStatusView> => {
       return ok({
         servers: multiplexer.status().map(({ serverId, root, state, openDocuments, restarts }) => {
@@ -637,6 +993,34 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       return calls;
     },
   };
+}
+
+/** How long a server has to answer `prepareRename` or `rename` (ADR 0163). */
+const renameDeadline = Temporal.Duration.from({ seconds: 10 });
+/** typescript-language-server's wrapping of tsserver's own words. */
+const requestFailedPrefix = /^Request \S+ failed with message: /u;
+/** How much of a server's refusal reaches the reviewer. */
+const maxServerMessageLength = 300;
+/** Longest name a rename's title quotes in full. */
+const maxTitleNameLength = 80;
+
+/** The caller's signal joined with the rename deadline, which says when it was the deadline. */
+interface Deadline {
+  readonly signal: AbortSignal;
+  readonly hasTimedOut: () => boolean;
+}
+
+/** The names a rename goes from and to. */
+interface RenameNames {
+  readonly oldName: string;
+  readonly newName: string;
+}
+
+/** A name in a line of code: where it starts and ends (UTF-16), and its text. */
+interface LineWord {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
 }
 
 const importLine = /^\s*(?:import|export\s*(?:\{|\*|type\s*\{))/u;
@@ -838,4 +1222,57 @@ function nodeViewFrom(node: CallHierarchyNode, spans: ChangedLines): CallHierarc
     selectionLine: node.selectionRange.start.line + 1,
     badge: badgeCallHierarchyNode(node, spans),
   };
+}
+
+function deadlineFrom(signal: AbortSignal | undefined): Deadline {
+  const timeout = timeoutSignal(renameDeadline);
+  let combined = timeout;
+  if (signal !== undefined) {
+    combined = AbortSignal.any([signal, timeout]);
+  }
+  return {
+    signal: combined,
+    hasTimedOut: (): boolean => {
+      return combined.aborted && combined.reason === timeout.reason;
+    },
+  };
+}
+
+/** The identifier around a UTF-16 column, as the token a rename is about when the server says nothing. */
+function wordAt(lineText: string, character: number): LineWord | undefined {
+  for (const match of lineText.matchAll(/[\p{L}\p{N}_$]+/gu)) {
+    const end = match.index + match[0].length;
+    if (match.index <= character && character <= end) {
+      return { start: match.index, end, text: match[0] };
+    }
+  }
+  return undefined;
+}
+
+/** "Rename `old` to `new`" (ADR 0163), a long name cut so the title stays one short line. */
+function renameTitleFrom({ oldName, newName }: RenameNames): string {
+  return `Rename \`${shortNameOf(oldName)}\` to \`${shortNameOf(newName)}\``;
+}
+
+function shortNameOf(name: string): string {
+  if (name.length <= maxTitleNameLength) {
+    return name;
+  }
+  return `${name.slice(0, maxTitleNameLength - 1)}…`;
+}
+
+/** A server's own words for a refusal, on one line and cut short. */
+function serverMessageFrom(message: string): string {
+  const line = message.replaceAll(/\s+/gu, ' ').replace(requestFailedPrefix, '').trim();
+  if (line === '') {
+    return 'The language server can’t rename this.';
+  }
+  if (line.length <= maxServerMessageLength) {
+    return line;
+  }
+  return `${line.slice(0, maxServerMessageLength - 1)}…`;
+}
+
+function utf8Length(text: string): number {
+  return new TextEncoder().encode(text).length;
 }

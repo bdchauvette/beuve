@@ -1,6 +1,6 @@
 # 0023. Universal Review Artifact: item model, anchoring and exporters
 
-- Status: Accepted; origins amended by [0055](0055-review-folded-into-chat-with-verification.md)
+- Status: Accepted; origins amended by [0055](0055-review-folded-into-chat-with-verification.md); suggestions and exports amended by [0162](0162-suggestions-are-a-notes-list-of-replacements.md)
 - Date: 2026-10-28
 
 ## Context

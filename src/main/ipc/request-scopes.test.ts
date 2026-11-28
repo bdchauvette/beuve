@@ -44,6 +44,20 @@ describe('RequestScopes', () => {
     expect([other, again].map(({ signal }) => signal.aborted)).toStrictEqual([false, true]);
   });
 
+  test('a named file read is superseded only by a read with the same name', ({ expect }) => {
+    const scopes = new RequestScopes();
+    using first = scopes.begin(1, 'named-file', 'lines-a');
+    using other = scopes.begin(1, 'named-file', 'lines-b');
+    using sheet = scopes.begin(1, 'sheet-file');
+    using again = scopes.begin(1, 'named-file', 'lines-a');
+    expect([first, other, sheet, again].map(({ signal }) => signal.aborted)).toStrictEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
+  });
+
   test('closing a window aborts everything it has outstanding', ({ expect }) => {
     const scopes = new RequestScopes();
     using review = scopes.begin(1, 'review');

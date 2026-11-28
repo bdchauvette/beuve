@@ -1,16 +1,26 @@
 import type { Result } from '#x/result/result.ts';
 
-import type { UraItem, UraItemError } from './ura-item.ts';
+import type { UraDeps, UraItem, UraItemError, UraSuggestionDraft } from './ura-item.ts';
+import { uraSuggestionsFromDrafts } from './ura-suggestions-from-drafts.ts';
 import type { UraSeverity } from './ura-severities.ts';
 import { validateUraItem } from './validate-ura-item.ts';
 
-/** Fields a reviewer can change in the notes list. An empty `suggestion` removes the patch. */
+/**
+ * Fields a reviewer can change in the notes list. `suggestions` replaces them all (`[]` removes
+ * them); a draft with the id of one the item has keeps that suggestion's identity.
+ */
 export interface UraItemEdit {
   readonly severity?: UraSeverity;
   readonly blocking?: boolean;
   readonly title?: string;
   readonly body?: string;
-  readonly suggestion?: string;
+  readonly suggestions?: readonly UraSuggestionDraft[];
+}
+
+/** When the edit happens, and where new suggestions' ids come from. */
+export interface UraEditContext {
+  readonly now: Temporal.Instant;
+  readonly deps: UraDeps;
 }
 
 /**
@@ -20,11 +30,15 @@ export interface UraItemEdit {
 export function editUraItem(
   item: UraItem,
   edit: UraItemEdit,
-  now: Temporal.Instant,
+  context: UraEditContext,
 ): Result<UraItem, UraItemError> {
-  let suggestion = edit.suggestion ?? item.suggestion?.text;
-  if (suggestion === '') {
-    suggestion = undefined;
+  const { now, deps } = context;
+  let suggestions = item.suggestions;
+  if (edit.suggestions !== undefined) {
+    suggestions = uraSuggestionsFromDrafts(
+      { drafts: edit.suggestions, existing: item.suggestions },
+      deps,
+    );
   }
   return validateUraItem({
     ...item,
@@ -32,7 +46,7 @@ export function editUraItem(
     blocking: edit.blocking ?? item.blocking,
     title: edit.title?.trim() ?? item.title,
     body: edit.body ?? item.body,
-    suggestion,
+    suggestions,
     updatedAt: now.toString({ fractionalSecondDigits: 3 }),
   });
 }

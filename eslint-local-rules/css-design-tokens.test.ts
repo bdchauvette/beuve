@@ -14,6 +14,8 @@ createRuleTester().run('css-design-tokens', cssDesignTokens, {
     'const s = css`.a { font: inherit; }`;',
     'const s = `color: #fff`;',
     "import './beuve-menu.ts';",
+    "const t = EditorView.theme({ '&': { color: 'var(--beuve-code-text)', padding: '0' }, '.cm-line': { lineHeight: 1.4 } });",
+    "const t = other.theme({ '&': { color: '#fff' } });",
   ],
   invalid: [
     {
@@ -67,6 +69,16 @@ createRuleTester().run('css-design-tokens', cssDesignTokens, {
     {
       code: 'const s = css`.a { color: var(--beuve-scale-gray-11); }`;',
       errors: [{ messageId: 'scaleToken' }],
+    },
+    {
+      code: "const t = EditorView.theme({ '&light .cm-x': { backgroundColor: '#d9d9d9' } });",
+      errors: [
+        { messageId: 'colorLiteral', data: { property: 'background-color', value: '#d9d9d9' } },
+      ],
+    },
+    {
+      code: "const t = EditorView.baseTheme({ '@media print': { '.cm-x': { fontSize: '11px', marginInlineStart: '2px' } } });",
+      errors: [{ messageId: 'fontSizeLiteral' }, { messageId: 'lengthLiteral' }],
     },
   ],
 });

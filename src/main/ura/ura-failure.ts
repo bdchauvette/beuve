@@ -18,7 +18,8 @@ export function uraFailure(
     case 'invalid-anchor':
     case 'invalid-origin':
     case 'invalid-text':
-    case 'invalid-patch': {
+    case 'invalid-patch':
+    case 'invalid-suggestion': {
       return err({ code: 'invalid-request', message: error.reason });
     }
     case 'invalid-transition': {

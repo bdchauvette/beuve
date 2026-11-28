@@ -32,7 +32,8 @@ export type MenuCondition =
   | 'session'
   | 'file'
   | 'diff-target'
-  | 'editable-target'
+  | 'suggestion-target'
+  | 'rename-target'
   | 'note-item'
   | 'busy'
   | 'pull-request'
@@ -684,10 +685,10 @@ const entries = Object.freeze([
     id: 'stage',
     title: 'Add Note',
     menu: { menu: 'note', group: 0 },
-    keys: { mac: 'Cmd+/', linux: 'Ctrl+/' },
-    context: ['line', 'file'],
+    keys: { mac: 'Cmd+N', linux: 'Ctrl+N' },
+    context: ['line', 'file', 'sheet'],
     when: ['diff-target'],
-    windows: ['main'],
+    windows: ['main', 'sheet'],
     handler: 'window',
   },
   {
@@ -695,9 +696,9 @@ const entries = Object.freeze([
     title: 'Add Suggestion…',
     menu: { menu: 'review', group: 2 },
     keys: { mac: 'Alt+Cmd+E', linux: 'Ctrl+Shift+E' },
-    context: ['line'],
-    when: ['diff-target', 'editable-target'],
-    windows: ['main'],
+    context: ['line', 'sheet'],
+    when: ['diff-target', 'suggestion-target'],
+    windows: ['main', 'sheet'],
     handler: 'window',
   },
   {
@@ -709,6 +710,16 @@ const entries = Object.freeze([
     when: ['file'],
     textConflict: true,
     windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'suggest-rename',
+    title: 'Suggest Rename…',
+    menu: { menu: 'analyze', group: 1 },
+    keys: { mac: 'F2', linux: 'F2' },
+    context: ['line', 'sheet'],
+    when: ['rename-target'],
+    windows: ['main', 'sheet'],
     handler: 'window',
   },
   {
@@ -1050,9 +1061,9 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
-    id: 'expand-note',
-    title: 'Flesh Out Note Draft',
-    label: 'Flesh Out Draft',
+    id: 'autoedit-note',
+    title: 'Autoedit Note Draft',
+    label: 'Autoedit Draft',
     menu: { menu: 'note', group: 0 },
     when: ['session'],
     windows: ['main'],

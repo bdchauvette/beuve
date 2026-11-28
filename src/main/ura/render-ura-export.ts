@@ -47,7 +47,10 @@ function render(
       return { mediaType: 'application/xml', text: renderAgentReviewXml(artifact, options) };
     }
     case 'github': {
-      return { mediaType: 'application/json', text: json(buildGithubReview(artifact, options)) };
+      return {
+        mediaType: 'application/json',
+        text: json(buildGithubReview(artifact, options).payload),
+      };
     }
   }
 }

@@ -12,6 +12,7 @@ import type {
   UraItemView,
 } from '#contract/ipc-contract.ts';
 import { diffObjects } from '#internal/git/diff-objects.ts';
+import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
 import type { RequestOptions } from '../request-options.ts';
@@ -44,6 +45,20 @@ export interface SheetServices {
   ) => Promise<IpcResult<ImageFileView>>;
   /** Checks that the sheet's commit and file exist before main opens a window for it. */
   readonly checkOpen: (request: OpenSheetRequest) => Promise<IpcResult<OpenedView>>;
+  /**
+   * Checks that lines `startLine`–`endLine` are lines of `path` at the sheet's commit, before
+   * main asks the main window for a note on them (ADR 0162).
+   */
+  readonly checkLines: (request: SheetLinesRequest) => Promise<IpcResult<OpenedView>>;
+}
+
+/** Lines of one file at one commit of a session. */
+export interface SheetLinesRequest {
+  readonly sessionId: string;
+  readonly sha: string;
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
 }
 
 export interface SheetServicesOptions {
@@ -138,6 +153,24 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
       }
       return refreshed;
     },
+    checkLines: async ({ startLine, endLine, ...file }): Promise<IpcResult<OpenedView>> => {
+      const commit = await resolveSheetCommit(context, file);
+      if (!commit.ok) {
+        return commit;
+      }
+      const contents = await readSheetSource(context, commit.value, file.path);
+      if (!contents.ok) {
+        return contents;
+      }
+      const lineCount = splitLineCount(contents.value);
+      if (startLine < 1 || endLine < startLine || endLine > lineCount) {
+        return err({
+          code: 'invalid-request',
+          message: `${file.path} has ${String(lineCount)} lines at that commit`,
+        });
+      }
+      return ok({ opened: true });
+    },
     checkOpen: async ({ sessionId, sha, path }): Promise<IpcResult<OpenedView>> => {
       const commit = await resolveSheetCommit(context, { sessionId, sha });
       if (!commit.ok) {
@@ -150,6 +183,18 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
       return contents;
     },
   };
+}
+
+/** How many lines a file has: a final newline ends the last line rather than starting one. */
+function splitLineCount(contents: string): number {
+  if (contents === '') {
+    return 0;
+  }
+  const count = contents.split('\n').length;
+  if (contents.endsWith('\n')) {
+    return count - 1;
+  }
+  return count;
 }
 
 function notesOn(path: string, items: readonly UraItemView[]): SheetNoteView[] {

@@ -70,7 +70,15 @@ export interface MainServices {
   readonly threads: ThreadServices;
   readonly lsp: Pick<
     LspServices,
-    'callHierarchy' | 'definition' | 'diagnostics' | 'hover' | 'restart' | 'status'
+    | 'callHierarchy'
+    | 'definition'
+    | 'diagnostics'
+    | 'hover'
+    | 'restart'
+    | 'status'
+    | 'renameSupport'
+    | 'prepareRename'
+    | 'rename'
   >;
   /** Sheets: whole files pinned to a commit (ADR 0067). */
   readonly sheets: SheetServices;

@@ -21,6 +21,8 @@ export interface SheetOpenDetail {
 export interface ClickedToken {
   readonly line: number;
   readonly character: number;
+  /** The token's element, while it is on screen: Suggest Rename… opens its field under it. */
+  readonly element?: Element | undefined;
 }
 
 /** What the main window asks of sheets and permalinks (ADR 0067). */

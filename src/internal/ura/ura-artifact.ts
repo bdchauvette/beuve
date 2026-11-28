@@ -1,4 +1,4 @@
-import type { CommitSha, SessionId, UraAnchor, UraItem } from './ura-item.ts';
+import type { CommitSha, SessionId, UraAnchor, UraItem, UraSuggestion } from './ura-item.ts';
 
 /** What the review asks of the author, as a GitHub review event would say it. */
 export type UraVerdict = 'approve' | 'request-changes' | 'comment';
@@ -47,9 +47,29 @@ export type UraPlacement =
   | { readonly kind: 'current'; readonly anchor: UraAnchor }
   | { readonly kind: 'outdated'; readonly reason: OutdatedReason };
 
+/** Where a suggestion sits on the artifact's head: its lines there, or why it can't be placed. */
+export type UraSuggestionPlacement =
+  | { readonly kind: 'current'; readonly suggestion: UraSuggestion }
+  | { readonly kind: 'outdated'; readonly reason: OutdatedReason };
+
+/** One of an item's suggestions, placed on the artifact's head on its own (ADR 0162). */
+export interface UraPlacedSuggestion {
+  /** As written, on the head the item was written against. */
+  readonly suggestion: UraSuggestion;
+  readonly placement: UraSuggestionPlacement;
+  /**
+   * The unified diff `suggestedPatchFrom` derives against the head the item was written against;
+   * absent when that file's text wasn't given, or the suggestion is out of its range or changes
+   * nothing.
+   */
+  readonly patch?: string;
+}
+
 export interface UraEntry {
   readonly item: UraItem;
   readonly placement: UraPlacement;
+  /** The item's suggestions in order, each placed on its own; outdated ones are kept. */
+  readonly suggestions: readonly UraPlacedSuggestion[];
 }
 
 /** The derived verdict, or the reviewer's choice with the derived one kept for reference. */

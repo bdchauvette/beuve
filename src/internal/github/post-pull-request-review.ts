@@ -8,7 +8,6 @@ import { decodeWith } from './decode-with.ts';
 import type { GithubClient } from './github-client.ts';
 import type { GithubError, GithubValidationDetail } from './github-error.ts';
 import { githubPath } from './github-path.ts';
-import { moveCommentsToBody } from './move-comments-to-body.ts';
 import type { PullRequestRef } from './pull-request.ts';
 import type { ReviewPayload } from './review-payload.ts';
 
@@ -17,8 +16,6 @@ export interface PostedReview {
   readonly htmlUrl: string;
   /** `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, … */
   readonly state: string;
-  /** Inline comments that were moved into the body by the fallback. */
-  readonly movedToBody: number;
 }
 
 export type PostReviewError<E> =
@@ -50,12 +47,6 @@ export interface ReviewSubmission {
 }
 
 export interface PostReviewOptions {
-  /**
-   * `move-to-body`: when GitHub rejects inline comments, post once more with the identified comments
-   * (or, as GitHub rarely says which, all of them) moved into the body. Safe to retry: a 422 means
-   * nothing was created. Defaults to `fail`.
-   */
-  readonly onRejectedComments?: 'fail' | 'move-to-body';
   readonly signal?: AbortSignal | undefined;
 }
 
@@ -69,45 +60,17 @@ const staleCommit = /commit_id|not part of the pull request|no commit found/i;
 /**
  * Submits a review in one request (`POST /repos/{o}/{r}/pulls/{n}/reviews`, not a pending one), so
  * a review is all or nothing. 422s become typed errors: the author approving or requesting changes
- * on their own pull request, comments off the diff (with the optional body fallback) and a stale
- * `commit_id`; anything else stays `validation-failed`. Network errors are not retried, since the
- * review may have been created.
+ * on their own pull request, comments off the diff (with the indexes GitHub's message names, so
+ * the caller can place them elsewhere and post again: a 422 created nothing) and a stale
+ * `commit_id`; anything else stays `validation-failed`. Nothing is retried; after a network error
+ * the review may have been created.
  */
 export async function postPullRequestReview<E>(
   client: GithubClient<E>,
   { ref, payload }: ReviewSubmission,
   options: PostReviewOptions = {},
 ): Promise<Result<PostedReview, PostReviewError<E>>> {
-  const first = await submit(client, { ref, payload }, options.signal);
-  if (
-    first.ok ||
-    first.error.kind !== 'comments-rejected' ||
-    options.onRejectedComments !== 'move-to-body'
-  ) {
-    if (first.ok) {
-      return ok({ ...first.value, movedToBody: 0 });
-    }
-    return first;
-  }
-  const failed = first.error.failedCommentIndexes;
-  let fallback = moveCommentsToBody(payload, undefined);
-  if (failed !== undefined) {
-    fallback = moveCommentsToBody(payload, (_comment, index): boolean => {
-      return failed.includes(index);
-    });
-  }
-  const second = await submit(client, { ref, payload: fallback }, options.signal);
-  if (second.ok) {
-    return ok({ ...second.value, movedToBody: payload.comments.length - fallback.comments.length });
-  }
-  return second;
-}
-
-async function submit<E>(
-  client: GithubClient<E>,
-  { ref, payload }: ReviewSubmission,
-  signal: AbortSignal | undefined,
-): Promise<Result<Omit<PostedReview, 'movedToBody'>, PostReviewError<E>>> {
+  const { signal } = options;
   const response = await client.send({
     method: 'POST',
     path: githubPath`/repos/${ref.owner}/${ref.repo}/pulls/${ref.number}/reviews`,

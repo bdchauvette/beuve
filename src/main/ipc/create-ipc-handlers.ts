@@ -29,12 +29,13 @@ import type {
   DefinitionRequest,
   DefinitionView,
   DescriptionSheetView,
+  ComposeNoteView,
   DiagnosticsRequest,
   DiagnosticsView,
   DiffDisplayView,
   EditorOpenResponse,
   EditorSettingsView,
-  ExpandedNoteView,
+  AutoeditedNoteView,
   FileAttributesView,
   FilePairView,
   FlowGraphResponse,
@@ -43,6 +44,9 @@ import type {
   GithubReviewPreviewView,
   HoverRequest,
   HoverView,
+  PrepareRenameView,
+  RenamePreviewView,
+  RenameSupportView,
   InvokeChannel,
   InvokeResponse,
   IpcError,
@@ -57,6 +61,7 @@ import type {
   ModelTestView,
   OpenedConfigView,
   OpenedView,
+  SheetNoteSentView,
   OpenPullRequestResponse,
   OpenRemoteBranchResponse,
   OpenSheetRequest,
@@ -141,12 +146,26 @@ export interface IpcPlatform {
    * Electron, where `sheet:open-description` answers `not-wired`.
    */
   readonly openDescriptionSheet?: (view: DescriptionSheetView) => void;
+  /**
+   * The session and commit of the file sheet whose web contents are `webContentsId` (ADR 0067), or
+   * `undefined` for any other page; absent outside Electron, where `sheet:add-note` answers
+   * `not-wired`.
+   */
+  readonly sheetOf?: (webContentsId: number) => SheetOrigin | undefined;
+  /** Has a main window open its note composer on a sheet's lines (ADR 0162). */
+  readonly composeNote?: (view: ComposeNoteView) => void;
   /** Menu state, context menus and main-run commands (ADR 0068); absent outside Electron. */
   readonly menus?: {
     readonly setState: (webContentsId: number, state: MenuStateRequest) => void;
     readonly popup: (webContentsId: number, request: MenuContextRequest) => boolean;
     readonly runMainCommand: (webContentsId: number, id: string) => boolean;
   };
+}
+
+/** The session and commit a file sheet shows. */
+export interface SheetOrigin {
+  readonly sessionId: string;
+  readonly sha: string;
 }
 
 /** Who called: the web contents of the page, as `registerIpcHandlers` saw it. */
@@ -300,6 +319,52 @@ const openSheetRequest = z.strictObject({
 
 const sheetFileRequest = z.strictObject({ sessionId, sha: fullSha, path: sheetPath });
 
+const sheetLine = z.number().int().min(1).max(10_000_000);
+/** A name the reviewer types for Suggest Rename… (ADR 0163): one line, no control characters. */
+const newName = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((value) => {
+    return !hasControlCharacters(value) && value.trim() === value;
+  }, 'expected a name on one line, without surrounding spaces');
+const sheetRename = z.strictObject({ character, newName });
+const sheetNoteRequest = z
+  .strictObject({
+    headSha: fullSha,
+    path: sheetPath,
+    startLine: sheetLine,
+    endLine: sheetLine,
+    suggest: z.boolean(),
+    rename: sheetRename.optional(),
+  })
+  .refine((request) => {
+    return request.endLine >= request.startLine;
+  }, 'endLine comes before startLine')
+  .refine((request) => {
+    return request.rename === undefined || request.endLine === request.startLine;
+  }, 'a rename names one line');
+const renameSupportRequest = z.strictObject({
+  sessionId,
+  sha: fullSha.optional(),
+  path: sheetPath,
+});
+const prepareRenameRequest = z.strictObject({
+  sessionId,
+  expectedHeadSha,
+  path: sheetPath,
+  line: sheetLine,
+  character,
+});
+const renameRequest = z.strictObject({
+  sessionId,
+  expectedHeadSha,
+  path: sheetPath,
+  line: sheetLine,
+  character,
+  newName,
+});
+
 const permalinkRequest = z
   .strictObject({
     sessionId,
@@ -384,7 +449,19 @@ const uraSeverity = z.enum([
 const uraVerdict = z.enum(['approve', 'request-changes', 'comment']);
 const uraTitle = z.string().max(1000);
 const uraBody = z.string().max(100_000);
-const uraPatch = z.string().max(1_000_000);
+/** A suggestion's lines may be an insertion (`endLine = startLine - 1`); the domain checks the rest. */
+const uraSuggestion = z
+  .strictObject({
+    id: uuid.exactOptional(),
+    path: repositoryPath,
+    startLine: line,
+    endLine: z.number().int().min(0).max(10_000_000),
+    replacement: z.string().max(1_000_000),
+  })
+  .refine((suggestion) => {
+    return suggestion.endLine >= suggestion.startLine - 1;
+  }, 'endLine comes before startLine - 1');
+const uraSuggestions = z.array(uraSuggestion).max(500);
 
 const uraAnchor = z.discriminatedUnion('kind', [
   z
@@ -409,7 +486,7 @@ const uraCreateRequest = z.strictObject({
   blocking: z.boolean().optional(),
   title: uraTitle,
   body: uraBody,
-  suggestedPatch: uraPatch.optional(),
+  suggestions: uraSuggestions.optional(),
 });
 
 const uraUpdateRequest = z.strictObject({
@@ -418,7 +495,7 @@ const uraUpdateRequest = z.strictObject({
   blocking: z.boolean().optional(),
   title: uraTitle.optional(),
   body: uraBody.optional(),
-  suggestedPatch: uraPatch.optional(),
+  suggestions: uraSuggestions.optional(),
 });
 
 /** At most this many items in one `ura:edit-many` or `ura:delete` (ADR 0144). */
@@ -584,7 +661,24 @@ const openPullRequestRequest = z.strictObject({
   requestId: requestId.optional(),
 });
 const cancelRequestRequest = z.strictObject({ requestId });
-const expandNoteRequest = z.strictObject({
+const sheetFileReadRequest = z.strictObject({
+  sessionId,
+  sha: fullSha,
+  path: sheetPath,
+  requestId: requestId.optional(),
+});
+const autoeditSuggestion = z
+  .strictObject({
+    key: z.string().min(1).max(200),
+    path: repositoryPath,
+    startLine: line,
+    endLine: z.number().int().min(0).max(10_000_000),
+    replacement: z.string().max(1_000_000),
+  })
+  .refine((suggestion) => {
+    return suggestion.endLine >= suggestion.startLine - 1;
+  }, 'endLine comes before startLine - 1');
+const autoeditNoteRequest = z.strictObject({
   sessionId,
   headSha: commitSha,
   anchor: uraAnchor,
@@ -592,6 +686,13 @@ const expandNoteRequest = z.strictObject({
   blocking: z.boolean().optional(),
   title: uraTitle,
   body: uraBody,
+  suggestions: z
+    .array(autoeditSuggestion)
+    .max(500)
+    .refine((suggestions) => {
+      return new Set(suggestions.map((suggestion) => suggestion.key)).size === suggestions.length;
+    }, 'suggestion keys repeat')
+    .optional(),
   requestId: requestId.optional(),
 });
 const githubReviewRequest = z.strictObject({
@@ -801,6 +902,32 @@ export function createIpcHandlers(
       const diagnostics: DiagnosticsRequest = { ...required, ...(sha !== undefined && { sha }) };
       return services.lsp.diagnostics(diagnostics);
     },
+    'lsp:rename-support': async (request): Promise<IpcResult<RenameSupportView>> => {
+      const parsed = renameSupportRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sha, ...required } = parsed.data;
+      return services.lsp.renameSupport({ ...required, ...(sha !== undefined && { sha }) });
+    },
+    'lsp:prepare-rename': async (request, sender): Promise<IpcResult<PrepareRenameView>> => {
+      const parsed = prepareRenameRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      return scoped({ sender, kind: 'rename' }, async (options) => {
+        return services.lsp.prepareRename(parsed.data, options);
+      });
+    },
+    'lsp:rename': async (request, sender): Promise<IpcResult<RenamePreviewView>> => {
+      const parsed = renameRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      return scoped({ sender, kind: 'rename' }, async (options) => {
+        return services.lsp.rename(parsed.data, options);
+      });
+    },
     'sheet:open': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = openSheetRequest.safeParse(request);
       if (!parsed.success) {
@@ -821,13 +948,60 @@ export function createIpcHandlers(
       return checked;
     },
     'sheet:get-file': async (request, sender): Promise<IpcResult<SheetFileView>> => {
-      const parsed = sheetFileRequest.safeParse(request);
-      if (parsed.success) {
-        return scoped({ sender, kind: 'sheet-file' }, async (options) => {
-          return services.sheets.getFile(parsed.data, options);
-        });
+      const parsed = sheetFileReadRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
       }
-      return invalid(parsed.error);
+      const { requestId: id, ...file } = parsed.data;
+      let kind: SupersededKind = 'sheet-file';
+      if (id !== undefined) {
+        kind = 'named-file';
+      }
+      return scoped({ sender, kind, id }, async (options) => {
+        return services.sheets.getFile(file, options);
+      });
+    },
+    'sheet:add-note': async (request, sender): Promise<IpcResult<SheetNoteSentView>> => {
+      const parsed = sheetNoteRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sheetOf, composeNote } = platform;
+      if (sheetOf === undefined || composeNote === undefined) {
+        return err({ code: 'not-wired', message: 'no main window outside Electron' });
+      }
+      let sheet: SheetOrigin | undefined;
+      if (sender !== undefined) {
+        sheet = sheetOf(sender.webContentsId);
+      }
+      if (sheet === undefined) {
+        return err({ code: 'invalid-request', message: 'only a file sheet can ask for a note' });
+      }
+      const { headSha, path, startLine, endLine, suggest, rename } = parsed.data;
+      if (headSha !== sheet.sha) {
+        return err({ code: 'invalid-request', message: 'headSha is not the sheet’s commit' });
+      }
+      const { sessionId } = sheet;
+      const checked = await services.sheets.checkLines({
+        sessionId,
+        sha: headSha,
+        path,
+        startLine,
+        endLine,
+      });
+      if (!checked.ok) {
+        return checked;
+      }
+      composeNote({
+        sessionId,
+        headSha,
+        path,
+        startLine,
+        endLine,
+        suggest,
+        ...(rename !== undefined && { rename }),
+      });
+      return ok({ sent: true });
     },
     'sheet:open-description': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = sessionRequest.safeParse(request);
@@ -984,12 +1158,12 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { headSha, blocking, suggestedPatch, ...required } = parsed.data;
+      const { headSha, blocking, suggestions, ...required } = parsed.data;
       return services.ura.create({
         ...required,
         ...(headSha !== undefined && { headSha }),
         ...(blocking !== undefined && { blocking }),
-        ...(suggestedPatch !== undefined && { suggestedPatch }),
+        ...(suggestions !== undefined && { suggestions }),
       });
     },
     'ura:update': async (request): Promise<IpcResult<UraItemView>> => {
@@ -997,14 +1171,14 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { itemId, severity, blocking, title, body, suggestedPatch } = parsed.data;
+      const { itemId, severity, blocking, title, body, suggestions } = parsed.data;
       return services.ura.update({
         itemId,
         ...(severity !== undefined && { severity }),
         ...(blocking !== undefined && { blocking }),
         ...(title !== undefined && { title }),
         ...(body !== undefined && { body }),
-        ...(suggestedPatch !== undefined && { suggestedPatch }),
+        ...(suggestions !== undefined && { suggestions }),
       });
     },
     'ura:edit-many': async (request): Promise<IpcResult<UraItemsEditedView>> => {
@@ -1081,15 +1255,19 @@ export function createIpcHandlers(
         ...(summary !== undefined && { summary }),
       });
     },
-    'ura:expand-note': async (request, sender): Promise<IpcResult<ExpandedNoteView>> => {
-      const parsed = expandNoteRequest.safeParse(request);
+    'ura:autoedit-note': async (request, sender): Promise<IpcResult<AutoeditedNoteView>> => {
+      const parsed = autoeditNoteRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { requestId: id, blocking, ...draft } = parsed.data;
+      const { requestId: id, blocking, suggestions, ...draft } = parsed.data;
       return scoped({ sender, kind: 'note-draft', id }, async (options) => {
-        return services.drafting.expandNote(
-          { ...draft, ...(blocking !== undefined && { blocking }) },
+        return services.drafting.autoeditNote(
+          {
+            ...draft,
+            ...(blocking !== undefined && { blocking }),
+            ...(suggestions !== undefined && { suggestions }),
+          },
           options,
         );
       });

@@ -25,6 +25,12 @@ export interface LspHover {
   readonly range: LspRange | undefined;
 }
 
+/** A checked text edit of a `WorkspaceEdit` (ADR 0163): replace `range` with `newText`. */
+export interface LspTextEdit {
+  readonly range: LspRange;
+  readonly newText: string;
+}
+
 export interface LspLocation {
   readonly uri: string;
   readonly range: LspRange;
@@ -85,6 +91,10 @@ export interface LspServerCapabilities {
   readonly references: boolean;
   readonly hover: boolean;
   readonly documentSymbol: boolean;
+  /** `renameProvider` (ADR 0163). */
+  readonly rename: boolean;
+  /** `renameProvider.prepareProvider`: the server answers `textDocument/prepareRename`. */
+  readonly prepareRename: boolean;
   /** The announced `capabilities` object, for logging. */
   readonly raw: Readonly<Record<string, unknown>>;
 }

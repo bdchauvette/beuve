@@ -1,6 +1,9 @@
-import type { CommitSha, SessionId, UraItemId } from '../ura-item.ts';
+import type { CommitSha, SessionId, UraItemId, UraSuggestionId } from '../ura-item.ts';
 
-/** Fixed ids for tests. `itemId(n)` matches what `fixedUraDeps` hands out n-th. */
+/**
+ * Fixed ids for tests. `itemId(n)` matches what `fixedUraDeps` hands out n-th; `suggestionId(n)` is
+ * what test fixtures give a suggestion without one.
+ */
 export const testUraIds = {
   sessionId: '11111111-1111-4111-8111-111111111111' as SessionId,
   otherSessionId: '44444444-4444-4444-8444-444444444444' as SessionId,
@@ -10,5 +13,8 @@ export const testUraIds = {
   messageId: '33333333-3333-4333-8333-333333333333',
   itemId: (n: number): UraItemId => {
     return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as UraItemId;
+  },
+  suggestionId: (n: number): UraSuggestionId => {
+    return `55555555-5555-4555-8555-${String(n).padStart(12, '0')}` as UraSuggestionId;
   },
 } as const;

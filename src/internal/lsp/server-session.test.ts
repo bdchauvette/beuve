@@ -40,6 +40,8 @@ function createFakeServer(
       references: false,
       hover: false,
       documentSymbol: false,
+      rename: false,
+      prepareRename: false,
       raw: {},
       ...overrides,
     },

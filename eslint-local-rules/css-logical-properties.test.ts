@@ -11,8 +11,18 @@ createRuleTester().run('css-logical-properties', cssLogicalProperties, {
     'const s = css`.row > label:first-child { color: red; }`;',
     'const s = `margin-left: 4px; width: 10px`;',
     'const s = html`<div style="width: 10px"></div>`;',
+    "const t = EditorView.theme({ '.cm-line': { paddingInline: '0', borderInlineStartColor: 'red' } });",
   ],
   invalid: [
+    {
+      code: "const t = EditorView.theme({ '.cm-cursor': { borderLeftColor: 'var(--x)', '--x-width': '0' } });",
+      errors: [
+        {
+          messageId: 'physicalProperty',
+          data: { found: 'border-left-color', logical: 'border-inline-start-color' },
+        },
+      ],
+    },
     {
       code: 'const s = css`.a { margin-left: 4px; }`;',
       errors: [

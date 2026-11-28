@@ -26,6 +26,17 @@ describe('parseServerCapabilities', () => {
       pullDiagnostics: false,
     });
     expect(
+      parseServerCapabilities({ capabilities: { renameProvider: { prepareProvider: true } } }),
+    ).toMatchObject({ rename: true, prepareRename: true });
+    expect(parseServerCapabilities({ capabilities: { renameProvider: true } })).toMatchObject({
+      rename: true,
+      prepareRename: false,
+    });
+    expect(parseServerCapabilities({ capabilities: {} })).toMatchObject({
+      rename: false,
+      prepareRename: false,
+    });
+    expect(
       parseServerCapabilities({ capabilities: { positionEncoding: 'ucs-2' } })?.positionEncoding,
     ).toBe(positionEncodings.utf16);
     expect(parseServerCapabilities({})).toBeUndefined();

@@ -6,7 +6,9 @@ import path from 'node:path';
  * `directory` and returns its path. Behavior, chosen by its first argument:
  * - `normal`: negotiates UTF-8 positions, asks the client to apply an edit and for configuration
  *   after `initialized`, publishes diagnostics on open/change, echoes `prepareCallHierarchy` and
- *   answers `test/clientAnswers` with what the client replied.
+ *   `prepareRename` (four characters from the position, placeholder `echo`), answers `rename` with
+ *   `documentChanges`: the new name at the position, an edit of a file outside the workspace, one
+ *   of `link.ts` and a file creation, and answers `test/clientAnswers` with what the client replied.
  * - `bare`: like `normal`, but announces no call hierarchy support.
  * - `fail-initialize`: writes to stderr and exits with code 3 on `initialize`.
  */
@@ -41,6 +43,7 @@ const handle = (message) => {
       }
       send({ id: message.id, result: { capabilities: {
         positionEncoding: 'utf-8', textDocumentSync: 1, callHierarchyProvider: mode !== 'bare',
+        renameProvider: { prepareProvider: true },
       } } });
       return;
     case 'initialized':
@@ -64,6 +67,24 @@ const handle = (message) => {
       send({ id: message.id, result: [{
         name: 'echo', kind: 12, detail: JSON.stringify(position), uri: textDocument.uri, range, selectionRange: range,
       }] });
+      return;
+    }
+    case 'textDocument/prepareRename': {
+      const { position } = message.params;
+      const range = { start: position, end: { line: position.line, character: position.character + 4 } };
+      send({ id: message.id, result: { range, placeholder: 'echo' } });
+      return;
+    }
+    case 'textDocument/rename': {
+      const { position, textDocument, newName } = message.params;
+      const range = { start: position, end: { line: position.line, character: position.character + 4 } };
+      const sibling = new URL('link.ts', textDocument.uri).href;
+      send({ id: message.id, result: { documentChanges: [
+        { textDocument: { uri: textDocument.uri, version: null }, edits: [{ range, newText: newName }] },
+        { textDocument: { uri: 'file:///outside/beuve-fake.ts', version: null }, edits: [{ range, newText: newName }] },
+        { textDocument: { uri: sibling, version: null }, edits: [{ range, newText: newName }] },
+        { kind: 'create', uri: new URL('made.ts', textDocument.uri).href },
+      ] } });
       return;
     }
     case 'test/clientAnswers':

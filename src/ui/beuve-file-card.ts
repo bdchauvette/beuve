@@ -5,8 +5,6 @@ import type {
   FileDiffMetadata,
   OnTokenEventProps,
 } from '@pierre/diffs';
-import type * as DiffsEdit from '@pierre/diffs/edit';
-import type { Editor } from '@pierre/diffs/edit';
 import type * as DiffsWorker from '@pierre/diffs/worker';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 import { css, html, LitElement, nothing, svg } from 'lit';
@@ -32,8 +30,7 @@ import './beuve-ura-composer.ts';
 import type { BeuveUraComposer } from './beuve-ura-composer.ts';
 import type { UraDeleteDetail } from './app-event-details.ts';
 import type { NoteEdit } from './note-edit-from.ts';
-import { applySuggestedPatch } from './apply-suggested-patch.ts';
-import { buildSuggestedPatch } from './build-suggested-patch.ts';
+import type { SuggestionFieldView } from './suggestion-field-view.ts';
 import { describeDiagnostics } from './describe-diagnostics.ts';
 import { DiagnosticHighlights } from './diagnostic-highlights.ts';
 import { diagnosticRangesFrom } from './diagnostic-ranges-from.ts';
@@ -46,10 +43,6 @@ import { languageFromShebang } from './language-from-shebang.ts';
 import type { ClickedToken } from './run-sheet-action.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
-import { editTargetFrom } from './edit-target-from.ts';
-import { editableDiffFrom } from './editable-diff-from.ts';
-import { uneditableReasonFrom } from './uneditable-reason-from.ts';
-import type { EditTarget } from './edit-target-from.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
 import { planStepHighlight } from './plan-step-highlight.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
@@ -58,6 +51,7 @@ import { targetFrom } from './target-from.ts';
 import type { ReviewTarget, SelectedLines } from './target-from.ts';
 import { splitPatch } from './split-patch.ts';
 import { headSideAnnotationsFrom } from './head-side-annotations-from.ts';
+import type { HeadSideAnnotation } from './head-side-annotations-from.ts';
 import type { PlacedNote } from './head-side-annotations-from.ts';
 import { placeNoteOnDiff } from './place-note-on-diff.ts';
 import type {
@@ -123,10 +117,17 @@ export interface ComposerState {
   readonly where: string;
   readonly saving: boolean;
   readonly error: string;
-  /** The suggestion an Add Suggestion edit produced, staged with the note (ADR 0043). */
-  readonly suggestedPatch?: string;
+  /** The head the note's lines and suggestions are on: the review's, or the edited note's. */
+  readonly headSha: string;
+  /** The note's suggestion fields (ADR 0162). */
+  readonly suggestions: readonly SuggestionFieldView[];
   /** The staged note this composer edits in place of its marker (ADR 0129); absent for a new one. */
   readonly edit?: NoteEdit;
+  /**
+   * Shown above the cards, not under its lines on a card (ADR 0162): a sheet's lines that no
+   * card can be counted on to show. A composer on a path no card shows is there too.
+   */
+  readonly isAboveCards?: boolean;
 }
 
 /** `beuve-note-edit`: the reviewer asked to edit staged note `itemId` from its marker. */
@@ -134,26 +135,16 @@ export interface NoteEditDetail {
   readonly itemId: string;
 }
 
-/**
- * An Add Suggestion edit on this card (ADR 0043): loading the file pair and the editor, editing, or failed
- * to start; `error` is shown in the edit bar (e.g. an edit outside the range).
- */
-export interface EditSession {
-  readonly target: EditTarget;
-  readonly phase: 'loading' | 'editing' | 'failed';
-  readonly error: string;
-}
-
-/** Sent when an edit is cancelled, with a note for the status bar (`''` for none). */
-export interface SuggestionCancelDetail {
-  readonly message: string;
-}
-
 /** Sent by "Load diff" (or its undo) on a card. */
 /** `beuve-token-jump`: ⌘/Ctrl-click on a head-side token, to follow its definition. */
 export interface TokenJumpDetail {
   readonly target: ReviewTarget;
   readonly token: ClickedToken | undefined;
+}
+
+/** `beuve-token-click`: the reviewer clicked a head-side token of `path` (Suggest Rename…'s target). */
+export interface TokenClickDetail {
+  readonly path: string;
 }
 
 export interface DiffToggleDetail {
@@ -166,12 +157,6 @@ export interface SideLines {
   readonly start: number;
   readonly end: number;
   readonly side: 'head' | 'base';
-}
-
-/** Sent when an Add Suggestion edit is saved: the edited range and its suggested patch. */
-export interface SuggestionSaveDetail {
-  readonly target: EditTarget;
-  readonly patch: string;
 }
 
 /** What a card annotates under a head line (or above the diff, at line 0). */
@@ -294,27 +279,6 @@ export class BeuveFileCard extends LitElement {
       .deletions {
         font: var(--beuve-font-code);
         color: var(--beuve-diff-removed-text);
-      }
-
-      .edit-bar {
-        display: flex;
-        align-items: baseline;
-        gap: var(--beuve-space-2);
-        padding: var(--beuve-space-1) var(--beuve-space-3);
-        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
-        border-inline-start: var(--beuve-border-width-heavy) solid var(--beuve-accent);
-        background: var(--beuve-surface);
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
-      }
-
-      .edit-bar .what {
-        font-weight: var(--beuve-font-weight-semibold);
-        color: var(--beuve-text);
-      }
-
-      .edit-bar .error {
-        color: var(--beuve-danger);
       }
 
       .placeholder {
@@ -828,9 +792,6 @@ export class BeuveFileCard extends LitElement {
   private clickedToken: ClickedToken | undefined;
   /** The head line a jump (citation or flow node) landed on, until Next/Previous Change moves on. */
   private focusedLine: number | undefined;
-  /** The Add Suggestion editor attached to the diff, and the head text it started from. */
-  private editor: Editor<'file-diff', PlacedSlot> | undefined;
-  private editHead: string | undefined;
   /** Insight notes the reviewer expanded, by insight key. */
   private readonly openAnnotations = new Set<string>();
   /** The gutter marks' style sheet in this diff's shadow root. */
@@ -838,37 +799,10 @@ export class BeuveFileCard extends LitElement {
   private tintSheet: CSSStyleSheet | undefined;
   /** Whether this diff's gutter button already shows the chat icon. */
   private isGutterLabeled = false;
-  /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
+  /** Bumped to give the diff a fresh container: after a move in the stream, or a layout change. */
   private codeGeneration = 0;
   /** This card's diagnostic underlines in the document's shared highlights. */
   private readonly diagnosticHighlights = new DiagnosticHighlights();
-  /**
-   * While editing, ⌘/Ctrl+Enter saves and Escape cancels before the editor sees them; every
-   * other key stays with the editor and never reaches the stream's shortcuts.
-   */
-  private readonly onEditKeyCapture = (event: KeyboardEvent): void => {
-    if (this.edit === undefined) {
-      return;
-    }
-    const isSave = event.key === 'Enter' && (event.metaKey || event.ctrlKey);
-    if (!isSave && event.key !== 'Escape') {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    if (isSave) {
-      this.saveEdit();
-    } else {
-      this.cancelEdit('');
-    }
-  };
-
-  private readonly onEditKeyBubble = (event: KeyboardEvent): void => {
-    if (this.edit !== undefined) {
-      event.stopPropagation();
-    }
-  };
-
   private readonly onFlowNodeActivate = (event: CustomEvent<FlowNodeActivateDetail>): void => {
     event.stopPropagation();
     void this.focusLine(event.detail.startLine);
@@ -882,7 +816,15 @@ export class BeuveFileCard extends LitElement {
     this.clickedToken = {
       line: props.lineNumber,
       character: props.lineCharStart + characterOffsetAt(props.tokenElement, event),
+      element: props.tokenElement,
     };
+    const path = this.file?.path;
+    if (path !== undefined) {
+      const clicked: TokenClickDetail = { path };
+      this.dispatchEvent(
+        new CustomEvent('beuve-token-click', { detail: clicked, bubbles: true, composed: true }),
+      );
+    }
     if (!event.metaKey && !event.ctrlKey) {
       return;
     }
@@ -1040,8 +982,6 @@ export class BeuveFileCard extends LitElement {
     },
   } satisfies DelegatedActions;
 
-  /** The editing keys' listeners, while a Add Suggestion edit is in progress. */
-  private editKeys: AbortController | undefined;
   /** The ⌘/Ctrl tracking that shows the pointer on tokens, while the card is in the document. */
   /** Context the reviewer revealed for notes outside the hunks, until the file changes. */
   /** The change runs of the file's patch, for the rendered view's statuses. */
@@ -1092,9 +1032,6 @@ export class BeuveFileCard extends LitElement {
    */
   @property({ reflect: true }) accessor reviewed: FileReviewStateView = 'no';
 
-  /** The Add Suggestion edit in progress on this card (ADR 0043). */
-  @state() accessor edit: EditSession | undefined;
-
   @state() accessor isFallback = false;
   /** `@pierre/diffs`, loaded with the first card that mounts (ADR 0025). */
   @state() accessor library: typeof Diffs | undefined;
@@ -1118,7 +1055,6 @@ export class BeuveFileCard extends LitElement {
       },
       hostDisconnected: (): void => {
         this.diagnosticHighlights.clear();
-        this.endEdit();
         this.diff?.cleanUp();
         this.diff = undefined;
         this.unobserveCode();
@@ -1183,7 +1119,10 @@ export class BeuveFileCard extends LitElement {
   ): void {
     const isNew = this.diff === undefined;
     this.diff ??= this.createDiff(library);
-    const annotations = headSideAnnotationsFrom(this.shownLines(), this.notes());
+    let annotations = headSideAnnotationsFrom(this.shownLines(), this.notes());
+    if (!isNew && !changed.has('file') && !changed.has('library')) {
+      annotations = this.underExpandedLines(annotations);
+    }
     const isNewInput = [
       'file',
       'mounted',
@@ -1230,6 +1169,33 @@ export class BeuveFileCard extends LitElement {
     this.lineSelection = undefined;
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
     this.diff.setSelectedLines(step ?? null, planStepHighlight(this.diffStyle, step));
+  }
+
+  /**
+   * Notes on lines the reviewer expanded with the separators' own buttons sit under those lines
+   * too, not above the gap they came from: the composer of Add Note on expanded lines among them
+   * (ADR 0162). Only a diff already on screen knows what is expanded.
+   */
+  private underExpandedLines(
+    annotations: readonly HeadSideAnnotation<CardSlot>[],
+  ): HeadSideAnnotation<CardSlot>[] {
+    const { diff } = this;
+    return annotations.map((annotation) => {
+      const { note, placement } = annotation.metadata;
+      if (
+        diff === undefined ||
+        placement.kind !== 'hidden' ||
+        diff.isLineInCollapsedContext(note.lineEnd, 'additions')
+      ) {
+        return annotation;
+      }
+      const after = note.lineEnd;
+      return {
+        ...annotation,
+        lineNumber: after,
+        metadata: { note, placement: { kind: 'shown', after } },
+      };
+    });
   }
 
   /** The head lines the diff shows: its hunks, and the context revealed for notes. */
@@ -1427,19 +1393,6 @@ export class BeuveFileCard extends LitElement {
     }
   }
 
-  /** While editing, the editing keys come first: listeners on the host, from start to end. */
-  private syncEditKeys(): void {
-    if (this.edit !== undefined && this.editKeys === undefined) {
-      this.editKeys = new AbortController();
-      const { signal } = this.editKeys;
-      this.addEventListener('keydown', this.onEditKeyCapture, { capture: true, signal });
-      this.addEventListener('keydown', this.onEditKeyBubble, { signal });
-    } else if (this.edit === undefined && this.editKeys !== undefined) {
-      this.editKeys.abort();
-      this.editKeys = undefined;
-    }
-  }
-
   private noteElement({ note: slot, placement }: PlacedSlot): HTMLElement {
     const { note } = slot;
     switch (note.kind) {
@@ -1621,10 +1574,13 @@ export class BeuveFileCard extends LitElement {
     }
     composerElement.where = composer.where;
     composerElement.anchor = composer.anchor;
+    composerElement.placement = '';
     if (isOutsideHunks(composer.anchor, this.file.hunks)) {
-      composerElement.where = `${composer.where} · outside the diff: on GitHub it goes in the review body`;
+      composerElement.placement = 'Outside the diff: on GitHub it goes in the review body.';
     }
-    composerElement.patch = composer.suggestedPatch ?? '';
+    composerElement.suggestions = composer.suggestions;
+    composerElement.headSha = composer.headSha;
+    composerElement.noteKey = composer.edit?.itemId ?? 'new';
     composerElement.saving = composer.saving;
     composerElement.error = composer.error;
   }
@@ -1653,7 +1609,6 @@ export class BeuveFileCard extends LitElement {
     return (
       file !== undefined &&
       this.view === 'rendered' &&
-      this.edit === undefined &&
       !file.binary &&
       richViewKindFrom(file.path) !== undefined
     );
@@ -1994,80 +1949,6 @@ ${splitPatch(file.patch).map((line) => {
         })}</pre>`;
   }
 
-  /** ⌘/Ctrl+Enter: the edit as a patch of the target lines, unless it strays outside them. */
-  private saveEdit(): void {
-    const { edit, editor, editHead, file } = this;
-    if (editor === undefined || editHead === undefined || edit?.phase !== 'editing') {
-      if (edit?.phase === 'failed') {
-        this.cancelEdit('');
-      }
-      return;
-    }
-    const plan = buildSuggestedPatch({
-      path: file?.path ?? '',
-      head: editHead,
-      edited: editor.getText(),
-      range: edit.target,
-    });
-    switch (plan.kind) {
-      case 'outside': {
-        this.edit = { ...edit, error: plan.message };
-        return;
-      }
-      case 'unchanged': {
-        this.cancelEdit('Nothing changed, so there is no suggestion.');
-        return;
-      }
-      case 'patch': {
-        this.endEdit();
-        const detail: SuggestionSaveDetail = { target: edit.target, patch: plan.text };
-        this.dispatchEvent(
-          new CustomEvent('beuve-suggestion-save', { detail, bubbles: true, composed: true }),
-        );
-      }
-    }
-  }
-
-  private cancelEdit(message: string): void {
-    this.endEdit();
-    this.dispatchEvent(
-      new CustomEvent('beuve-suggestion-cancel', {
-        detail: { message },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
-  /** Detaches the editor, discarding its text, and remounts the diff as it was. */
-  private endEdit(): void {
-    const isAttached = this.editor !== undefined;
-    this.diff?.setCodeScrollLeft(0);
-    this.editor?.cleanUp('discard');
-    this.editor = undefined;
-    this.editHead = undefined;
-    this.edit = undefined;
-    if (!isAttached) {
-      return;
-    }
-
-    this.diff?.cleanUp();
-    this.diff = undefined;
-    this.codeGeneration += 1;
-  }
-
-  private renderEditBar(): TemplateResult | typeof nothing {
-    const { edit } = this;
-    if (edit === undefined) {
-      return nothing;
-    }
-    return html`<div class="edit-bar" role="status">
-      <span class="what">${editDescription(edit.target)}</span>
-      <span>${editPhaseNotes[edit.phase]}</span>
-      ${edit.error === '' ? nothing : html`<span class="error" role="alert">${edit.error}</span>`}
-    </div>`;
-  }
-
   /** Scrolls a row (or the card) into view vertically, keeping the code's horizontal scroll. */
   private scrollToRow(row: Element | undefined): void {
     const left = this.diff?.getCodeScrollLeft();
@@ -2078,21 +1959,6 @@ ${splitPatch(file.patch).map((line) => {
     }
     if (left !== undefined) {
       this.diff?.setCodeScrollLeft(left);
-    }
-  }
-
-  /**
-   * Gives the diff the complete file pair when the library cannot hydrate it itself (an added
-   * file, {@link editableDiffFrom}); the card's own parse renders again once the edit ends.
-   */
-  private completeForEditing({ diff, patch, head }: EditedDiff): void {
-    const { library, metadata } = this;
-    if (library === undefined || metadata === undefined) {
-      return;
-    }
-    const editable = editableDiffFrom({ library, shown: metadata, patch, head });
-    if (editable !== metadata) {
-      diff.render({ fileDiff: editable });
     }
   }
 
@@ -2162,11 +2028,6 @@ ${splitPatch(file.patch).map((line) => {
     this.scrollToRow(row);
   }
 
-  /** What Add Suggestion would edit here: the target's lines, or the staged note under them. */
-  editTarget(items: readonly UraItemView[], headSha: string): EditTarget | undefined {
-    return editTargetFrom(this.target(), items, headSha);
-  }
-
   /**
    * Runs the card's action for a click, double-click or key event that the diff stream's
    * delegated listener caught on this card (ADR 0074).
@@ -2181,65 +2042,6 @@ ${splitPatch(file.patch).map((line) => {
   notePointerMove(): void {
     if (!this.isGutterLabeled) {
       this.labelGutterButton();
-    }
-  }
-
-  /**
-   * Opens `@pierre/diffs/edit` on the head side of this diff (ADR 0043), once both full files are
-   * loaded through `session:get-file-pair`, with the caret on the target's first line. Nothing
-   * is ever written: saving builds a suggested patch for the target lines and emits
-   * `beuve-suggestion-save`; cancelling emits `beuve-suggestion-cancel`.
-   */
-  async startEdit(target: EditTarget): Promise<void> {
-    const { file, loadFilePair: loader } = this;
-    if (file === undefined || loader === undefined || this.edit !== undefined) {
-      return;
-    }
-    const reason = uneditableReasonFrom(file);
-    if (reason !== undefined) {
-      this.edit = { target, phase: 'failed', error: reason };
-      return;
-    }
-    // Add Suggestion edits the source (ADR 0123): a rendered file shows its diff for it.
-    this.view = 'source';
-    this.edit = { target, phase: 'loading', error: '' };
-    this.mounted = true;
-    try {
-      const [pair, module] = await Promise.all([loader(file.path), loadEditor()]);
-      const diff = await waitForValue(() => this.diff);
-      if (diff === undefined || pair?.newContents === undefined) {
-        throw new Error('beuve could not load this file to edit it.');
-      }
-      this.completeForEditing({ diff, patch: file.patch, head: pair.newContents });
-      await diff.prepareForEditing();
-      if (this.edit.target !== target || this.diff !== diff) {
-        return;
-      }
-      const editor = new module.Editor<'file-diff', PlacedSlot>('file-diff');
-      editor.edit(diff);
-      let suggested: string | undefined;
-      if (target.patch !== undefined) {
-        suggested = applySuggestedPatch({ head: pair.newContents, patch: target.patch });
-      }
-      if (suggested !== undefined && suggested !== pair.newContents) {
-        // Re-editing starts from the suggestion; undo goes back to the head.
-        const end = { line: pair.newContents.split('\n').length, character: 0 };
-        editor.applyEdits([
-          { range: { start: { line: 0, character: 0 }, end }, newText: suggested },
-        ]);
-      }
-      this.editor = editor;
-      this.editHead = pair.newContents;
-      this.edit = { target, phase: 'editing', error: '' };
-      editor.focus({ lineNumber: target.startLine, preventScroll: false });
-      await this.revealLine(target.startLine);
-    } catch (error: unknown) {
-      this.endEdit();
-      let message = 'The editor could not start.';
-      if (Error.isError(error)) {
-        message = error.message;
-      }
-      this.edit = { target, phase: 'failed', error: message };
     }
   }
 
@@ -2310,7 +2112,6 @@ ${splitPatch(file.patch).map((line) => {
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
-    this.syncEditKeys();
     if (changed.has('activeHunk')) {
       this.focusedLine = undefined;
       this.clickedToken = undefined;
@@ -2321,18 +2122,11 @@ ${splitPatch(file.patch).map((line) => {
     if (changed.has('mounted') && this.mounted && this.library === undefined) {
       void this.loadLibrary();
     }
-    if (changed.has('mounted') && !this.mounted && this.edit !== undefined) {
-      // An open edit keeps its diff mounted however far the stream scrolls.
-      this.mounted = true;
-    }
-    if (changed.has('diffStyle') && this.diff !== undefined && this.edit === undefined) {
+    if (changed.has('diffStyle') && this.diff !== undefined) {
       this.diff.cleanUp();
       this.diff = undefined;
       this.codeGeneration += 1;
       this.measuredHeight = undefined;
-    }
-    if (changed.has('collapsed') && this.collapsed && this.edit !== undefined) {
-      this.collapsed = false;
     }
     if (
       (changed.has('mounted') || changed.has('collapsed')) &&
@@ -2388,8 +2182,7 @@ ${splitPatch(file.patch).map((line) => {
       this.isRendered() ||
       !this.mounted ||
       this.collapsed ||
-      this.isFallback ||
-      this.editor !== undefined
+      this.isFallback
     ) {
       return;
     }
@@ -2438,7 +2231,6 @@ ${splitPatch(file.patch).map((line) => {
           >
           ${this.renderViewToggle(file)} ${this.renderSheetButton(file)}
         </div>
-        ${this.renderEditBar()}
       </div>
       ${this.renderAsideThreads()}
       ${this.peek === undefined ? nothing : html`<beuve-peek-portal .peek=${this.peek}></beuve-peek-portal>`}
@@ -2543,14 +2335,6 @@ function startWorkerPool(workers: typeof DiffsWorker): WorkerPoolManager {
   );
 }
 
-const sharedEditor: { module: Promise<typeof DiffsEdit> | undefined } = { module: undefined };
-
-/** `@pierre/diffs/edit`, a lazy chunk loaded by the first Add Suggestion (ADR 0043). */
-async function loadEditor(): Promise<typeof DiffsEdit> {
-  sharedEditor.module ??= import('@pierre/diffs/edit');
-  return sharedEditor.module;
-}
-
 const checkIcon: SVGTemplateResult = svg`<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 7.2 6 9.6l4.6-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 /** Parses the patch, keyed by its blobs and hunks, picks a grammar from the `#!` line when the name gives none, and turns highlighting off for languages beuve doesn't ship. */
@@ -2589,13 +2373,6 @@ async function loadFiles(
   };
 }
 
-/** The diff an edit attaches to, the patch the card parsed, and the head file it edits. */
-interface EditedDiff {
-  readonly diff: FileDiff<PlacedSlot>;
-  readonly patch: string;
-  readonly head: string;
-}
-
 /** Where a card's diff renders: the library, the element it fills, and the parsed file. */
 interface DiffMount {
   readonly library: typeof Diffs;
@@ -2607,29 +2384,6 @@ interface DiffMount {
 interface InsightNote {
   readonly note: HTMLElement;
   readonly insight: ReviewInsight;
-}
-
-const editPhaseNotes: Readonly<Record<EditSession['phase'], string>> = {
-  loading: 'Opening the editor…',
-  editing: 'Your files are never written',
-  failed: '',
-};
-
-/** What the edit bar says is being edited: a new suggestion, or the item's own. */
-function editDescription(target: EditTarget): string {
-  const lines = editedLines(target);
-  if (target.itemId === undefined) {
-    return `Suggesting ${lines}`;
-  }
-  return `Editing the suggestion for ${lines}`;
-}
-
-/** `line 12`, or `lines 12–15`. */
-function editedLines({ startLine, endLine }: EditTarget): string {
-  if (startLine === endLine) {
-    return `line ${String(startLine)}`;
-  }
-  return `lines ${String(startLine)}–${String(endLine)}`;
 }
 
 const estimatedHeights = new WeakMap<DiffFileView, number>();

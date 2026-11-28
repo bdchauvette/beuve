@@ -5,15 +5,22 @@ import type { Result } from '#x/result/result.ts';
 import { deriveUraVerdict } from './derive-ura-verdict.ts';
 import type { LineMapping } from './line-mapping.ts';
 import { reanchorUraAnchor } from './reanchor-ura-anchor.ts';
+import { reanchorUraSuggestion } from './reanchor-ura-suggestion.ts';
+import { suggestedPatchFrom } from './suggested-patch-from.ts';
 import type {
   UraArtifact,
   UraArtifactError,
   UraArtifactVerdict,
+  UraPlacedSuggestion,
   UraPlacement,
+  UraSuggestionPlacement,
   UraSummary,
   UraVerdict,
 } from './ura-artifact.ts';
-import type { UraItem } from './ura-item.ts';
+import type { UraItem, UraSuggestion } from './ura-item.ts';
+
+/** File texts by head, then by path. */
+export type UraHeadTexts = ReadonlyMap<string, ReadonlyMap<string, string>>;
 
 export interface UraArtifactInput {
   readonly summary: UraSummary;
@@ -26,11 +33,17 @@ export interface UraArtifactInput {
   readonly lineMappings: readonly LineMapping[];
   /** The reviewer's verdict, when they chose one over the derived default. */
   readonly verdict?: UraVerdict;
+  /**
+   * The text of each file a staged item's suggestions name, at the head the item was written
+   * against, to derive their patches from. A suggestion whose file is missing has no patch.
+   */
+  readonly headTexts?: UraHeadTexts;
 }
 
 /**
- * Compiles the staged items into the artifact every exporter reads: each item is placed on the
- * summary's head (re-anchored if it was written against an older one) and the verdict is derived
+ * Compiles the staged items into the artifact every exporter reads: each item and each of its
+ * suggestions is placed on the summary's head (re-anchored if it was written against an older
+ * one), each suggestion's patch is derived from `headTexts`, and the verdict is derived
  * from the labels unless the reviewer chose one. Approving over a staged blocking note is refused.
  */
 export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact, UraArtifactError> {
@@ -57,6 +70,34 @@ export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact,
     }
     return reanchorUraAnchor(item.anchor, mapping.files);
   };
+  const placeSuggestion = (item: UraItem, suggestion: UraSuggestion): UraSuggestionPlacement => {
+    if (item.headSha === summary.headSha) {
+      return { kind: 'current', suggestion };
+    }
+    const mapping = mappings.get(item.headSha);
+    if (mapping === undefined) {
+      return { kind: 'outdated', reason: 'no-line-mapping' };
+    }
+    return reanchorUraSuggestion(suggestion, mapping.files);
+  };
+  const suggestionsOf = (item: UraItem): UraPlacedSuggestion[] => {
+    const texts = input.headTexts?.get(item.headSha);
+    return item.suggestions.map((suggestion): UraPlacedSuggestion => {
+      const text = texts?.get(suggestion.path);
+      let patch: string | undefined;
+      if (text !== undefined) {
+        const derived = suggestedPatchFrom(text, suggestion);
+        if (derived.ok) {
+          patch = derived.value;
+        }
+      }
+      return {
+        suggestion,
+        placement: placeSuggestion(item, suggestion),
+        ...(patch !== undefined && { patch }),
+      };
+    });
+  };
   const derived = deriveUraVerdict(staged);
   const blocking = staged.filter((item) => item.blocking).map((item) => item.id);
   if (input.verdict === 'approve' && blocking.length > 0) {
@@ -69,7 +110,7 @@ export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact,
   return ok({
     summary,
     entries: staged.map((item) => {
-      return { item, placement: place(item) };
+      return { item, placement: place(item), suggestions: suggestionsOf(item) };
     }),
     verdict,
   });

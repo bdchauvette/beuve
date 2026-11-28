@@ -11,7 +11,8 @@ const events: Readonly<Record<UraVerdictView, string>> = {
 
 /**
  * The confirmation line before posting: `2 inline comments and 1 in the review body, as Comment,
- * on 1a2b3c4d5e6f.` Items an earlier review carried are counted separately. Pure.
+ * on 1a2b3c4d5e6f.` Items an earlier review carried are counted separately, and so are pieces the
+ * body had no room for (ADR 0162). Pure.
  */
 export function describeReviewPreview(preview: GithubReviewPreviewView): string {
   const { inlineCount, bodyCount, alreadyPostedCount } = preview;
@@ -25,7 +26,15 @@ export function describeReviewPreview(preview: GithubReviewPreviewView): string 
   if (parts.length === 0) {
     parts.push('No new items, only the verdict');
   }
-  return `${parts.join(' and ')}, as ${events[preview.verdict]}, on ${preview.headSha.slice(0, 12)}.${earlierText(alreadyPostedCount)}`;
+  return `${parts.join(' and ')}, as ${events[preview.verdict]}, on ${preview.headSha.slice(0, 12)}.${earlierText(alreadyPostedCount)}${leftOutText(preview.leftOutCount ?? 0)}`;
+}
+
+function leftOutText(leftOutCount: number): string {
+  if (leftOutCount === 0) {
+    return '';
+  }
+  const are = nounFor(leftOutCount, { one: 'is', other: 'are' });
+  return ` ${countNoun(leftOutCount, 'part')} of notes ${are} too long for GitHub and only in the exported review.`;
 }
 
 function earlierText(alreadyPostedCount: number): string {

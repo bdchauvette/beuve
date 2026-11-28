@@ -7,7 +7,9 @@ import { withdrawUraItem } from './withdraw-ura-item.ts';
 
 describe('withdrawUraItem', () => {
   test('withdraws a staged or an addressed note', ({ expect }) => {
-    const staged = createTestUraItem({ suggestion: '@@ -11 +11 @@\n-a\n+b\n' });
+    const staged = createTestUraItem({
+      suggestions: [{ path: 'src/app.ts', startLine: 11, endLine: 11, replacement: 'b' }],
+    });
     expect(withdrawUraItem(staged, later())).toStrictEqual({
       ok: true,
       value: {

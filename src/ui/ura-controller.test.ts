@@ -142,7 +142,7 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', blocking: false, title: 't', body: '' },
+      draft: { severity: 'issue', blocking: false, title: 't', body: '', suggestions: [] },
       settle: (error): void => {
         settled.push(error);
       },
@@ -160,13 +160,33 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', blocking: false, title: 't', body: '' },
+      draft: { severity: 'issue', blocking: false, title: 't', body: '', suggestions: [] },
       settle: (error): void => {
         settled.push(error);
       },
     });
     expect(settled).toStrictEqual(['too long']);
     expect(ura.notice).toBeUndefined();
+  });
+
+  test('names a staged note by its title without its Markdown', async ({ expect }) => {
+    const title = 'Rename `validate` to `isValid`';
+    const { ura } = createUraHarness({
+      review: reviewOf(),
+      replies: { 'ura:create': ok(createUraItemView({ title })) },
+    });
+    await ura.create({
+      anchor: { kind: 'change' },
+      headSha: 'a'.repeat(40),
+      draft: { severity: 'suggestion', blocking: false, title, body: '', suggestions: [] },
+      settle: (error): void => {
+        expect(error).toBeUndefined();
+      },
+    });
+    expect(ura.notice).toStrictEqual({
+      tone: 'info',
+      text: 'Staged “Rename validate to isValid”.',
+    });
   });
 
   test('closes the composer and says what was staged', async ({ expect }) => {
@@ -178,8 +198,13 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', blocking: true, title: 'Handle it', body: 'b' },
-      suggestedPatch: 'patch',
+      draft: {
+        severity: 'issue',
+        blocking: true,
+        title: 'Handle it',
+        body: 'b',
+        suggestions: [{ path: 'src/a.ts', startLine: 1, endLine: 1, replacement: 'x' }],
+      },
       settle: (error): void => {
         settled.push(error);
       },
@@ -191,7 +216,7 @@ describe('UraController', () => {
       sessionId: 's1',
       blocking: true,
       title: 'Handle it',
-      suggestedPatch: 'patch',
+      suggestions: [{ path: 'src/a.ts', startLine: 1, endLine: 1, replacement: 'x' }],
     });
   });
 
@@ -310,14 +335,24 @@ describe('UraController', () => {
     expect(ura.isExporting).toBe(false);
   });
 
-  test('expands a draft at the review’s head, or its own, through ura:expand-note', async ({
+  test('autoedits a draft at the review’s head, or its own, through ura:autoedit-note', async ({
     expect,
     signal,
   }) => {
+    const added = { path: 'a.ts', startLine: 2, endLine: 2, replacement: 'b' };
     const { ura, invoked } = createUraHarness({
       review: reviewOf(),
-      replies: { 'ura:expand-note': ok({ outcome: 'expanded', body: 'Longer.', model: 'm' }) },
+      replies: {
+        'ura:autoedit-note': ok({
+          outcome: 'autoedited',
+          body: 'Longer.',
+          suggestions: [added],
+          droppedSuggestions: 1,
+          model: 'm',
+        }),
+      },
     });
+    const suggestion = { key: 'new-1', path: 'a.ts', startLine: 1, endLine: 1, replacement: 'a' };
     const draft = {
       anchor: { kind: 'file', path: 'a.ts' },
       noteKey: 'new',
@@ -325,15 +360,21 @@ describe('UraController', () => {
       blocking: true,
       title: 'naming',
       body: '',
+      suggestions: [suggestion],
     } as const;
-    await expect(ura.expandNote(draft, signal)).resolves.toStrictEqual({
-      kind: 'expanded',
+    await expect(ura.autoeditNote(draft, signal)).resolves.toStrictEqual({
+      kind: 'autoedited',
       body: 'Longer.',
+      suggestions: [added],
+      dropped: 1,
+      headSha: 'a'.repeat(40),
     });
-    await ura.expandNote({ ...draft, headSha: 'b'.repeat(40), noteKey: 'item-1' }, signal);
+    await expect(
+      ura.autoeditNote({ ...draft, headSha: 'b'.repeat(40), noteKey: 'item-1' }, signal),
+    ).resolves.toMatchObject({ headSha: 'b'.repeat(40) });
     expect(invoked).toStrictEqual([
       [
-        'ura:expand-note',
+        'ura:autoedit-note',
         {
           sessionId: 's1',
           headSha: 'a'.repeat(40),
@@ -342,12 +383,13 @@ describe('UraController', () => {
           blocking: true,
           title: 'naming',
           body: '',
-          requestId: 'expand-note:new',
+          suggestions: [suggestion],
+          requestId: 'autoedit-note:new',
         },
       ],
       [
-        'ura:expand-note',
-        expect.objectContaining({ headSha: 'b'.repeat(40), requestId: 'expand-note:item-1' }),
+        'ura:autoedit-note',
+        expect.objectContaining({ headSha: 'b'.repeat(40), requestId: 'autoedit-note:item-1' }),
       ],
     ]);
   });
@@ -359,8 +401,11 @@ describe('UraController', () => {
     ],
     [failed({ code: 'not-found', message: 'gone' }), { kind: 'failed', message: 'gone' }],
     [failed({ code: 'cancelled', message: 'cancelled' }), { kind: 'cancelled' }],
-  ] as const)('an expansion answered %j ends %j', async ([reply, outcome], { expect, signal }) => {
-    const { ura } = createUraHarness({ review: reviewOf(), replies: { 'ura:expand-note': reply } });
+  ] as const)('an autoedit answered %j ends %j', async ([reply, outcome], { expect, signal }) => {
+    const { ura } = createUraHarness({
+      review: reviewOf(),
+      replies: { 'ura:autoedit-note': reply },
+    });
     const draft = {
       anchor: { kind: 'change' },
       noteKey: 'new',
@@ -368,14 +413,15 @@ describe('UraController', () => {
       blocking: false,
       title: 't',
       body: '',
+      suggestions: [],
     } as const;
-    await expect(ura.expandNote(draft, signal)).resolves.toStrictEqual(outcome);
+    await expect(ura.autoeditNote(draft, signal)).resolves.toStrictEqual(outcome);
   });
 
-  test('cancelling an expansion cancels its request in main', async ({ expect }) => {
+  test('cancelling an autoedit cancels its request in main', async ({ expect }) => {
     const { ura, invoked } = createUraHarness({
       review: reviewOf(),
-      replies: { 'ura:expand-note': failed({ code: 'cancelled', message: 'cancelled' }) },
+      replies: { 'ura:autoedit-note': failed({ code: 'cancelled', message: 'cancelled' }) },
     });
     const controller = new AbortController();
     const draft = {
@@ -385,10 +431,11 @@ describe('UraController', () => {
       blocking: false,
       title: 't',
       body: '',
+      suggestions: [],
     } as const;
-    const pending = ura.expandNote(draft, controller.signal);
+    const pending = ura.autoeditNote(draft, controller.signal);
     controller.abort();
     await expect(pending).resolves.toStrictEqual({ kind: 'cancelled' });
-    expect(invoked[1]).toStrictEqual(['request:cancel', { requestId: 'expand-note:item-2' }]);
+    expect(invoked[1]).toStrictEqual(['request:cancel', { requestId: 'autoedit-note:item-2' }]);
   });
 });
