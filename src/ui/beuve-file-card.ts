@@ -1579,6 +1579,8 @@ export class BeuveFileCard extends LitElement {
       composerElement.placement = 'Outside the diff: on GitHub it goes in the review body.';
     }
     composerElement.suggestions = composer.suggestions;
+    composerElement.headSha = composer.headSha;
+    composerElement.noteKey = composer.edit?.itemId ?? 'new';
     composerElement.saving = composer.saving;
     composerElement.error = composer.error;
   }

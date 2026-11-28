@@ -56,7 +56,7 @@ export const invokeChannels = Object.freeze([
   'ura:stage-note-proposal',
   'ura:set-verdict',
   'ura:export',
-  'ura:expand-note',
+  'ura:autoedit-note',
   'chat:ask',
   'chat:list',
   'chat:cancel',

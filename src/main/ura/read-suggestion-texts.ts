@@ -4,7 +4,7 @@ import type { GitError } from '#internal/git/git-error.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { readBlobs } from '#internal/git/read-blobs.ts';
 import type { UraHeadTexts } from '#internal/ura/compile-ura-artifact.ts';
-import type { UraItem } from '#internal/ura/ura-item.ts';
+import type { UraItem, UraSuggestion } from '#internal/ura/ura-item.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
@@ -15,6 +15,12 @@ interface FoundFile {
   readonly blob: TreeBlobEntry;
 }
 
+/** What the read takes of an item: the head its suggestions are on, and their paths. */
+export interface SuggestionTextsSubject {
+  readonly headSha: UraItem['headSha'];
+  readonly suggestions: readonly Pick<UraSuggestion, 'path'>[];
+}
+
 /**
  * The text of each file the items' suggestions name, at the head each item was written against
  * (ADR 0162), by head and path, read through the git typed operations. A file that is not in that
@@ -22,7 +28,7 @@ interface FoundFile {
  */
 export async function readSuggestionTexts(
   repository: GitRepository,
-  items: readonly UraItem[],
+  items: readonly SuggestionTextsSubject[],
 ): Promise<Result<UraHeadTexts, GitError>> {
   const wanted = new Map<string, Set<string>>();
   for (const item of items) {
@@ -33,7 +39,11 @@ export async function readSuggestionTexts(
   const found: FoundFile[] = [];
   for (const [headSha, paths] of wanted) {
     for (const path of paths) {
-      const blob = await findTreeBlob(repository, headSha as UraItem['headSha'], path);
+      const blob = await findTreeBlob(
+        repository,
+        headSha as SuggestionTextsSubject['headSha'],
+        path,
+      );
       if (!blob.ok) {
         return blob;
       }

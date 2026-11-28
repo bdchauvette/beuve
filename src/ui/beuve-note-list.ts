@@ -16,7 +16,8 @@ import type {
 
 import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
 
-import './beuve-note-expand.ts';
+import './beuve-note-autoedit.ts';
+import type { SuggestionFieldsReplaceDetail } from './beuve-note-autoedit.ts';
 import './beuve-patch-preview.ts';
 import './beuve-suggestion-field.ts';
 import type { BeuveSuggestionField, SuggestionFieldKeyDetail } from './beuve-suggestion-field.ts';
@@ -454,6 +455,7 @@ export class BeuveNoteList extends LitElement {
       }
 
       .editor .actions {
+        flex-wrap: wrap;
         margin-block-start: var(--beuve-space-2);
       }
 
@@ -644,6 +646,12 @@ export class BeuveNoteList extends LitElement {
     this.editingSuggestions = this.editingSuggestions.filter((field) => field.key !== key);
   };
 
+  /** ✨ Autoedit, or its undo, revised the editor's fields (ADR 0125). */
+  private readonly onFieldsReplace = (event: CustomEvent<SuggestionFieldsReplaceDetail>): void => {
+    event.stopPropagation();
+    this.editingSuggestions = event.detail.fields;
+  };
+
   /** ⌘/Ctrl+Return in a field saves the editor's note, as it does in the title and body. */
   private readonly onFieldSave = (event: Event): void => {
     event.stopPropagation();
@@ -763,6 +771,7 @@ export class BeuveNoteList extends LitElement {
     this.addEventListener('keydown', this.onKeyDown);
     this.addEventListener('beuve-ura-label-change', this.onLabelChange as EventListener);
     this.addEventListener('beuve-suggestion-field-remove', this.onFieldRemove as EventListener);
+    this.addEventListener('beuve-suggestion-fields-replace', this.onFieldsReplace as EventListener);
     this.addEventListener('beuve-suggestion-field-save', this.onFieldSave);
     this.addEventListener('beuve-suggestion-field-cancel', this.onFieldCancel);
     // ADR 0074: the items, their editor and the export buttons, through one listener per type.
@@ -1522,11 +1531,11 @@ export class BeuveNoteList extends LitElement {
           : html`<span class="suggestion-notice" role="status">${this.suggestionNotice}</span>`
       }
       <div class="row actions">
-        <beuve-note-expand
+        <beuve-note-autoedit
           .anchor=${item.anchor}
           .headSha=${item.headSha}
           .noteKey=${item.id}
-        ></beuve-note-expand>
+        ></beuve-note-autoedit>
         <button class="button" type="button" data-action="add-suggestion" data-item-id=${item.id}>
           Add suggestion
         </button>

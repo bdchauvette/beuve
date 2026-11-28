@@ -35,7 +35,7 @@ import type {
   DiffDisplayView,
   EditorOpenResponse,
   EditorSettingsView,
-  ExpandedNoteView,
+  AutoeditedNoteView,
   FileAttributesView,
   FilePairView,
   FlowGraphResponse,
@@ -667,7 +667,18 @@ const sheetFileReadRequest = z.strictObject({
   path: sheetPath,
   requestId: requestId.optional(),
 });
-const expandNoteRequest = z.strictObject({
+const autoeditSuggestion = z
+  .strictObject({
+    key: z.string().min(1).max(200),
+    path: repositoryPath,
+    startLine: line,
+    endLine: z.number().int().min(0).max(10_000_000),
+    replacement: z.string().max(1_000_000),
+  })
+  .refine((suggestion) => {
+    return suggestion.endLine >= suggestion.startLine - 1;
+  }, 'endLine comes before startLine - 1');
+const autoeditNoteRequest = z.strictObject({
   sessionId,
   headSha: commitSha,
   anchor: uraAnchor,
@@ -675,6 +686,13 @@ const expandNoteRequest = z.strictObject({
   blocking: z.boolean().optional(),
   title: uraTitle,
   body: uraBody,
+  suggestions: z
+    .array(autoeditSuggestion)
+    .max(500)
+    .refine((suggestions) => {
+      return new Set(suggestions.map((suggestion) => suggestion.key)).size === suggestions.length;
+    }, 'suggestion keys repeat')
+    .optional(),
   requestId: requestId.optional(),
 });
 const githubReviewRequest = z.strictObject({
@@ -1237,15 +1255,19 @@ export function createIpcHandlers(
         ...(summary !== undefined && { summary }),
       });
     },
-    'ura:expand-note': async (request, sender): Promise<IpcResult<ExpandedNoteView>> => {
-      const parsed = expandNoteRequest.safeParse(request);
+    'ura:autoedit-note': async (request, sender): Promise<IpcResult<AutoeditedNoteView>> => {
+      const parsed = autoeditNoteRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { requestId: id, blocking, ...draft } = parsed.data;
+      const { requestId: id, blocking, suggestions, ...draft } = parsed.data;
       return scoped({ sender, kind: 'note-draft', id }, async (options) => {
-        return services.drafting.expandNote(
-          { ...draft, ...(blocking !== undefined && { blocking }) },
+        return services.drafting.autoeditNote(
+          {
+            ...draft,
+            ...(blocking !== undefined && { blocking }),
+            ...(suggestions !== undefined && { suggestions }),
+          },
           options,
         );
       });

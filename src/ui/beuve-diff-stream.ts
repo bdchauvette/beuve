@@ -31,6 +31,7 @@ import type { BeuveFindBar, FindQueryDetail, FindStepDetail } from './beuve-find
 import type { DiffToggleDetail, SideLines } from './beuve-file-card.ts';
 import type { ComposerState, FilePairLoader, NoteEditDetail } from './beuve-file-card.ts';
 import type { SuggestionFieldKeyDetail } from './beuve-suggestion-field.ts';
+import type { SuggestionFieldsReplaceDetail } from './beuve-note-autoedit.ts';
 import type { BeuveUraComposer, UraDraft } from './beuve-ura-composer.ts';
 import { noteEditFrom } from './note-edit-from.ts';
 import type { NoteEdit } from './note-edit-from.ts';
@@ -434,6 +435,16 @@ export class BeuveDiffStream extends LitElement {
     };
   };
 
+  /** ✨ Autoedit, or its undo, revised the composer's fields (ADR 0125). */
+  private readonly onFieldsReplace = (event: CustomEvent<SuggestionFieldsReplaceDetail>): void => {
+    const { composer } = this;
+    if (composer === undefined) {
+      return;
+    }
+    event.stopPropagation();
+    this.composer = { ...composer, suggestions: event.detail.fields };
+  };
+
   private readonly onFindQuery = (event: CustomEvent<FindQueryDetail>): void => {
     this.findQuery = event.detail.query;
     this.isFindCaseSensitive = event.detail.isCaseSensitive;
@@ -683,6 +694,7 @@ export class BeuveDiffStream extends LitElement {
     this.addEventListener('beuve-ura-compose-cancel', this.onComposeCancel);
     this.addEventListener('beuve-suggestion-add', this.onSuggestionAdd);
     this.addEventListener('beuve-suggestion-field-remove', this.onFieldRemove as EventListener);
+    this.addEventListener('beuve-suggestion-fields-replace', this.onFieldsReplace as EventListener);
     this.addEventListener('beuve-note-add', this.onNoteAdd as EventListener);
     this.addEventListener('beuve-note-edit', this.onNoteEdit as EventListener);
     this.addEventListener('beuve-diff-toggle', this.onDiffToggle as EventListener);
@@ -1488,6 +1500,8 @@ export class BeuveDiffStream extends LitElement {
           .where=${composer.where}
           .placement=${placement}
           .anchor=${composer.anchor}
+          .headSha=${composer.headSha}
+          .noteKey=${composer.edit?.itemId ?? 'new'}
           .suggestions=${composer.suggestions}
           ?saving=${composer.saving}
           .error=${composer.error}

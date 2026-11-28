@@ -1061,9 +1061,9 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
-    id: 'expand-note',
-    title: 'Flesh Out Note Draft',
-    label: 'Flesh Out Draft',
+    id: 'autoedit-note',
+    title: 'Autoedit Note Draft',
+    label: 'Autoedit Draft',
     menu: { menu: 'note', group: 0 },
     when: ['session'],
     windows: ['main'],

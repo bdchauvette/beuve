@@ -5,7 +5,7 @@ import type {
   AppInfo,
   ComposeNoteView,
   DescriptionSheetView,
-  ExpandedNoteView,
+  AutoeditedNoteView,
   IpcError,
   IpcResult,
   OpenedView,
@@ -1426,7 +1426,7 @@ describe('github channels', () => {
   });
 });
 
-describe('ura:expand-note', () => {
+describe('ura:autoedit-note', () => {
   test('validates the draft and passes it on, scoped by its requestId (ADR 0125)', async ({
     expect,
   }) => {
@@ -1436,14 +1436,20 @@ describe('ura:expand-note', () => {
       {
         ...stubServices({}),
         drafting: {
-          expandNote: async (request, options): Promise<IpcResult<ExpandedNoteView>> => {
+          autoeditNote: async (request, options): Promise<IpcResult<AutoeditedNoteView>> => {
             calls.push(request);
             const aborted = Promise.withResolvers<undefined>();
             options?.signal?.addEventListener('abort', () => {
               aborted.resolve(undefined);
             });
             await aborted.promise;
-            return ok({ outcome: 'expanded', body: 'late', model: undefined });
+            return ok({
+              outcome: 'autoedited',
+              body: 'late',
+              suggestions: [],
+              droppedSuggestions: 0,
+              model: undefined,
+            });
           },
         },
       },
@@ -1458,13 +1464,29 @@ describe('ura:expand-note', () => {
       title: '',
       body: 'rename',
     };
-    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, headSha: 'abc' }));
-    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, severity: 'major' }));
-    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, chat: 'history' }));
+    await expectInvalid(expect, handlers['ura:autoedit-note']({ ...draft, headSha: 'abc' }));
+    await expectInvalid(expect, handlers['ura:autoedit-note']({ ...draft, severity: 'major' }));
+    await expectInvalid(expect, handlers['ura:autoedit-note']({ ...draft, chat: 'history' }));
+    const suggestion = { key: 'f1', path: 'src/a.ts', startLine: 3, endLine: 3, replacement: 'x' };
+    await expectInvalid(
+      expect,
+      handlers['ura:autoedit-note']({ ...draft, suggestions: [suggestion, suggestion] }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['ura:autoedit-note']({
+        ...draft,
+        suggestions: [{ ...suggestion, startLine: 5, endLine: 3 }],
+      }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['ura:autoedit-note']({ ...draft, suggestions: [{ ...suggestion, id: 'x' }] }),
+    );
     const sender = { webContentsId: 1 };
-    const first = handlers['ura:expand-note']({ ...draft, requestId: 'note-a' }, sender);
-    const other = handlers['ura:expand-note']({ ...draft, requestId: 'note-b' }, sender);
-    const again = handlers['ura:expand-note']({ ...draft, requestId: 'note-a' }, sender);
+    const first = handlers['ura:autoedit-note']({ ...draft, requestId: 'note-a' }, sender);
+    const other = handlers['ura:autoedit-note']({ ...draft, requestId: 'note-b' }, sender);
+    const again = handlers['ura:autoedit-note']({ ...draft, requestId: 'note-a' }, sender);
     const cancelled = { ok: false, error: { code: 'cancelled', message: 'cancelled' } };
     await expect(first).resolves.toStrictEqual(cancelled);
     expect(handlers['request:cancel']({ requestId: 'note-a' }, sender)).toStrictEqual(
@@ -1475,7 +1497,15 @@ describe('ura:expand-note', () => {
       ok({ cancelled: true }),
     );
     await expect(other).resolves.toStrictEqual(cancelled);
-    expect(calls).toStrictEqual([draft, draft, draft]);
+    const withSuggestion = handlers['ura:autoedit-note'](
+      { ...draft, suggestions: [suggestion], requestId: 'note-c' },
+      sender,
+    );
+    expect(handlers['request:cancel']({ requestId: 'note-c' }, sender)).toStrictEqual(
+      ok({ cancelled: true }),
+    );
+    await expect(withSuggestion).resolves.toStrictEqual(cancelled);
+    expect(calls).toStrictEqual([draft, draft, draft, { ...draft, suggestions: [suggestion] }]);
   });
 });
 
@@ -1587,7 +1617,7 @@ function stubServices(
         return doNothingSync;
       },
     },
-    drafting: { expandNote: notWired },
+    drafting: { autoeditNote: notWired },
     terminal: {
       open: notWired,
       openScripted: notWired,

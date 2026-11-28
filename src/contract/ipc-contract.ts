@@ -1604,13 +1604,13 @@ export interface UpdateUraItemRequest {
 }
 
 /**
- * `ura:expand-note` (ADR 0125): "Expand on this" for a note being written or edited. One model
- * request outside the chat, on the `draft` role, whose context is only this draft and the diff
- * hunks near `anchor` at `headSha` (the head the anchor refers to). Nothing is stored. A newer
- * request with the same `requestId` from the same window replaces one in flight, and
- * `request:cancel` stops it (ADR 0079).
+ * `ura:autoedit-note` (ADR 0125 and its amendment "Autoedit: body and suggestions"): ✨ Autoedit
+ * for a note being written or edited. One model request outside the chat, on the `draft` role,
+ * whose context is only this draft (its suggestions included) and the diff hunks near `anchor` at
+ * `headSha` (the head the anchor refers to). Nothing is stored. A newer request with the same
+ * `requestId` from the same window replaces one in flight, and `request:cancel` stops it (ADR 0079).
  */
-export interface ExpandNoteRequest {
+export interface AutoeditNoteRequest {
   readonly sessionId: string;
   readonly headSha: string;
   readonly anchor: UraAnchorView;
@@ -1619,16 +1619,49 @@ export interface ExpandNoteRequest {
   readonly blocking?: boolean;
   readonly title: string;
   readonly body: string;
+  /** The form's suggestion fields as they hold now, on `headSha`. */
+  readonly suggestions?: readonly AutoeditSuggestionDraftView[];
   readonly requestId?: string;
 }
 
+/** A suggestion field of the draft being autoedited: its form `key`, lines and current text. */
+export interface AutoeditSuggestionDraftView {
+  /** The field's key in its form, unique among the request's suggestions. */
+  readonly key: string;
+  readonly path: string;
+  /** 1-based and inclusive on `headSha`; `endLine = startLine - 1` is an insertion. */
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly replacement: string;
+}
+
 /**
- * The expanded note body (Markdown) for the reviewer to keep, edit or undo, or why the model gave
- * none: `errorKind` is the model port's error kind (`timeout`, `not-authenticated`, …) or
- * `refused` for a draft that can't be expanded, and `message` says what to do.
+ * A suggestion an autoedit proposes, checked by main: it revises the field `key`, or is new when
+ * `key` is absent. Fields the answer leaves out stay as they are.
  */
-export type ExpandedNoteView =
-  | { readonly outcome: 'expanded'; readonly body: string; readonly model: string | undefined }
+export interface AutoeditSuggestionView {
+  readonly key?: string;
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly replacement: string;
+}
+
+/**
+ * The autoedited note: its new body (Markdown) and the suggestions it revised or added, for the
+ * form to show until the reviewer keeps, edits or undoes them; `droppedSuggestions` counts the
+ * ones main left out as invalid. Or why the model gave none: `errorKind` is the model port's error
+ * kind (`timeout`, `not-authenticated`, `invalid-output`, …) or `refused` for a draft that can't
+ * be autoedited, and `message` says what to do.
+ */
+export type AutoeditedNoteView =
+  | {
+      readonly outcome: 'autoedited';
+      readonly body: string;
+      readonly suggestions: readonly AutoeditSuggestionView[];
+      readonly droppedSuggestions: number;
+      readonly model: string | undefined;
+    }
   | { readonly outcome: 'failed'; readonly errorKind: string; readonly message: string };
 
 /**
@@ -3107,9 +3140,9 @@ export interface InvokeChannelMap {
     readonly request: ExportUraRequest;
     readonly response: IpcResult<UraExportView>;
   };
-  'ura:expand-note': {
-    readonly request: ExpandNoteRequest;
-    readonly response: IpcResult<ExpandedNoteView>;
+  'ura:autoedit-note': {
+    readonly request: AutoeditNoteRequest;
+    readonly response: IpcResult<AutoeditedNoteView>;
   };
   'chat:ask': { readonly request: ChatAskRequest; readonly response: IpcResult<ChatAskedView> };
   'chat:list': { readonly request: ChatListRequest; readonly response: IpcResult<ChatListView> };

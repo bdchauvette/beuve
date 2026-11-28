@@ -620,8 +620,8 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Add Note",
       },
       {
-        "id": "expand-note",
-        "label": "&Flesh Out Draft",
+        "id": "autoedit-note",
+        "label": "Autoedit &Draft",
       },
       {
         "type": "separator",
@@ -734,7 +734,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       {
         "icon": "arrow-down",
         "id": "note-move-down",
-        "label": "Move &Down",
+        "label": "M&ove Down",
       },
       {
         "type": "separator",
@@ -1567,8 +1567,8 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Add Note",
       },
       {
-        "id": "expand-note",
-        "label": "Flesh Out Draft",
+        "id": "autoedit-note",
+        "label": "Autoedit Draft",
       },
       {
         "type": "separator",

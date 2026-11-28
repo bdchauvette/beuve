@@ -2,6 +2,7 @@ import type { IpcError } from '#contract/ipc-contract.ts';
 import type { ChatFile } from '#internal/chat/chat-question.ts';
 import { diffObjects } from '#internal/git/diff-objects.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
+import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -21,6 +22,12 @@ export interface NoteDiffQuery {
   readonly signal?: AbortSignal | undefined;
 }
 
+/** A note's change, and the repository to read its head's files from. */
+export interface NoteDiff {
+  readonly files: readonly ChatFile[];
+  readonly repository: GitRepository;
+}
+
 /**
  * The whole change at a note's head (ADR 0125): fork point to `headSha`, which may be older than
  * the session's head when the note was written against one. The head is not read or stored; a
@@ -29,7 +36,7 @@ export interface NoteDiffQuery {
 export async function loadNoteDiff(
   context: SessionContext,
   { sessionId, headSha, signal }: NoteDiffQuery,
-): Promise<Result<readonly ChatFile[], IpcError>> {
+): Promise<Result<NoteDiff, IpcError>> {
   const loaded = loadSession(context, sessionId);
   if (!loaded.ok) {
     return loaded;
@@ -59,5 +66,5 @@ export async function loadNoteDiff(
   if (!files.ok) {
     return gitFailure(context.logger, files.error);
   }
-  return ok(files.value.map((file) => chatFileFrom(file)));
+  return ok({ files: files.value.map((file) => chatFileFrom(file)), repository });
 }

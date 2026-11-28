@@ -161,7 +161,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'note-label-chore': noteList,
     'note-move-up': noteList,
     'note-move-down': noteList,
-    'expand-note': app,
+    'autoedit-note': app,
     'note-select-all': noteList,
     'note-move': none,
     'note-extend-selection': none,

@@ -13,7 +13,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import type { UraCreateRequest } from './beuve-diff-stream.ts';
-import type { NoteExpandDraft, NoteExpandOutcome } from './beuve-note-expand.ts';
+import type { NoteAutoeditDraft, NoteAutoeditOutcome } from './beuve-note-autoedit.ts';
 import type { NoteListNotice } from './beuve-note-list.ts';
 import { countNoun } from './count-noun.ts';
 import { plainTitleFrom } from './plain-title-from.ts';
@@ -303,10 +303,10 @@ export class UraController implements ReactiveController {
   }
 
   /**
-   * "Expand on this" (ADR 0125): the draft through `ura:expand-note`, at its own head or the open
+   * ✨ Autoedit (ADR 0125): the draft through `ura:autoedit-note`, at its own head or the open
    * review's. Aborting `signal` cancels it in main, which then answers `cancelled`.
    */
-  async expandNote(draft: NoteExpandDraft, signal: AbortSignal): Promise<NoteExpandOutcome> {
+  async autoeditNote(draft: NoteAutoeditDraft, signal: AbortSignal): Promise<NoteAutoeditOutcome> {
     const bridge = this.environment.bridge();
     const review = this.environment.review();
     if (bridge === undefined || review === undefined) {
@@ -315,7 +315,7 @@ export class UraController implements ReactiveController {
     if (signal.aborted) {
       return { kind: 'cancelled' };
     }
-    const requestId = `expand-note:${draft.noteKey}`;
+    const requestId = `autoedit-note:${draft.noteKey}`;
     using listening = new DisposableStack();
     const cancel = (): void => {
       void bridge.invoke('request:cancel', { requestId });
@@ -324,26 +324,29 @@ export class UraController implements ReactiveController {
     listening.defer(() => {
       signal.removeEventListener('abort', cancel);
     });
-    const expanded = await bridge.invoke('ura:expand-note', {
+    const headSha = draft.headSha ?? review.headSha;
+    const answered = await bridge.invoke('ura:autoedit-note', {
       sessionId: review.sessionId,
-      headSha: draft.headSha ?? review.headSha,
+      headSha,
       anchor: draft.anchor,
       severity: draft.severity,
       blocking: draft.blocking,
       title: draft.title,
       body: draft.body,
+      suggestions: draft.suggestions,
       requestId,
     });
-    if (!expanded.ok) {
-      if (expanded.error.code === 'cancelled') {
+    if (!answered.ok) {
+      if (answered.error.code === 'cancelled') {
         return { kind: 'cancelled' };
       }
-      return { kind: 'failed', message: expanded.error.message };
+      return { kind: 'failed', message: answered.error.message };
     }
-    if (expanded.value.outcome === 'failed') {
-      return { kind: 'failed', message: expanded.value.message };
+    if (answered.value.outcome === 'failed') {
+      return { kind: 'failed', message: answered.value.message };
     }
-    return { kind: 'expanded', body: expanded.value.body };
+    const { body, suggestions, droppedSuggestions } = answered.value;
+    return { kind: 'autoedited', body, suggestions, dropped: droppedSuggestions, headSha };
   }
 
   /** The reviewer's verdict; `undefined` goes back to the derived one. */

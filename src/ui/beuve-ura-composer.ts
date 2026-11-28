@@ -9,7 +9,7 @@ import type {
   UraSuggestionDraftView,
 } from '#contract/ipc-contract.ts';
 
-import './beuve-note-expand.ts';
+import './beuve-note-autoedit.ts';
 import './beuve-suggestion-field.ts';
 import type { BeuveSuggestionField } from './beuve-suggestion-field.ts';
 import type { SuggestionFieldView } from './suggestion-field-view.ts';
@@ -151,6 +151,7 @@ export class BeuveUraComposer extends LitElement {
       }
 
       .actions {
+        flex-wrap: wrap;
         margin-block-start: var(--beuve-space-2);
       }
 
@@ -242,8 +243,12 @@ export class BeuveUraComposer extends LitElement {
   @property({ attribute: false }) accessor suggestions: readonly SuggestionFieldView[] = [];
   /** The staged note being edited, whose text the fields start from; `undefined` for a new note. */
   @property({ attribute: false }) accessor draft: UraDraftText | undefined;
-  /** What the note is on, for Expand (ADR 0125). */
+  /** What the note is on, for ✨ Autoedit (ADR 0125). */
   @property({ attribute: false }) accessor anchor: UraAnchorView | undefined;
+  /** The head {@link anchor} and the fields are on; empty for the open review's head. */
+  @property() accessor headSha = '';
+  /** Names the note to ✨ Autoedit: the staged note's id, or `new`. */
+  @property() accessor noteKey = 'new';
 
   @state() accessor severity: UraSeverityView = 'issue';
   @state() accessor blocking = false;
@@ -365,7 +370,11 @@ export class BeuveUraComposer extends LitElement {
             </div>`
       }
       <div class="row actions">
-        <beuve-note-expand .anchor=${this.anchor}></beuve-note-expand>
+        <beuve-note-autoedit
+          .anchor=${this.anchor}
+          .headSha=${this.headSha}
+          .noteKey=${this.noteKey}
+        ></beuve-note-autoedit>
         <button class="button" type="button" @click=${this.onAddSuggestion}>Add suggestion</button>
         <span class="spacer"></span>
         ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}

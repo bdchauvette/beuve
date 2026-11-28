@@ -160,7 +160,7 @@ import { isEditableElement } from './is-editable-element.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 import type { CommitInfoRequestDetail, CopyTextDetail } from './primitives/beuve-commit.ts';
 import type { ShowInChatDetail } from './primitives/beuve-agent-mark.ts';
-import type { BeuveNoteExpand, NoteExpandRequestDetail } from './beuve-note-expand.ts';
+import type { BeuveNoteAutoedit, NoteAutoeditRequestDetail } from './beuve-note-autoedit.ts';
 
 /**
  * The open review (ADR 0104): the diff, the sidebar and the terminal, rendered from the shared
@@ -265,15 +265,15 @@ export class BeuveReview extends LitElement {
       this.focusedZone = zone.dataset['zone'] as ZoneId;
     }
     const form = event.composedPath().find((target) => target instanceof HTMLFormElement);
-    const expander = form?.querySelector('beuve-note-expand');
-    if (expander !== null && expander !== undefined) {
-      this.noteExpander = expander;
+    const autoeditor = form?.querySelector('beuve-note-autoedit');
+    if (autoeditor !== null && autoeditor !== undefined) {
+      this.noteAutoeditor = autoeditor;
     }
     this.scheduleMenuSync();
   };
 
-  /** The Flesh out of the note form the reviewer last typed in, for Flesh Out Note Draft (ADR 0125). */
-  private noteExpander: BeuveNoteExpand | undefined;
+  /** The ✨ Autoedit of the note form the reviewer last typed in, for Autoedit Note Draft (ADR 0125). */
+  private noteAutoeditor: BeuveNoteAutoedit | undefined;
 
   /** Commits read for commit hashes' cards (ADR 0116), per session and hash. */
   private readonly commitInfos = new Map<string, Promise<CommitInfoView | undefined>>();
@@ -299,11 +299,11 @@ export class BeuveReview extends LitElement {
     event.detail.respond(answer);
   };
 
-  /** `beuve-note-expand-request`: a note form's Expand (ADR 0125), through the notes list's controller. */
-  private readonly onNoteExpand = (event: CustomEvent<NoteExpandRequestDetail>): void => {
+  /** `beuve-note-autoedit-request`: a note form's ✨ Autoedit (ADR 0125), through the notes list's controller. */
+  private readonly onNoteAutoedit = (event: CustomEvent<NoteAutoeditRequestDetail>): void => {
     event.stopPropagation();
     const { draft, signal } = event.detail;
-    event.detail.respond(this.ura.expandNote(draft, signal));
+    event.detail.respond(this.ura.autoeditNote(draft, signal));
   };
 
   /** `beuve-copy-text`: a commit card's Copy, through main's clipboard. */
@@ -1798,18 +1798,18 @@ export class BeuveReview extends LitElement {
     return this.session.review;
   }
 
-  /** Flesh Out Note Draft: the Flesh out of the open note form the reviewer last focused. */
-  private expandNoteDraft(): void {
-    const expander = this.noteExpander;
-    if (expander?.isConnected !== true) {
-      this.noteExpander = undefined;
+  /** Autoedit Note Draft: the ✨ Autoedit of the open note form the reviewer last focused. */
+  private autoeditNoteDraft(): void {
+    const autoeditor = this.noteAutoeditor;
+    if (autoeditor?.isConnected !== true) {
+      this.noteAutoeditor = undefined;
       this.showNotice({
         tone: 'info',
-        text: 'Open a note’s composer or editor to flesh out its draft.',
+        text: 'Open a note’s composer or editor to autoedit its draft.',
       });
       return;
     }
-    void expander.expand();
+    void autoeditor.autoedit();
   }
 
   private showNotice(notice: StatusNotice): void {
@@ -2034,7 +2034,7 @@ export class BeuveReview extends LitElement {
     this.addEventListener('focusin', this.onFocusIn);
     this.addEventListener('beuve-commit-info', this.onCommitInfo as EventListener);
     this.addEventListener('beuve-copy-text', this.onCopyText as EventListener);
-    this.addEventListener('beuve-note-expand-request', this.onNoteExpand as EventListener);
+    this.addEventListener('beuve-note-autoedit-request', this.onNoteAutoedit as EventListener);
     this.addEventListener('beuve-suggestion-lines', this.onSuggestionLines as EventListener);
     this.addEventListener('beuve-suggestion-target', this.onSuggestionTarget as EventListener);
   }
@@ -2045,7 +2045,7 @@ export class BeuveReview extends LitElement {
     this.removeEventListener('focusin', this.onFocusIn);
     this.removeEventListener('beuve-commit-info', this.onCommitInfo as EventListener);
     this.removeEventListener('beuve-copy-text', this.onCopyText as EventListener);
-    this.removeEventListener('beuve-note-expand-request', this.onNoteExpand as EventListener);
+    this.removeEventListener('beuve-note-autoedit-request', this.onNoteAutoedit as EventListener);
     this.removeEventListener('beuve-suggestion-lines', this.onSuggestionLines as EventListener);
     this.removeEventListener('beuve-suggestion-target', this.onSuggestionTarget as EventListener);
   }
@@ -2067,8 +2067,8 @@ export class BeuveReview extends LitElement {
         this.toggleChat();
         return true;
       }
-      case 'expand-note': {
-        this.expandNoteDraft();
+      case 'autoedit-note': {
+        this.autoeditNoteDraft();
         return true;
       }
       case 'tree-mode': {

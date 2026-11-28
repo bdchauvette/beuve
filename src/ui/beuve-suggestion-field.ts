@@ -42,7 +42,8 @@ type Phase = 'reading' | 'opening' | 'ready';
  * (`beuve-suggestion-lines`). The text is the field's own until {@link draft} reads it; a field
  * moved out of the document and back keeps it. Its editor is contenteditable, so it reports
  * `text-focus` as every text field does. Presentational: emits `beuve-suggestion-field-remove`,
- * `beuve-suggestion-field-save` (⌘/Ctrl+Return) and `beuve-suggestion-field-cancel` (Escape).
+ * `beuve-suggestion-field-save` (⌘/Ctrl+Return), `beuve-suggestion-field-cancel` (Escape) and
+ * `beuve-suggestion-field-edit` (its text changed after it opened, which ends an autoedit's undo).
  */
 @customElement('beuve-suggestion-field')
 export class BeuveSuggestionField extends LitElement {
@@ -150,6 +151,9 @@ export class BeuveSuggestionField extends LitElement {
           this.emit('beuve-suggestion-field-cancel');
         },
         onChange: (text): void => {
+          if (this.editor !== undefined) {
+            this.emit('beuve-suggestion-field-edit');
+          }
           this.scheduleHighlight(text);
         },
       });
